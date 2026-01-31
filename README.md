@@ -523,6 +523,13 @@ go build -o dotcor cmd/dotcor/main.go
 go run cmd/dotcor/main.go [command]
 ```
 
+### Releases
+
+Releases are automated via GoReleaser and GitHub Actions. See `RELEASING.md` for:
+- Creating new releases
+- Testing releases locally
+- Troubleshooting release issues
+
 ### Contributing
 
 See `PLAN.md` for implementation details and development roadmap.
