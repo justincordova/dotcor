@@ -1,0 +1,78 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: dotcor
+    main: ./cmd/dotcor
+    binary: dotcor
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+
+archives:
+  - id: default
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^ci:'
+  groups:
+    - title: Features
+      regexp: '^feat:'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^fix:'
+      order: 1
+    - title: Others
+      order: 999
+
+brews:
+  - name: dotcor
+    repository:
+      owner: justincordova
+      name: homebrew-dotcor
+    directory: Formula
+    homepage: https://github.com/justincordova/dotcor
+    description: "Symlink-based dotfile manager with Git integration"
+    license: MIT
+    dependencies:
+      - name: go
+        type: build
+    install: |
+      system "go", "build", *std_go_args(ldflags: "-s -w -X main.version=#{version}"), "./cmd/dotcor"
+    test: |
+      assert_match "dotcor version #{version}", shell_output("#{bin}/dotcor --version")
+
+release:
+  github:
+    owner: justincordova
+    name: dotcor
+  draft: false
+  prerelease: auto
+  name_template: "v{{.Version}}"
