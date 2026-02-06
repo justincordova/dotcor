@@ -1,4 +1,5 @@
 # DotCor
+![Version](https://img.shields.io/github/release/justincordova/dotcor.svg)
 
 A simple, fast dotfile manager built in Go with symlinks and Git automation.
 
@@ -550,53 +551,6 @@ Releases are automated via GoReleaser and GitHub Actions. See `RELEASING.md` for
 ### Contributing
 
 See `PLAN.md` for implementation details and development roadmap.
-
----
-
-## Roadmap
-
-### v1.0 (Current - Complete)
-- ✅ Core symlink-based management
-- ✅ Git auto-commit and sync
-- ✅ Cross-platform support (macOS, Linux, Windows)
-- ✅ Backup and restore functionality
-- ✅ History and diff commands
-
-### v1.2 - Hooks System (Next)
-- Pre/post hooks for add, remove, sync, restore
-- Simple bash files in `~/.dotcor/hooks/`
-- Graceful degradation (skip if hook missing)
-
-### v1.3 - Recursive Add
-- `--recursive` flag for adding directories
-- Preserves directory structure in repo
-- Progress indicator for large directories
-
-### v1.4 - Simple Templates
-- Basic substitution: `{{ .Hostname }}`, `{{ .OS }}`, `{{ .User }}`
-- `--template` flag for `add` command
-- New `dotcor rebuild-links` command to render templates
-
-### v1.5 - Improved Doctor
-- More diagnostic checks (permissions, git, symlinks)
-- Actionable fix suggestions
-- `--fix` flag for automatic repairs
-
-### v1.6 - Polish
-- Bug fixes and improvements from v1.2-v1.5
-- Performance optimizations
-- UX refinements
-
-### v2.0 - Profiles & Package Documentation
-- Machine profiles with separate managed files per profile
-- Profile switching: `dotcor set-profile <name>`
-- Package file generation (Brewfile, winget.txt, apt.txt)
-- Manual package install (no auto-execution)
-- **Note:** Skip watch mode - manual sync is preferred
-
-### v3.0 - Undecided
-- Depends on v2.0 feedback
-- Possible: TUI, migration tools, profile inheritance
 
 ---
 
