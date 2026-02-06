@@ -40,10 +40,10 @@ dotcor/
 │       ├── sync.go           # dotcor sync (with diff preview)
 │       ├── restore.go        # dotcor restore <file>
 │       ├── history.go        # dotcor history <file>
-│       ├── diff.go           # dotcor diff [file] (NEW)
-│       ├── adopt.go          # dotcor adopt <file> (NEW)
+│       ├── diff.go           # dotcor diff [file]
+│       ├── adopt.go          # dotcor adopt <file>
 │       ├── doctor.go         # dotcor doctor (health check)
-│       ├── rebuild.go        # dotcor rebuild-config (NEW)
+│       ├── rebuild.go        # dotcor rebuild-config
 │       ├── clone.go          # dotcor clone <url>
 │       └── cleanup.go        # dotcor cleanup-backups
 │
@@ -51,15 +51,15 @@ dotcor/
 │   ├── config/
 │   │   ├── config.go         # Config struct, Load/Save operations
 │   │   ├── paths.go          # Path normalization utilities
-│   │   └── migrate.go        # Config version migrations (NEW)
+│   │   └── migrate.go        # Config version migrations
 │   │
 │   ├── core/
 │   │   ├── linker.go         # Symlink creation/removal logic
 │   │   ├── validator.go      # File/path validation + secret detection
 │   │   ├── backup.go         # Backup/restore operations
 │   │   ├── lock.go           # File-based locking with stale detection
-│   │   ├── transaction.go    # Transaction/rollback semantics (NEW)
-│   │   └── ignore.go         # Ignore pattern matching (NEW)
+│   │   ├── transaction.go    # Transaction/rollback semantics
+│   │   └── ignore.go         # Ignore pattern matching
 │   │
 │   ├── fs/
 │   │   ├── fs.go             # File operations (move, copy)
@@ -677,7 +677,7 @@ func ValidateNotInDotcorDir(path string, config *Config) error
 // ValidateFileSize checks file isn't unreasonably large (>100MB warning)
 func ValidateFileSize(path string) error
 
-// DetectSecrets scans file content for potential secrets (NEW)
+// DetectSecrets scans file content for potential secrets
 func DetectSecrets(path string) (warnings []string, err error)
 
 // ShouldWarnAboutSecrets returns true if file likely contains secrets
@@ -1063,10 +1063,10 @@ func IsGitInstalled() bool
 // GetRemoteURL returns configured remote URL, or empty if none
 func GetRemoteURL(repoPath string) (string, error)
 
-// GetDiff returns unified diff for uncommitted changes (NEW)
+// GetDiff returns unified diff for uncommitted changes
 func GetDiff(repoPath string) (string, error)
 
-// GetFileDiff returns diff for specific file (NEW)
+// GetFileDiff returns diff for specific file
 func GetFileDiff(repoPath, filePath string) (string, error)
 
 type StatusInfo struct {
