@@ -1996,10 +1996,7 @@ func TestRelativeSymlinks(t *testing.T) {
 - **Rationale:** Manual sync is predictable, watch adds complexity
 - **Trade-off:** Requires explicit sync command
 
-**ADR-013: Package documentation only (no auto-install)**
-- **Rationale:** DotCor manages dotfiles, package managers manage packages
-- **Trade-off:** One extra step for users (manual install)
-
+---
 
 ---
 
@@ -2038,12 +2035,10 @@ func TestRelativeSymlinks(t *testing.T) {
 - UX refinements
 - Documentation updates
 
-### v2.0 - Machine Profiles & Package Documentation
+### v2.0 - Machine Profiles
 - Machine profiles with separate managed files lists per profile
 - Profile switching (`dotcor set-profile <name>`)
 - List available profiles (`dotcor list-profiles`)
-- Package file generation (Brewfile, winget.txt, apt.txt)
-- Manual package install (no auto-execution by DotCor)
 - Profile structure: Option A - separate lists per profile
 
 ### v3.0 - Undecided (Depends on v2.0 Feedback)
