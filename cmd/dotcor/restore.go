@@ -152,11 +152,14 @@ func restoreFromGit(repoRoot, repoPath, fullRepoPath, ref string, preview, force
 
 // restoreFromBackup restores a file from backup
 func restoreFromBackup(sourcePath, repoPath string, preview, force bool) error {
-	// Get filename for backup lookup
-	filename := getFilename(sourcePath)
+	// Normalize source path for backup lookup
+	normalized, err := config.NormalizePath(sourcePath)
+	if err != nil {
+		normalized = sourcePath
+	}
 
 	// Find backups
-	backups, err := core.GetBackupsForFile(filename)
+	backups, err := core.GetBackupsForFile(normalized)
 	if err != nil {
 		return fmt.Errorf("finding backups: %w", err)
 	}
@@ -247,14 +250,4 @@ func confirmRestore() bool {
 	input = strings.TrimSpace(strings.ToLower(input))
 
 	return input == "y" || input == "yes"
-}
-
-// getFilename extracts filename from a path
-func getFilename(path string) string {
-	for i := len(path) - 1; i >= 0; i-- {
-		if path[i] == '/' || path[i] == '\\' {
-			return path[i+1:]
-		}
-	}
-	return path
 }

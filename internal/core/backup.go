@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/justincordova/dotcor/internal/config"
@@ -60,17 +61,20 @@ func CreateBackup(sourcePath string) (string, error) {
 		return "", fmt.Errorf("creating backup directory: %w", err)
 	}
 
-	// Generate backup filename (strip leading dot, use original name)
-	filename := filepath.Base(expanded)
-	backupPath := filepath.Join(timestampDir, filename)
+	// Normalize source path and use as relative path in backup to preserve uniqueness
+	normalized, err := config.NormalizePath(sourcePath)
+	if err != nil {
+		normalized = sourcePath
+	}
 
-	// Handle name collisions by appending counter
-	counter := 1
-	for fs.FileExists(backupPath) {
-		ext := filepath.Ext(filename)
-		name := filename[:len(filename)-len(ext)]
-		backupPath = filepath.Join(timestampDir, fmt.Sprintf("%s_%d%s", name, counter, ext))
-		counter++
+	// Strip leading ~ and convert to relative path for storage
+	// e.g., ~/.zshrc -> zshrc, ~/.config/nvim/init.lua -> config/nvim/init.lua
+	backupRelativePath := strings.TrimPrefix(normalized, "~/")
+	backupPath := filepath.Join(timestampDir, backupRelativePath)
+
+	// Ensure parent directory exists
+	if err := fs.EnsureDir(filepath.Dir(backupPath)); err != nil {
+		return "", fmt.Errorf("creating backup subdirectory: %w", err)
 	}
 
 	// Copy file to backup location
@@ -149,22 +153,25 @@ func ListBackups() ([]BackupInfo, error) {
 			return nil // Skip files directly in backup dir
 		}
 
-		// For nested paths, get the first directory component (the timestamp)
-		// e.g., "2024-01-15_10-30-00/subdir/file.txt" -> "2024-01-15_10-30-00"
-		firstDir := timestampStr
-		if idx := findPathSeparator(timestampStr); idx != -1 {
-			firstDir = timestampStr[:idx]
+		// Extract source path (everything after the timestamp directory)
+		// e.g., "2024-01-15_10-30-00/config/nvim/init.lua" -> "config/nvim/init.lua"
+		parts := strings.SplitN(relPath, string(filepath.Separator), 2)
+		if len(parts) != 2 {
+			return nil // Skip if path doesn't have timestamp prefix
 		}
 
 		// Parse timestamp from the first directory component
-		timestamp, err := time.Parse(TimestampFormat, firstDir)
+		timestamp, err := time.Parse(TimestampFormat, timestampStr)
 		if err != nil {
 			return nil // Skip if we can't parse timestamp
 		}
 
+		// Reconstruct original source path with ~ prefix
+		sourcePath := "~/" + parts[1]
+
 		backups = append(backups, BackupInfo{
 			Timestamp:  timestamp,
-			SourcePath: info.Name(), // Just filename, original path unknown
+			SourcePath: sourcePath,
 			BackupPath: path,
 			Size:       info.Size(),
 		})
@@ -336,8 +343,17 @@ func getDirSize(path string) (int64, error) {
 	return size, err
 }
 
-// GetBackupsForFile returns backups for a specific file (by filename)
-func GetBackupsForFile(filename string) ([]BackupInfo, error) {
+// GetBackupsForFile returns backups for a specific file (by normalized source path)
+func GetBackupsForFile(sourcePath string) ([]BackupInfo, error) {
+	// Normalize source path
+	normalized, err := config.NormalizePath(sourcePath)
+	if err != nil {
+		normalized = sourcePath
+	}
+
+	// Strip leading ~ to match backup storage format
+	backupRelativePath := strings.TrimPrefix(normalized, "~/")
+
 	allBackups, err := ListBackups()
 	if err != nil {
 		return nil, err
@@ -345,8 +361,17 @@ func GetBackupsForFile(filename string) ([]BackupInfo, error) {
 
 	var fileBackups []BackupInfo
 	for _, backup := range allBackups {
-		if backup.SourcePath == filename || filepath.Base(backup.BackupPath) == filename {
-			fileBackups = append(fileBackups, backup)
+		// Match on the relative path portion
+		backupDir, dirErr := GetBackupDir()
+		if dirErr == nil {
+			backupRelPath, relErr := filepath.Rel(backupDir, backup.BackupPath)
+			if relErr == nil {
+				// Path will be like "2025-01-04_10-30-15/config/nvim/init.lua"
+				// We need to match after the timestamp directory
+				if parts := strings.SplitN(backupRelPath, string(filepath.Separator), 2); len(parts) == 2 && parts[1] == backupRelativePath {
+					fileBackups = append(fileBackups, backup)
+				}
+			}
 		}
 	}
 
@@ -354,14 +379,14 @@ func GetBackupsForFile(filename string) ([]BackupInfo, error) {
 }
 
 // GetLatestBackup returns the most recent backup for a file
-func GetLatestBackup(filename string) (*BackupInfo, error) {
-	backups, err := GetBackupsForFile(filename)
+func GetLatestBackup(sourcePath string) (*BackupInfo, error) {
+	backups, err := GetBackupsForFile(sourcePath)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(backups) == 0 {
-		return nil, fmt.Errorf("no backups found for: %s", filename)
+		return nil, fmt.Errorf("no backups found for: %s", sourcePath)
 	}
 
 	// Already sorted newest first
@@ -369,8 +394,8 @@ func GetLatestBackup(filename string) (*BackupInfo, error) {
 }
 
 // BackupExists checks if any backup exists for a file
-func BackupExists(filename string) bool {
-	backups, err := GetBackupsForFile(filename)
+func BackupExists(sourcePath string) bool {
+	backups, err := GetBackupsForFile(sourcePath)
 	if err != nil {
 		return false
 	}
