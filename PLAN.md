@@ -83,7 +83,7 @@ dotcor/
 **Location:** `~/.dotcor/config.yaml`
 
 ```yaml
-version: "1.0"                   # Config schema version for migrations
+version: '1.0'                   # Config schema version for migrations
 repo_path: ~/.dotcor/files
 git_enabled: true
 git_remote: ""                   # Optional remote URL
@@ -272,7 +272,7 @@ package config
 
 import "time"
 
-const CurrentConfigVersion = "1.0"
+const CurrentConfigVersion = "0.1"
 
 type Config struct {
     Version         string        `yaml:"version"`           // Schema version
