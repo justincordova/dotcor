@@ -44,7 +44,7 @@ dotcor init
 # Add your dotfiles (moves file to repo, creates symlink)
 dotcor add ~/.zshrc
 dotcor add ~/.gitconfig
-dotcor add ~/.config/nvim
+dotcor add ~/.config/nvim/*.lua  # Add with glob pattern
 
 # List managed files
 dotcor list
@@ -147,11 +147,11 @@ dotcor init --apply
 
 ### `dotcor add <file>`
 
-Add a dotfile or directory to DotCor.
+Add a dotfile or use glob patterns to add multiple files to DotCor.
 
 ```bash
 dotcor add ~/.zshrc
-dotcor add ~/.config/nvim
+dotcor add ~/.config/nvim/*.lua  # Glob pattern for multiple files
 dotcor add ~/.gitconfig ~/.bashrc  # Multiple files at once
 ```
 
@@ -160,6 +160,8 @@ What it does:
 2. Creates symlink at original location
 3. Records in `config.yaml`
 4. Git commits automatically
+
+**Note:** Use glob patterns (`*`, `**`) to add multiple files from directories. Directories cannot be added directly.
 
 ---
 
@@ -360,20 +362,30 @@ git checkout HEAD~5 -- shell/zshrc
 Configuration is stored in `~/.dotcor/config.yaml`:
 
 ```yaml
+version: "1.0"
 repo_path: ~/.dotcor/files
 git_enabled: true
 git_remote: ""
+ignore_patterns:
+  - "*.log"
+  - "*.swp"
+  - ".env"
+  - ".env.*"
+  - "*.key"
+  - "*.pem"
 
 managed_files:
   - source_path: ~/.zshrc
     repo_path: shell/zshrc
     added_at: 2025-01-04T10:30:00Z
     platforms: []  # Empty = all platforms
+    has_uncommitted: false
 
   - source_path: ~/Library/Preferences/foo.plist
     repo_path: foo.plist
     added_at: 2025-01-04T10:31:00Z
     platforms: ["darwin"]  # macOS only
+    has_uncommitted: false
 ```
 
 ### Platform-Specific Files
@@ -435,17 +447,22 @@ Full symlink support out of the box. No configuration needed.
 
 **Symlink support:** Requires Windows 10+ with Developer Mode enabled or Administrator privileges.
 
-**If symlinks fail:** DotCor automatically falls back to copying files with a warning:
-
-```
-⚠ Symlink failed, copying file instead
-  Enable Developer Mode for symlink support
-```
+DotCor requires symlink support and will exit with clear error messages if symlinks are unavailable.
 
 **To enable Developer Mode:**
 1. Settings → Update & Security → For developers
 2. Enable "Developer Mode"
 3. Restart terminal
+
+**Error if symlinks unavailable:**
+```
+✗ Symlinks not supported on this platform.
+
+  Windows users: Enable Developer Mode
+    Settings → Update & Security → For developers → Developer Mode
+
+  Then restart your terminal and try again.
+```
 
 ---
 
