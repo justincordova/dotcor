@@ -1930,6 +1930,115 @@ func TestRelativeSymlinks(t *testing.T) {
 
 ---
 
+
+
+## Development Workflow & Session Handoff
+
+### Per-Task Development Process
+
+**For every task, follow this exact workflow:**
+
+1. **Write the failing test** - Create test that describes expected behavior
+2. **Run test to verify it fails** - Confirms test is valid
+3. **Write minimal implementation** - Just enough code to make test pass
+4. **Run test to verify it passes** - Confirms implementation works
+5. **Build the project** - `go build ./...` to verify no compilation errors
+6. **Run all tests** - `go test ./...` to ensure nothing broke
+7. **Run type checking/linting** - If available (e.g., `golangci-lint run`)
+8. **Commit the changes** - Atomic commit for this task only
+
+**Commit requirements:**
+- One commit per task/subtask
+- Use conventional commit format: `type(scope): description`
+- Examples: `feat: add hook system`, `fix: handle missing parent directory`, `refactor: extract path normalization`
+- No batching multiple tasks into one commit
+- Describe the "why" not the "what" in commit message
+
+**Pre-commit gate:**
+Before any commit, the project MUST:
+1. Build successfully: `go build ./...`
+2. Pass all tests: `go test ./...`
+3. Pass type check/lint: if configured
+
+If ANY step fails, fix it before committing. Do not commit broken code.
+
+### Session Handoff Protocol
+
+**When reaching 80% of token budget:**
+
+1. **Create handoff document** at `docs/plans/handoff-{task-name}.md`
+2. **Document current state:**
+   - Task(s) in progress
+   - Files modified
+   - Work completed
+   - Tests passing/failing
+   - Next steps to take
+   - Context about what you were working on
+3. **Be concise but complete** - Next agent needs enough context to continue smoothly
+4. **Mark handoff in PLAN.md** - Add note: `→ Handoff: docs/plans/handoff-{task-name}.md`
+
+**Handoff document template:**
+
+```markdown
+# Handoff: {Task Name}
+
+## Context
+Working on: {feature description}
+Current version: v0.x.x
+
+## What Was Done
+- {Completed work item 1}
+- {Completed work item 2}
+- {Completed work item 3}
+
+## Current State
+**Files modified:**
+- `internal/core/hooks.go` - Partially implemented
+- `cmd/dotcor/add.go` - Modified to call hooks
+
+**Test status:**
+- Passing: {list of passing tests}
+- Failing: {list of failing tests}
+- Build: OK/failing
+
+**Next Steps**
+1. {Specific next action 1}
+2. {Specific next action 2}
+3. {Specific next action 3}
+
+## Notes
+{Any important notes, edge cases, or decisions made}
+```
+
+### Commit Discipline
+
+**Rules:**
+- **Never batch commits** - Each task gets its own commit
+- **Commit after EACH task** - Don't accumulate uncommitted work
+- **Atomic changes** - One concern per commit
+- **Clear commit messages** - Conventional format, descriptive
+- **Test before commit** - Always verify build/tests pass
+
+**Why this matters:**
+- Easy to bisect bugs
+- Clear history of what changed when
+- Smaller, reviewable diffs
+- Prevents broken commits in history
+- Reduces merge conflicts
+
+### Why Tedious Process?
+
+This process may seem slow for simple tasks, but it prevents:
+- Introducing bugs that cascade through multiple commits
+- Breaking existing functionality without noticing
+- Large, unreviewable commit diffs
+- "Works on my machine" issues
+- Needing to rewrite entire features due to foundational bugs
+
+The time spent on testing and reviewing saves exponentially more time debugging later.
+
+---
+
 ## Development Order Checklist
 
 **Infrastructure (build first):**
