@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	version = "0.1.2" // Updated with release process
+	version = "0.1.2" // Production fixes release
 )
 
 // ANSI color codes
