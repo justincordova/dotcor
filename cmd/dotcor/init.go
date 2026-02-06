@@ -61,7 +61,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("checking symlink support: %w", err)
 	}
 	if !supported {
-		fmt.Fprintln(os.Stderr, "✗ Symlinks not supported on this platform.")
+		fmt.Fprintln(os.Stderr, "[X] Symlinks not supported on this platform.")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Windows users: Enable Developer Mode")
 		fmt.Fprintln(os.Stderr, "  Settings → Update & Security → For developers → Developer Mode")
@@ -99,7 +99,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if err := fs.EnsureDir(configDir); err != nil {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
-	fmt.Printf("✓ Created %s\n", configDir)
+	fmt.Printf("[OK] Created %s\n", configDir)
 
 	if err := fs.EnsureDir(filesDir); err != nil {
 		return fmt.Errorf("creating files directory: %w", err)
@@ -113,13 +113,13 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if git.IsGitInstalled() {
 		if !git.IsRepo(filesDir) {
 			if err := git.InitRepo(filesDir); err != nil {
-				fmt.Printf("⚠ Git init failed: %v\n", err)
+				fmt.Printf("[!] Git init failed: %v\n", err)
 			} else {
-				fmt.Println("✓ Initialized Git repository")
+				fmt.Println("[OK] Initialized Git repository")
 			}
 		}
 	} else {
-		fmt.Println("⚠ Git not found. Installing Git is recommended for version control.")
+		fmt.Println("[!] Git not found. Installing Git is recommended for version control.")
 	}
 
 	// Create or load config
@@ -139,7 +139,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		if err := cfg.SaveConfig(); err != nil {
 			return fmt.Errorf("saving config: %w", err)
 		}
-		fmt.Println("✓ Created config.yaml")
+		fmt.Println("[OK] Created config.yaml")
 	}
 
 	// Handle --apply flag (create symlinks from existing config)
@@ -180,19 +180,19 @@ func applySymlinks(cfg *config.Config) error {
 		// Get full paths
 		sourcePath, err := config.ExpandPath(mf.SourcePath)
 		if err != nil {
-			fmt.Printf("  ✗ %s (invalid path)\n", mf.SourcePath)
+			fmt.Printf("  [X] %s (invalid path)\n", mf.SourcePath)
 			continue
 		}
 
 		repoPath, err := config.GetRepoFilePath(cfg, mf.RepoPath)
 		if err != nil {
-			fmt.Printf("  ✗ %s (invalid repo path)\n", mf.SourcePath)
+			fmt.Printf("  [X] %s (invalid repo path)\n", mf.SourcePath)
 			continue
 		}
 
 		// Check if repo file exists
 		if !fs.FileExists(repoPath) {
-			fmt.Printf("  ✗ %s (not in repository)\n", mf.SourcePath)
+			fmt.Printf("  [X] %s (not in repository)\n", mf.SourcePath)
 			continue
 		}
 
@@ -209,7 +209,7 @@ func applySymlinks(cfg *config.Config) error {
 		if fs.FileExists(sourcePath) {
 			backupPath, err := core.CreateBackup(sourcePath)
 			if err != nil {
-				fmt.Printf("  ✗ %s (backup failed: %v)\n", mf.SourcePath, err)
+				fmt.Printf("  [X] %s (backup failed: %v)\n", mf.SourcePath, err)
 				continue
 			}
 			fmt.Printf("  → Backed up to %s\n", backupPath)
@@ -218,11 +218,11 @@ func applySymlinks(cfg *config.Config) error {
 
 		// Create symlink
 		if err := fs.CreateSymlink(repoPath, sourcePath); err != nil {
-			fmt.Printf("  ✗ %s (%v)\n", mf.SourcePath, err)
+			fmt.Printf("  [X] %s (%v)\n", mf.SourcePath, err)
 			continue
 		}
 
-		fmt.Printf("  ✓ %s\n", mf.SourcePath)
+		fmt.Printf("  [OK] %s\n", mf.SourcePath)
 		created++
 	}
 
@@ -291,9 +291,9 @@ func interactiveInit(cfg *config.Config) error {
 
 	for _, dotfile := range found {
 		if err := addFile(cfg, dotfile, "", false); err != nil {
-			fmt.Printf("  ✗ %s: %v\n", dotfile, err)
+			fmt.Printf("  [X] %s: %v\n", dotfile, err)
 		} else {
-			fmt.Printf("  ✓ %s\n", dotfile)
+			fmt.Printf("  [OK] %s\n", dotfile)
 			added++
 		}
 	}
@@ -302,12 +302,12 @@ func interactiveInit(cfg *config.Config) error {
 	if git.IsGitInstalled() && added > 0 {
 		repoPath, err := config.ExpandPath(cfg.RepoPath)
 		if err != nil {
-			fmt.Printf("⚠ Git commit skipped: invalid repo path: %v\n", err)
+			fmt.Printf("[!] Git commit skipped: invalid repo path: %v\n", err)
 		} else {
 			if err := git.AutoCommit(repoPath, fmt.Sprintf("Add %d dotfiles via interactive init", added)); err != nil {
-				fmt.Printf("⚠ Git commit failed: %v\n", err)
+				fmt.Printf("[!] Git commit failed: %v\n", err)
 			} else {
-				fmt.Println("✓ Committed to Git")
+				fmt.Println("[OK] Committed to Git")
 			}
 		}
 	}

@@ -129,13 +129,13 @@ func runSync(cmd *cobra.Command, args []string) error {
 		if err := git.AutoCommit(repoPath, commitMsg); err != nil {
 			return fmt.Errorf("committing changes: %w", err)
 		}
-		fmt.Println("✓ Changes committed")
+		fmt.Println("[OK] Changes committed")
 
 		// Clear uncommitted flags for all files
 		uncommittedFiles := cfg.GetUncommittedFiles()
 		for _, mf := range uncommittedFiles {
 			if err := cfg.ClearUncommitted(mf.SourcePath); err != nil {
-				fmt.Printf("⚠ Failed to clear uncommitted flag for %s: %v\n", mf.SourcePath, err)
+				fmt.Printf("[!] Failed to clear uncommitted flag for %s: %v\n", mf.SourcePath, err)
 			}
 		}
 	}
@@ -148,9 +148,9 @@ func runSync(cmd *cobra.Command, args []string) error {
 			if err := pushToRemote(repoPath); err != nil {
 				return fmt.Errorf("pushing to remote: %w", err)
 			}
-			fmt.Println("✓ Pushed to remote")
+			fmt.Println("[OK] Pushed to remote")
 		} else {
-			fmt.Println("⚠ No remote configured. Use 'git remote add origin <url>' to set up.")
+			fmt.Println("[!] No remote configured. Use 'git remote add origin <url>' to set up.")
 		}
 	}
 
@@ -191,7 +191,7 @@ func showSyncPreview(repoPath string, hasChanges bool, gitStatus git.StatusInfo,
 			if gitStatus.AheadBy > 0 {
 				fmt.Printf("Would push %d commit(s) to remote.\n", gitStatus.AheadBy)
 			} else if gitStatus.BehindBy > 0 {
-				fmt.Printf("⚠ Remote is %d commit(s) ahead. Consider 'git pull' first.\n", gitStatus.BehindBy)
+				fmt.Printf("[!] Remote is %d commit(s) ahead. Consider 'git pull' first.\n", gitStatus.BehindBy)
 			} else {
 				fmt.Println("Already in sync with remote.")
 			}

@@ -111,13 +111,13 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		// Report partial success if some deletions worked
 		if deleted > 0 {
-			fmt.Printf("⚠ Removed %d backup set(s), freed %s\n", deleted, formatSize(freedSpace))
+			fmt.Printf("[!] Removed %d backup set(s), freed %s\n", deleted, formatSize(freedSpace))
 			fmt.Printf("  Failed to remove %d backup set(s): %v\n", failed, err)
 		} else {
 			return fmt.Errorf("cleaning backups: %w", err)
 		}
 	} else {
-		fmt.Printf("✓ Removed %d backup set(s), freed %s\n", deleted, formatSize(freedSpace))
+		fmt.Printf("[OK] Removed %d backup set(s), freed %s\n", deleted, formatSize(freedSpace))
 	}
 
 	// Show new stats

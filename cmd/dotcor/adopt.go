@@ -96,7 +96,7 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 			skipped++
 		case adoptResultError:
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "  ✗ %s: %v\n", symlink, err)
+				fmt.Fprintf(os.Stderr, "  [X] %s: %v\n", symlink, err)
 			}
 			skipped++
 		}
@@ -119,11 +119,11 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 	if git.IsGitInstalled() && adopted > 0 && !dryRun {
 		repoPath, err := config.ExpandPath(cfg.RepoPath)
 		if err != nil {
-			fmt.Printf("⚠ Git commit skipped: invalid repo path: %v\n", err)
+			fmt.Printf("[!] Git commit skipped: invalid repo path: %v\n", err)
 		} else {
 			message := fmt.Sprintf("Adopt %d existing symlink(s)", adopted)
 			if err := git.AutoCommit(repoPath, message); err != nil {
-				fmt.Printf("⚠ Git commit failed: %v\n", err)
+				fmt.Printf("[!] Git commit failed: %v\n", err)
 			}
 		}
 	}
@@ -226,7 +226,7 @@ func processAdoptSymlink(cfg *config.Config, symlinkPath string, dryRun bool) (a
 			return adoptResultError, fmt.Errorf("copying target to repo: %w", err)
 		}
 
-		fmt.Printf("  ✓ Copied %s to %s\n", absoluteTarget, repoFilePath)
+		fmt.Printf("  [OK] Copied %s to %s\n", absoluteTarget, repoFilePath)
 	} else {
 		// Target already in repo, use its existing relative path
 		actualRepoPath = relPath
@@ -260,7 +260,7 @@ func processAdoptSymlink(cfg *config.Config, symlinkPath string, dryRun bool) (a
 		return adoptResultError, fmt.Errorf("adding to config: %w", err)
 	}
 
-	fmt.Printf("  ✓ Updated %s → %s\n", normalized, actualRepoPath)
+	fmt.Printf("  [OK] Updated %s → %s\n", normalized, actualRepoPath)
 	return adoptResultSuccess, nil
 }
 

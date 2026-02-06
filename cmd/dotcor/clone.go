@@ -119,7 +119,7 @@ func runClone(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cloning repository: %w", err)
 	}
 
-	fmt.Println("✓ Repository cloned")
+	fmt.Println("[OK] Repository cloned")
 
 	// Check for config.yaml in repo
 	configPath := filesDir + "/config.yaml"
@@ -127,9 +127,9 @@ func runClone(cmd *cobra.Command, args []string) error {
 		// Copy config to correct location
 		destConfig := configDir + "/config.yaml"
 		if err := fs.CopyFile(configPath, destConfig); err != nil {
-			fmt.Printf("⚠ Could not copy config: %v\n", err)
+			fmt.Printf("[!] Could not copy config: %v\n", err)
 		} else {
-			fmt.Println("✓ Configuration loaded from repository")
+			fmt.Println("[OK] Configuration loaded from repository")
 		}
 	} else {
 		// Create default config
@@ -140,7 +140,7 @@ func runClone(cmd *cobra.Command, args []string) error {
 		if err := cfg.SaveConfig(); err != nil {
 			return fmt.Errorf("saving config: %w", err)
 		}
-		fmt.Println("✓ Created default configuration")
+		fmt.Println("[OK] Created default configuration")
 		fmt.Println("  Note: Run 'dotcor rebuild-config --scan' to detect files")
 	}
 

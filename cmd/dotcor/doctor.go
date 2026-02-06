@@ -80,7 +80,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	fmt.Println("-------")
 
 	if issues == 0 {
-		fmt.Println("✓ No issues found. Your DotCor setup is healthy!")
+		fmt.Println("[OK] No issues found. Your DotCor setup is healthy!")
 	} else {
 		fmt.Printf("Found %d issue(s)", issues)
 		if fix && fixed > 0 {
@@ -100,7 +100,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 func checkConfiguration(fix bool) (issues, fixed int) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		fmt.Printf("  ✗ Config error: %v\n", err)
+		fmt.Printf("  [X] Config error: %v\n", err)
 		issues++
 
 		if fix {
@@ -108,7 +108,7 @@ func checkConfiguration(fix bool) (issues, fixed int) {
 			newCfg, err := config.NewDefaultConfig()
 			if err == nil {
 				if err := newCfg.SaveConfig(); err == nil {
-					fmt.Println("  ✓ Created new default config")
+					fmt.Println("  [OK] Created new default config")
 					fixed++
 				}
 			}
@@ -119,24 +119,24 @@ func checkConfiguration(fix bool) (issues, fixed int) {
 	// Check repo path
 	repoPath, err := config.ExpandPath(cfg.RepoPath)
 	if err != nil {
-		fmt.Printf("  ✗ Invalid repo path: %v\n", err)
+		fmt.Printf("  [X] Invalid repo path: %v\n", err)
 		issues++
 		return
 	}
 
 	if !fs.PathExists(repoPath) {
-		fmt.Printf("  ✗ Repository directory missing: %s\n", repoPath)
+		fmt.Printf("  [X] Repository directory missing: %s\n", repoPath)
 		issues++
 
 		if fix {
 			if err := fs.EnsureDir(repoPath); err == nil {
-				fmt.Printf("  ✓ Created repository directory: %s\n", repoPath)
+				fmt.Printf("  [OK] Created repository directory: %s\n", repoPath)
 				fixed++
 			}
 		}
 	}
 
-	fmt.Println("  ✓ Configuration valid")
+	fmt.Println("  [OK] Configuration valid")
 	return
 }
 
@@ -148,13 +148,13 @@ func checkLockFile(fix bool) (issues, fixed int) {
 	}
 
 	if info == nil {
-		fmt.Println("  ✓ No lock file")
+		fmt.Println("  [OK] No lock file")
 		return
 	}
 
 	// Check if lock is from our process
 	if info.PID == os.Getpid() {
-		fmt.Println("  ✓ Lock held by current process")
+		fmt.Println("  [OK] Lock held by current process")
 		return
 	}
 
@@ -166,20 +166,20 @@ func checkLockFile(fix bool) (issues, fixed int) {
 
 	stale, _ := core.IsStale(lockPath)
 	if !stale {
-		fmt.Printf("  ⚠ Lock held by PID %d on %s\n", info.PID, info.Hostname)
+		fmt.Printf("  [!] Lock held by PID %d on %s\n", info.PID, info.Hostname)
 		fmt.Println("    (Lock appears active - another dotcor process may be running)")
 		return
 	}
 
-	fmt.Printf("  ✗ Stale lock from PID %d (process dead)\n", info.PID)
+	fmt.Printf("  [X] Stale lock from PID %d (process dead)\n", info.PID)
 	issues++
 
 	if fix {
 		if err := core.ForceReleaseLock(); err == nil {
-			fmt.Println("  ✓ Removed stale lock")
+			fmt.Println("  [OK] Removed stale lock")
 			fixed++
 		} else {
-			fmt.Printf("  ✗ Could not remove lock: %v\n", err)
+			fmt.Printf("  [X] Could not remove lock: %v\n", err)
 		}
 	}
 
@@ -200,21 +200,21 @@ func checkRepository(fix bool) (issues, fixed int) {
 
 	// Check if git is installed
 	if !git.IsGitInstalled() {
-		fmt.Println("  ⚠ Git is not installed (recommended)")
+		fmt.Println("  [!] Git is not installed (recommended)")
 		return
 	}
 
 	// Check if it's a git repo
 	if !git.IsRepo(repoPath) {
-		fmt.Printf("  ✗ Not a Git repository: %s\n", repoPath)
+		fmt.Printf("  [X] Not a Git repository: %s\n", repoPath)
 		issues++
 
 		if fix {
 			if err := git.InitRepo(repoPath); err == nil {
-				fmt.Println("  ✓ Initialized Git repository")
+				fmt.Println("  [OK] Initialized Git repository")
 				fixed++
 			} else {
-				fmt.Printf("  ✗ Could not initialize: %v\n", err)
+				fmt.Printf("  [X] Could not initialize: %v\n", err)
 			}
 		}
 		return
@@ -223,10 +223,10 @@ func checkRepository(fix bool) (issues, fixed int) {
 	// Check for uncommitted changes
 	hasChanges, _ := git.HasChanges(repoPath)
 	if hasChanges {
-		fmt.Println("  ⚠ Uncommitted changes in repository")
+		fmt.Println("  [!] Uncommitted changes in repository")
 		fmt.Println("    Run 'dotcor sync' to commit changes")
 	} else {
-		fmt.Println("  ✓ Git repository healthy")
+		fmt.Println("  [OK] Git repository healthy")
 	}
 
 	return
@@ -258,12 +258,12 @@ func checkSymlinks(fix bool) (issues, fixed int) {
 
 		// Check if source exists
 		if !fs.PathExists(sourcePath) {
-			fmt.Printf("  ✗ Missing symlink: %s\n", mf.SourcePath)
+			fmt.Printf("  [X] Missing symlink: %s\n", mf.SourcePath)
 			issues++
 
 			if fix && fs.FileExists(repoPath) {
 				if err := fs.CreateSymlink(repoPath, sourcePath); err == nil {
-					fmt.Printf("  ✓ Recreated symlink: %s\n", mf.SourcePath)
+					fmt.Printf("  [OK] Recreated symlink: %s\n", mf.SourcePath)
 					fixed++
 				}
 			}
@@ -273,7 +273,7 @@ func checkSymlinks(fix bool) (issues, fixed int) {
 		// Check if it's a symlink
 		isLink, _ := fs.IsSymlink(sourcePath)
 		if !isLink {
-			fmt.Printf("  ✗ Not a symlink: %s (regular file)\n", mf.SourcePath)
+			fmt.Printf("  [X] Not a symlink: %s (regular file)\n", mf.SourcePath)
 			issues++
 			continue
 		}
@@ -281,14 +281,14 @@ func checkSymlinks(fix bool) (issues, fixed int) {
 		// Check if symlink is valid
 		valid, _ := fs.IsValidSymlink(sourcePath)
 		if !valid {
-			fmt.Printf("  ✗ Broken symlink: %s\n", mf.SourcePath)
+			fmt.Printf("  [X] Broken symlink: %s\n", mf.SourcePath)
 			issues++
 
 			if fix && fs.FileExists(repoPath) {
 				// Remove broken symlink and recreate
 				os.Remove(sourcePath)
 				if err := fs.CreateSymlink(repoPath, sourcePath); err == nil {
-					fmt.Printf("  ✓ Fixed symlink: %s\n", mf.SourcePath)
+					fmt.Printf("  [OK] Fixed symlink: %s\n", mf.SourcePath)
 					fixed++
 				}
 			}
@@ -296,7 +296,7 @@ func checkSymlinks(fix bool) (issues, fixed int) {
 	}
 
 	if issues == 0 {
-		fmt.Printf("  ✓ All %d symlinks healthy\n", len(files))
+		fmt.Printf("  [OK] All %d symlinks healthy\n", len(files))
 	}
 
 	return
@@ -324,11 +324,11 @@ func checkOrphanedFiles(fix bool) (issues, fixed int) {
 	orphans := findOrphanedFiles(repoPath, tracked)
 
 	if len(orphans) == 0 {
-		fmt.Println("  ✓ No orphaned files")
+		fmt.Println("  [OK] No orphaned files")
 		return
 	}
 
-	fmt.Printf("  ⚠ Found %d orphaned file(s) in repository:\n", len(orphans))
+	fmt.Printf("  [!] Found %d orphaned file(s) in repository:\n", len(orphans))
 	for _, orphan := range orphans {
 		fmt.Printf("    - %s\n", orphan)
 	}

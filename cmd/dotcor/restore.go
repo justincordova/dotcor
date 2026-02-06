@@ -136,9 +136,9 @@ func restoreFromGit(repoRoot, repoPath, fullRepoPath, ref string, preview, force
 	// Create backup of current version
 	backupPath, err := core.CreateBackup(fullRepoPath)
 	if err != nil {
-		fmt.Printf("⚠ Could not create backup: %v\n", err)
+		fmt.Printf("[!] Could not create backup: %v\n", err)
 	} else {
-		fmt.Printf("✓ Backed up current version to %s\n", backupPath)
+		fmt.Printf("[OK] Backed up current version to %s\n", backupPath)
 	}
 
 	// Restore from Git
@@ -146,7 +146,7 @@ func restoreFromGit(repoRoot, repoPath, fullRepoPath, ref string, preview, force
 		return fmt.Errorf("restoring from git: %w", err)
 	}
 
-	fmt.Printf("✓ Restored %s from %s\n", repoPath, ref)
+	fmt.Printf("[OK] Restored %s from %s\n", repoPath, ref)
 	return nil
 }
 
@@ -200,7 +200,7 @@ func restoreFromBackup(sourcePath, repoPath string, preview, force bool) error {
 		return fmt.Errorf("restoring from backup: %w", err)
 	}
 
-	fmt.Printf("✓ Restored %s from backup\n", sourcePath)
+	fmt.Printf("[OK] Restored %s from backup\n", sourcePath)
 	return nil
 }
 

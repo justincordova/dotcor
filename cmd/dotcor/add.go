@@ -94,7 +94,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 			skipped++
 		case addResultError:
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "  ✗ %s: %v\n", file, err)
+				fmt.Fprintf(os.Stderr, "  [X] %s: %v\n", file, err)
 			}
 			skipped++
 		}
@@ -117,20 +117,20 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	if git.IsGitInstalled() && added > 0 {
 		repoPath, err := config.ExpandPath(cfg.RepoPath)
 		if err != nil {
-			fmt.Printf("⚠ Git commit skipped: invalid repo path: %v\n", err)
+			fmt.Printf("[!] Git commit skipped: invalid repo path: %v\n", err)
 		} else {
 			message := formatCommitMessage(gitFiles)
 			if err := git.AutoCommit(repoPath, message); err != nil {
 				// Mark all added files as uncommitted
 				for _, file := range files {
 					if err := cfg.MarkAsUncommitted(file); err != nil {
-						fmt.Printf("⚠ Failed to mark as uncommitted: %v\n", err)
+						fmt.Printf("[!] Failed to mark as uncommitted: %v\n", err)
 					}
 				}
-				fmt.Printf("⚠ Git commit failed: %v (files marked as uncommitted)\n", err)
+				fmt.Printf("[!] Git commit failed: %v (files marked as uncommitted)\n", err)
 				fmt.Println("Run 'dotcor sync' to commit these changes.")
 			} else {
-				fmt.Println("✓ Committed to Git")
+				fmt.Println("[OK] Committed to Git")
 			}
 		}
 	}
@@ -182,7 +182,7 @@ func processAddFile(cfg *config.Config, sourcePath string, category string, forc
 	if err := core.ValidateSourceFile(expanded, cfg); err != nil {
 		// Check if it's a warning vs error
 		if isWarning(err) && force {
-			fmt.Printf("  ⚠ %s: %v (forced)\n", normalized, err)
+			fmt.Printf("  [!] %s: %v (forced)\n", normalized, err)
 		} else {
 			return addResultError, "", err
 		}
@@ -194,7 +194,7 @@ func processAddFile(cfg *config.Config, sourcePath string, category string, forc
 		if !force {
 			return addResultError, "", fmt.Errorf("potential secrets detected: %v\nUse --force to add anyway", secrets)
 		}
-		fmt.Printf("  ⚠ %s: potential secrets detected (forced)\n", normalized)
+		fmt.Printf("  [!] %s: potential secrets detected (forced)\n", normalized)
 	}
 
 	// Generate repo path
@@ -226,7 +226,7 @@ func processAddFile(cfg *config.Config, sourcePath string, category string, forc
 	backupPath, err := core.CreateBackup(expanded)
 	if err != nil {
 		// Non-fatal, continue but warn
-		fmt.Printf("  ⚠ Backup failed for %s: %v\n", normalized, err)
+		fmt.Printf("  [!] Backup failed for %s: %v\n", normalized, err)
 	}
 
 	// Create managed file entry
@@ -249,14 +249,14 @@ func processAddFile(cfg *config.Config, sourcePath string, category string, forc
 		// Try to restore from backup if we have one
 		if backupPath != "" {
 			if restoreErr := core.RestoreBackup(backupPath, expanded); restoreErr != nil {
-				fmt.Fprintf(os.Stderr, "  ⚠ Failed to restore backup: %v\n", restoreErr)
+				fmt.Fprintf(os.Stderr, "  [!] Failed to restore backup: %v\n", restoreErr)
 			}
 		}
 		return addResultError, "", err
 	}
 
 	tx.Commit()
-	fmt.Printf("  ✓ %s\n", normalized)
+	fmt.Printf("  [OK] %s\n", normalized)
 
 	// Return relative repoPath (consistent with dry-run return)
 	return addResultSuccess, repoPath, nil

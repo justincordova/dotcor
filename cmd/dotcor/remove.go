@@ -75,7 +75,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 		for _, arg := range args {
 			mf, err := cfg.GetManagedFile(arg)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "  ✗ %s: not managed\n", arg)
+				fmt.Fprintf(os.Stderr, "  [X] %s: not managed\n", arg)
 				continue
 			}
 			filesToRemove = append(filesToRemove, *mf)
@@ -111,7 +111,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 	for _, mf := range filesToRemove {
 		err := processRemoveFile(cfg, mf, keepRepo, dryRun)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  ✗ %s: %v\n", mf.SourcePath, err)
+			fmt.Fprintf(os.Stderr, "  [X] %s: %v\n", mf.SourcePath, err)
 			continue
 		}
 		removed++
@@ -130,13 +130,13 @@ func runRemove(cmd *cobra.Command, args []string) error {
 	if git.IsGitInstalled() && removed > 0 && !keepRepo {
 		repoPath, err := config.ExpandPath(cfg.RepoPath)
 		if err != nil {
-			fmt.Printf("⚠ Git commit skipped: invalid repo path: %v\n", err)
+			fmt.Printf("[!] Git commit skipped: invalid repo path: %v\n", err)
 		} else {
 			message := fmt.Sprintf("Remove %d file(s) from management", removed)
 			if err := git.AutoCommit(repoPath, message); err != nil {
-				fmt.Printf("⚠ Git commit failed: %v\n", err)
+				fmt.Printf("[!] Git commit failed: %v\n", err)
 			} else {
-				fmt.Println("✓ Committed to Git")
+				fmt.Println("[OK] Committed to Git")
 			}
 		}
 	}
@@ -184,7 +184,7 @@ func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool,
 			return fmt.Errorf("updating config: %w", err)
 		}
 
-		fmt.Printf("  ✓ %s (removed from management, kept in repo)\n", mf.SourcePath)
+		fmt.Printf("  [OK] %s (removed from management, kept in repo)\n", mf.SourcePath)
 		return nil
 	}
 
@@ -193,7 +193,7 @@ func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool,
 	// First, create backup of the repo file
 	if fs.FileExists(repoPath) {
 		if _, err := core.CreateBackup(repoPath); err != nil {
-			fmt.Printf("  ⚠ Backup failed for %s: %v\n", mf.RepoPath, err)
+			fmt.Printf("  [!] Backup failed for %s: %v\n", mf.RepoPath, err)
 		}
 	}
 
@@ -229,7 +229,7 @@ func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool,
 		return fmt.Errorf("updating config: %w", err)
 	}
 
-	fmt.Printf("  ✓ %s\n", mf.SourcePath)
+	fmt.Printf("  [OK] %s\n", mf.SourcePath)
 	return nil
 }
 

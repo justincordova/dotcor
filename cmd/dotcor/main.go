@@ -66,7 +66,7 @@ func runRoot(cmd *cobra.Command, args []string) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		// Not initialized
-		fmt.Printf("  %s⚠ Not initialized%s\n", colorYellow, colorReset)
+		fmt.Printf("  %s[!] Not initialized%s\n", colorYellow, colorReset)
 		fmt.Println()
 		fmt.Printf("  %sGet started:%s\n", colorDim, colorReset)
 		fmt.Println("    dotcor init          Initialize DotCor")
@@ -98,12 +98,12 @@ func showQuickStatus(cfg *config.Config) {
 
 	// Files status
 	if totalFiles == 0 {
-		fmt.Printf("  %s○%s No files managed\n", colorDim, colorReset)
+		fmt.Printf("  %s %s No files managed\n", colorDim, colorReset)
 	} else {
 		if problemCount == 0 {
-			fmt.Printf("  %s●%s %d file(s) %s✓%s\n", colorGreen, colorReset, totalFiles, colorGreen, colorReset)
+			fmt.Printf("  %s*%s %d file(s) %s[OK]%s\n", colorGreen, colorReset, totalFiles, colorGreen, colorReset)
 		} else {
-			fmt.Printf("  %s●%s %d file(s), %s%d with issues%s\n", colorYellow, colorReset, totalFiles, colorYellow, problemCount, colorReset)
+			fmt.Printf("  %s*%s %d file(s), %s%d with issues%s\n", colorYellow, colorReset, totalFiles, colorYellow, problemCount, colorReset)
 		}
 	}
 
@@ -113,9 +113,9 @@ func showQuickStatus(cfg *config.Config) {
 		gitStatus, err := git.GetStatus(repoPath)
 		if err == nil {
 			if gitStatus.HasUncommitted {
-				fmt.Printf("  %s○%s uncommitted changes\n", colorYellow, colorReset)
+				fmt.Printf("  %s %s uncommitted changes\n", colorYellow, colorReset)
 			} else {
-				fmt.Printf("  %s●%s clean %s✓%s\n", colorGreen, colorReset, colorGreen, colorReset)
+				fmt.Printf("  %s*%s clean %s[OK]%s\n", colorGreen, colorReset, colorGreen, colorReset)
 			}
 
 			if gitStatus.RemoteExists {
