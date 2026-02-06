@@ -555,29 +555,48 @@ See `PLAN.md` for implementation details and development roadmap.
 
 ## Roadmap
 
-### v1.0 (Current - MVP)
-- Core symlink-based management
-- Git auto-commit and sync
-- Cross-platform support (macOS, Linux, Windows)
-- Basic restore/history commands
+### v1.0 (Current - Complete)
+- ✅ Core symlink-based management
+- ✅ Git auto-commit and sync
+- ✅ Cross-platform support (macOS, Linux, Windows)
+- ✅ Backup and restore functionality
+- ✅ History and diff commands
 
-### v2.0 (Future)
-- Watch mode: auto-sync on file changes
-- Template support: basic variable substitution
-- Hooks: run commands before/after operations
-- Batch operations
+### v1.2 - Hooks System (Next)
+- Pre/post hooks for add, remove, sync, restore
+- Simple bash files in `~/.dotcor/hooks/`
+- Graceful degradation (skip if hook missing)
 
-### v3.0 (Future)
-- Machine profiles (work, home, server)
-- Encrypted secrets integration
-- Package manager integration (Brewfile, etc.)
-- TUI interface
+### v1.3 - Recursive Add
+- `--recursive` flag for adding directories
+- Preserves directory structure in repo
+- Progress indicator for large directories
 
-### v4.0 (Future)
-- Desktop GUI
-- Plugin system
-- Cloud sync options
-- Migration tools from other dotfile managers
+### v1.4 - Simple Templates
+- Basic substitution: `{{ .Hostname }}`, `{{ .OS }}`, `{{ .User }}`
+- `--template` flag for `add` command
+- New `dotcor rebuild-links` command to render templates
+
+### v1.5 - Improved Doctor
+- More diagnostic checks (permissions, git, symlinks)
+- Actionable fix suggestions
+- `--fix` flag for automatic repairs
+
+### v1.6 - Polish
+- Bug fixes and improvements from v1.2-v1.5
+- Performance optimizations
+- UX refinements
+
+### v2.0 - Profiles & Package Documentation
+- Machine profiles with separate managed files per profile
+- Profile switching: `dotcor set-profile <name>`
+- Package file generation (Brewfile, winget.txt, apt.txt)
+- Manual package install (no auto-execution)
+- **Note:** Skip watch mode - manual sync is preferred
+
+### v3.0 - Undecided
+- Depends on v2.0 feedback
+- Possible: TUI, migration tools, profile inheritance
 
 ---
 

@@ -1938,23 +1938,246 @@ func TestRelativeSymlinks(t *testing.T) {
 
 ## Future Enhancements
 
-### v1.1
-- Machine-specific configs (not just platform)
-- Export/import config
-- Better logging framework
-- Shell integration (hooks)
+### v1.2 - Hooks System
+- Pre/post hooks for add, remove, sync, restore
+- Simple bash files in `~/.dotcor/hooks/` directory
+- Graceful degradation (skip if hook doesn't exist)
+- Hook types: `pre-add`, `post-add`, `pre-remove`, `post-remove`, `pre-sync`, `post-sync`, `pre-restore`, `post-restore`
 
-### v2.0
-- Watch mode for auto-sync
-- Template support ({{ .hostname }})
-- Pre/post hooks
-- TUI interface
+**Implementation:**
+```go
+// internal/core/hooks.go
+func RunHook(hookType string) error {
+    hookPath := filepath.Join(configDir, "hooks", hookType)
+    if !fs.FileExists(hookPath) {
+        return nil // No hook defined, skip
+    }
+    cmd := exec.Command("bash", hookPath)
+    return cmd.Run()
+}
+```
 
-### v3.0
-- Encrypted secrets (age/gpg)
-- Package manager integration
-- Multi-machine conflict resolution
-- Plugin system
+**Usage in commands:**
+```go
+// In add command
+core.RunHook("pre-add")
+// ... perform add ...
+core.RunHook("post-add")
+```
+
+### v1.3 - Recursive Add
+- `--recursive` flag for adding directories
+- Preserves directory structure in repo
+- Respects ignore patterns
+- Progress indicator for large directories
+
+**Implementation:**
+```go
+// cmd/dotcor/add.go
+addCmd.Flags().BoolP("recursive", "r", false, "Add directory recursively")
+
+func processRecursiveAdd(sourcePath string) error {
+    return filepath.Walk(sourcePath, func(path string, info os.FileInfo, err error) error {
+        if info.IsDir() {
+            return nil // Don't add directories themselves
+        }
+        // Add each file
+        return processAddFile(cfg, path, category, force, dryRun)
+    })
+}
+```
+
+### v1.4 - Simple Template System
+- Basic substitution: `{{ .Hostname }}`, `{{ .OS }}`, `{{ .User }}`
+- `--template` flag for `add` command
+- Templates stored with `.template` extension in repo
+- New `dotcor rebuild-links` command to render templates
+- No Go template complexity (keep simple substitution)
+
+**Template variables available:**
+- `.Hostname` - Machine hostname
+- `.OS` - Operating system (darwin, linux, windows, wsl)
+- `.User` - Current username
+- `.Home` - Home directory path
+
+**Implementation:**
+```go
+// internal/core/template.go
+func RenderTemplate(templatePath string) (string, error) {
+    content, _ := os.ReadFile(templatePath)
+    template := string(content)
+
+    // Simple string substitution
+    hostname, _ := os.Hostname()
+    template = strings.ReplaceAll(template, "{{ .Hostname }}", hostname)
+    template = strings.ReplaceAll(template, "{{ .OS }}", runtime.GOOS)
+    template = strings.ReplaceAll(template, "{{ .User }}", os.Getenv("USER"))
+    template = strings.ReplaceAll(template, "{{ .Home }}", os.Getenv("HOME"))
+
+    return template, nil
+}
+```
+
+**rebuild-links command:**
+```go
+var rebuildLinksCmd = &cobra.Command{
+    Use:   "rebuild-links",
+    Short: "Rebuild symlinks from config (renders templates)",
+    Run:   runRebuildLinks,
+}
+```
+
+### v1.5 - Improved Doctor
+- More diagnostic checks (permissions, git config, symlink health)
+- Actionable fix suggestions
+- `--fix` flag for automatic repairs
+- Better output formatting
+
+**Diagnostic checks:**
+- Symlink validity (broken, wrong target)
+- Git repository health (detached HEAD, unpushed commits)
+- Permissions on `~/.dotcor/` directory
+- Config file validity (YAML parsing, required fields)
+- Lock file status (stale locks)
+- Git remote configuration
+- Hook file permissions (if hooks exist)
+
+### v1.6 - Polish & Bug Fixes
+- Address bugs and issues discovered during v1.2-v1.5 development
+- Performance improvements
+- UX refinements
+- Documentation updates
+
+### v2.0 - Machine Profiles & Package Documentation
+- Machine profiles with separate managed files lists per profile
+- Profile switching (`dotcor set-profile <name>`)
+- List available profiles (`dotcor list-profiles`)
+- Package file generation (Brewfile, winget.txt, apt.txt)
+- Manual package install (no auto-execution by DotCor)
+
+**Profiles Implementation (Option A - Separate Lists):**
+```yaml
+# ~/.dotcor/config.yaml
+active_profile: "home"
+
+profiles:
+  home:
+    managed_files:
+      - source_path: ~/.zshrc
+        repo_path: shell/zshrc
+        added_at: 2025-01-04T10:30:00Z
+        platforms: []
+        has_uncommitted: false
+
+  work:
+    managed_files:
+      - source_path: ~/.zshrc
+        repo_path: shell/zshrc-work
+        added_at: 2025-01-05T14:20:00Z
+        platforms: []
+        has_uncommitted: false
+```
+
+**Profile Switching:**
+```bash
+dotcor set-profile work
+# → Removes symlinks from home profile
+# → Creates symlinks for work profile
+# → Updates active_profile in config
+```
+
+**Package Generation Implementation:**
+```go
+// cmd/dotcar/generate-pkgs.go
+var generatePkgsCmd = &cobra.Command{
+    Use:   "generate-pkgs",
+    Short: "Generate package manager files from detected dependencies",
+    Run:   runGeneratePkgs,
+}
+
+func runGeneratePkgs(cmd *cobra.Command, args []string) error {
+    // 1. Scan managed files for command references
+    detectedTools := detectToolsInConfigFiles()
+
+    // 2. Generate Brewfile (macOS)
+    if runtime.GOOS == "darwin" {
+        writeBrewfile(detectedTools)
+    }
+
+    // 3. Generate winget.txt (Windows)
+    if runtime.GOOS == "windows" {
+        writeWingetFile(detectedTools)
+    }
+
+    // 4. Generate apt.txt (Linux - Ubuntu/Debian)
+    if runtime.GOOS == "linux" {
+        writeAptFile(detectedTools)
+    }
+
+    return nil
+}
+```
+
+**Generated file formats:**
+
+**Brewfile (macOS - Homebrew):**
+```ruby
+# ~/.dotcor/Brewfile
+brew "fzf"
+brew "ripgrep"
+brew "bat"
+brew "exa"
+cask "visual-studio-code"
+```
+
+**winget.txt (Windows):**
+```
+# ~/.dotcor/packages/winget.txt
+Microsoft.PowerShell
+JanDeDobbeleer.OhMyPosh
+junegunn.fzf
+BurntSushi.ripgrep.MSVC
+sharkdp.bat.aarch64
+```
+
+**apt.txt (Linux - Ubuntu/Debian):**
+```
+# ~/.dotcor/packages/apt.txt
+fzf
+ripgrep
+bat
+exa
+```
+
+**Tool detection heuristic:**
+```go
+var toolToPackage = map[string]map[string]string{
+    "fzf":      {"darwin": "fzf", "linux": "fzf", "windows": "junegunn.fzf"},
+    "ripgrep":  {"darwin": "ripgrep", "linux": "ripgrep", "windows": "BurntSushi.ripgrep.MSVC"},
+    "bat":      {"darwin": "bat", "linux": "bat", "windows": "sharkdp.bat"},
+    "exa":      {"darwin": "exa", "linux": "exa", "windows": "exa"},
+}
+```
+
+**User workflow:**
+```bash
+dotcor add ~/.zshrc
+# ... on new machine ...
+dotcor generate-pkgs
+# Manual install:
+brew bundle --file=~/.dotcor/Brewfile          # macOS
+winget install -m ~/.dotcor/packages/winget.txt  # Windows
+sudo apt install -y $(cat ~/.dotcor/packages/apt.txt)  # Linux
+```
+
+### v3.0 - Undecided (Depends on v2.0 Feedback)
+**Potential features:**
+- TUI interface (if features warrant complexity)
+- Migration tools from other dotfile managers (Stow, Chezmoi)
+- Better template engine (Go templates vs simple substitution)
+- Profile inheritance (base profile + profile-specific additions)
+
+**Decision point:** After v2.0 release and user feedback, determine which features are actually needed.
 
 ---
 
@@ -2001,3 +2224,24 @@ func TestRelativeSymlinks(t *testing.T) {
 **ADR-008: Secret detection and ignore patterns**
 - **Rationale:** Prevent accidental secret commits
 - **Trade-off:** False positives possible, user friction
+
+**ADR-009: Bash file hooks in ~/.dotcor/hooks/**
+- **Rationale:** Discoverable, editable, doesn't clutter config.yaml
+- **Trade-off:** Less programmatic control, relies on files
+
+**ADR-010: Separate managed file lists per profile**
+- **Rationale:** Simpler mental model, no inheritance confusion
+- **Trade-off:** Can't share base files across profiles
+
+**ADR-011: Simple template substitution (no Go templates)**
+- **Rationale:** 90% of use cases are simple variable replacement
+- **Trade-off:** No conditional logic in templates (can add later)
+
+**ADR-012: No watch mode daemon**
+- **Rationale:** Manual sync is predictable, watch adds complexity
+- **Trade-off:** Requires explicit sync command
+
+**ADR-013: Package documentation only (no auto-install)**
+- **Rationale:** DotCor manages dotfiles, package managers manage packages
+- **Trade-off:** One extra step for users (manual install)
+
