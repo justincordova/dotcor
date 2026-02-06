@@ -60,7 +60,24 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return outputStatusQuick(status)
 	}
 
-	return outputStatusFull(status, problemsOnly)
+	err = outputStatusFull(status, problemsOnly)
+	if err != nil {
+		return err
+	}
+
+	// Show files with uncommitted adds separately
+	uncommittedFiles := cfg.GetUncommittedFiles()
+	if len(uncommittedFiles) > 0 {
+		fmt.Println("")
+		fmt.Println("Uncommitted Files:")
+		for _, mf := range uncommittedFiles {
+			fmt.Printf("  ⚠ %s\n", mf.SourcePath)
+		}
+		fmt.Println("")
+		fmt.Println("Run 'dotcor sync' to commit these changes.")
+	}
+
+	return nil
 }
 
 // StatusReport contains all status information
@@ -90,8 +107,8 @@ type GitStatusInfo struct {
 
 // StatusStats contains summary statistics
 type StatusStats struct {
-	TotalFiles     int
-	HealthyFiles   int
+	TotalFiles       int
+	HealthyFiles     int
 	ProblematicFiles int
 }
 

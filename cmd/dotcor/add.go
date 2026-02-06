@@ -121,7 +121,14 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		} else {
 			message := formatCommitMessage(gitFiles)
 			if err := git.AutoCommit(repoPath, message); err != nil {
-				fmt.Printf("⚠ Git commit failed: %v\n", err)
+				// Mark all added files as uncommitted
+				for _, file := range files {
+					if err := cfg.MarkAsUncommitted(file); err != nil {
+						fmt.Printf("⚠ Failed to mark as uncommitted: %v\n", err)
+					}
+				}
+				fmt.Printf("⚠ Git commit failed: %v (files marked as uncommitted)\n", err)
+				fmt.Println("Run 'dotcor sync' to commit these changes.")
 			} else {
 				fmt.Println("✓ Committed to Git")
 			}

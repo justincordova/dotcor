@@ -130,6 +130,14 @@ func runSync(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("committing changes: %w", err)
 		}
 		fmt.Println("✓ Changes committed")
+
+		// Clear uncommitted flags for all files
+		uncommittedFiles := cfg.GetUncommittedFiles()
+		for _, mf := range uncommittedFiles {
+			if err := cfg.ClearUncommitted(mf.SourcePath); err != nil {
+				fmt.Printf("⚠ Failed to clear uncommitted flag for %s: %v\n", mf.SourcePath, err)
+			}
+		}
 	}
 
 	// Push to remote
