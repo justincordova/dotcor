@@ -182,16 +182,14 @@ func processAdoptSymlink(cfg *config.Config, symlinkPath string, dryRun bool) (a
 		return adoptResultError, fmt.Errorf("symlink target does not exist: %s", target)
 	}
 
-	// Check if target is inside the dotcor repo
+	// Check if target is inside dotcor repo
 	repoFilesPath, err := config.ExpandPath(cfg.RepoPath)
 	if err != nil {
 		return adoptResultError, fmt.Errorf("expanding repo path: %w", err)
 	}
 
 	relPath, err := filepath.Rel(repoFilesPath, absoluteTarget)
-	if err != nil || relPath == ".." || (len(relPath) > 2 && relPath[:3] == "../") {
-		return adoptResultError, fmt.Errorf("target is not inside dotcor repo: %s", absoluteTarget)
-	}
+	targetInRepo := err == nil && relPath != ".." && !(len(relPath) > 2 && relPath[:3] == "../")
 
 	// Check if already managed
 	if cfg.IsManaged(symlinkPath) {
@@ -200,14 +198,60 @@ func processAdoptSymlink(cfg *config.Config, symlinkPath string, dryRun bool) (a
 	}
 
 	if dryRun {
-		fmt.Printf("  + %s → %s\n", normalized, relPath)
+		if targetInRepo {
+			fmt.Printf("  + %s → %s (already in repo)\n", normalized, relPath)
+		} else {
+			fmt.Printf("  + %s → %s (will copy target)\n", normalized, relPath)
+		}
 		return adoptResultSuccess, nil
+	}
+
+	// If target is not in repo, copy it there
+	var actualRepoPath string
+	if !targetInRepo {
+		// Generate repo path for the source
+		generatedRepoPath, err := config.GenerateRepoPath(symlinkPath, "")
+		if err != nil {
+			return adoptResultError, fmt.Errorf("generating repo path: %w", err)
+		}
+		actualRepoPath = generatedRepoPath
+
+		// Copy target file into repo
+		repoFilePath, err := config.GetRepoFilePath(cfg, actualRepoPath)
+		if err != nil {
+			return adoptResultError, fmt.Errorf("getting repo file path: %w", err)
+		}
+
+		if err := fs.CopyWithPermissions(absoluteTarget, repoFilePath); err != nil {
+			return adoptResultError, fmt.Errorf("copying target to repo: %w", err)
+		}
+
+		fmt.Printf("  ✓ Copied %s to %s\n", absoluteTarget, repoFilePath)
+	} else {
+		// Target already in repo, use its existing relative path
+		actualRepoPath = relPath
+	}
+
+	// Recreate symlink to point to repo file
+	repoFilePath, err := config.GetRepoFilePath(cfg, actualRepoPath)
+	if err != nil {
+		return adoptResultError, fmt.Errorf("getting repo file path: %w", err)
+	}
+
+	// Remove old symlink
+	if err := os.Remove(expanded); err != nil && !os.IsNotExist(err) {
+		return adoptResultError, fmt.Errorf("removing old symlink: %w", err)
+	}
+
+	// Create new relative symlink
+	if err := fs.CreateSymlink(repoFilePath, expanded); err != nil {
+		return adoptResultError, fmt.Errorf("creating new symlink: %w", err)
 	}
 
 	// Add to config
 	mf := config.ManagedFile{
 		SourcePath: normalized,
-		RepoPath:   relPath,
+		RepoPath:   actualRepoPath,
 		AddedAt:    time.Now(),
 		Platforms:  []string{},
 	}
@@ -216,7 +260,7 @@ func processAdoptSymlink(cfg *config.Config, symlinkPath string, dryRun bool) (a
 		return adoptResultError, fmt.Errorf("adding to config: %w", err)
 	}
 
-	fmt.Printf("  ✓ %s → %s\n", normalized, relPath)
+	fmt.Printf("  ✓ Updated %s → %s\n", normalized, actualRepoPath)
 	return adoptResultSuccess, nil
 }
 
