@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/justincordova/dotcor/internal/config"
@@ -103,7 +104,28 @@ func runDiff(cmd *cobra.Command, args []string) error {
 // getDiff returns the full diff output
 func getDiff(repoPath, filePath string, staged bool) (string, error) {
 	if filePath != "" {
+		// Get diff for specific file (staged vs unstaged)
+		if staged {
+			cmd := exec.Command("git", "diff", "--cached", "--", filePath)
+			cmd.Dir = repoPath
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				return "", fmt.Errorf("git diff --cached failed: %s: %w", string(output), err)
+			}
+			return string(output), nil
+		}
 		return git.GetFileDiff(repoPath, filePath)
+	}
+
+	// Get full diff (staged vs unstaged)
+	if staged {
+		cmd := exec.Command("git", "diff", "--cached")
+		cmd.Dir = repoPath
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return "", fmt.Errorf("git diff --cached failed: %s: %w", string(output), err)
+		}
+		return string(output), nil
 	}
 	return git.GetDiff(repoPath)
 }
