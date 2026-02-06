@@ -1936,7 +1936,74 @@ func TestRelativeSymlinks(t *testing.T) {
 
 ---
 
-## Future Enhancements
+## Resources
+
+- [Cobra Documentation](https://github.com/spf13/cobra)
+- [Viper Documentation](https://github.com/spf13/viper)
+- [Go filepath](https://pkg.go.dev/path/filepath)
+- [Go os](https://pkg.go.dev/os)
+- [Testing in Go](https://go.dev/doc/tutorial/add-a-test)
+
+---
+
+## Architecture Decision Records
+
+**ADR-001: Use relative symlinks**
+- **Rationale:** Portability across machines and mount points
+- **Trade-off:** More complex path computation
+
+**ADR-002: Individual files with glob support**
+- **Rationale:** Flexibility while preventing conflicts
+- **Trade-off:** Users must be explicit about what to add
+
+**ADR-003: Never fail on Git errors**
+- **Rationale:** Files more important than version control
+- **Trade-off:** Need to track uncommitted state
+
+**ADR-004: File-based locking with stale detection**
+- **Rationale:** Prevents corruption, graceful recovery
+- **Trade-off:** Extra complexity for stale detection
+
+**ADR-005: Automatic backups + transaction rollback**
+- **Rationale:** Multiple safety layers
+- **Trade-off:** Disk space usage, slightly slower operations
+
+**ADR-006: NO Windows copy mode fallback**
+- **Rationale:** Copy mode breaks the contract (edits don't sync)
+- **Trade-off:** Windows users must enable Developer Mode
+
+**ADR-007: Versioned config**
+- **Rationale:** Future-proof for schema changes
+- **Trade-off:** Need migration system
+
+**ADR-008: Secret detection and ignore patterns**
+- **Rationale:** Prevent accidental secret commits
+- **Trade-off:** False positives possible, user friction
+
+**ADR-009: Bash file hooks in ~/.dotcor/hooks/**
+- **Rationale:** Discoverable, editable, doesn't clutter config.yaml
+- **Trade-off:** Less programmatic control, relies on files
+
+**ADR-010: Separate managed file lists per profile**
+- **Rationale:** Simpler mental model, no inheritance confusion
+- **Trade-off:** Can't share base files across profiles
+
+**ADR-011: Simple template substitution (no Go templates)**
+- **Rationale:** 90% of use cases are simple variable replacement
+- **Trade-off:** No conditional logic in templates (can add later)
+
+**ADR-012: No watch mode daemon**
+- **Rationale:** Manual sync is predictable, watch adds complexity
+- **Trade-off:** Requires explicit sync command
+
+**ADR-013: Package documentation only (no auto-install)**
+- **Rationale:** DotCor manages dotfiles, package managers manage packages
+- **Trade-off:** One extra step for users (manual install)
+
+
+---
+
+## Roadmap
 
 ### v1.2 - Hooks System
 - Pre/post hooks for add, remove, sync, restore
@@ -2180,68 +2247,4 @@ sudo apt install -y $(cat ~/.dotcor/packages/apt.txt)  # Linux
 **Decision point:** After v2.0 release and user feedback, determine which features are actually needed.
 
 ---
-
-## Resources
-
-- [Cobra Documentation](https://github.com/spf13/cobra)
-- [Viper Documentation](https://github.com/spf13/viper)
-- [Go filepath](https://pkg.go.dev/path/filepath)
-- [Go os](https://pkg.go.dev/os)
-- [Testing in Go](https://go.dev/doc/tutorial/add-a-test)
-
----
-
-## Architecture Decision Records
-
-**ADR-001: Use relative symlinks**
-- **Rationale:** Portability across machines and mount points
-- **Trade-off:** More complex path computation
-
-**ADR-002: Individual files with glob support**
-- **Rationale:** Flexibility while preventing conflicts
-- **Trade-off:** Users must be explicit about what to add
-
-**ADR-003: Never fail on Git errors**
-- **Rationale:** Files more important than version control
-- **Trade-off:** Need to track uncommitted state
-
-**ADR-004: File-based locking with stale detection**
-- **Rationale:** Prevents corruption, graceful recovery
-- **Trade-off:** Extra complexity for stale detection
-
-**ADR-005: Automatic backups + transaction rollback**
-- **Rationale:** Multiple safety layers
-- **Trade-off:** Disk space usage, slightly slower operations
-
-**ADR-006: NO Windows copy mode fallback**
-- **Rationale:** Copy mode breaks the contract (edits don't sync)
-- **Trade-off:** Windows users must enable Developer Mode
-
-**ADR-007: Versioned config**
-- **Rationale:** Future-proof for schema changes
-- **Trade-off:** Need migration system
-
-**ADR-008: Secret detection and ignore patterns**
-- **Rationale:** Prevent accidental secret commits
-- **Trade-off:** False positives possible, user friction
-
-**ADR-009: Bash file hooks in ~/.dotcor/hooks/**
-- **Rationale:** Discoverable, editable, doesn't clutter config.yaml
-- **Trade-off:** Less programmatic control, relies on files
-
-**ADR-010: Separate managed file lists per profile**
-- **Rationale:** Simpler mental model, no inheritance confusion
-- **Trade-off:** Can't share base files across profiles
-
-**ADR-011: Simple template substitution (no Go templates)**
-- **Rationale:** 90% of use cases are simple variable replacement
-- **Trade-off:** No conditional logic in templates (can add later)
-
-**ADR-012: No watch mode daemon**
-- **Rationale:** Manual sync is predictable, watch adds complexity
-- **Trade-off:** Requires explicit sync command
-
-**ADR-013: Package documentation only (no auto-install)**
-- **Rationale:** DotCor manages dotfiles, package managers manage packages
-- **Trade-off:** One extra step for users (manual install)
 
