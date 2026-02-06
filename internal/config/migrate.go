@@ -21,6 +21,13 @@ var migrations = map[string]MigrationFunc{
 // Returns error if migration fails
 // Creates backup before migration
 func MigrateConfig(config *Config) (*Config, error) {
+	// Handle empty/missing version first (pre-v1.0 configs)
+	if config.Version == "" {
+		if err := MigrateFromEmpty(config); err != nil {
+			return nil, fmt.Errorf("migrating from empty config: %w", err)
+		}
+	}
+
 	// Create backup before migration
 	if err := backupConfigForMigration(); err != nil {
 		return nil, fmt.Errorf("creating backup before migration: %w", err)
@@ -30,7 +37,7 @@ func MigrateConfig(config *Config) (*Config, error) {
 	path := GetMigrationPath(config.Version, CurrentConfigVersion)
 	if len(path) == 0 && config.Version != CurrentConfigVersion {
 		// No migration path but version differs - try to handle gracefully
-		// This might happen if we're at a newer version than the config
+		// This might happen if we're at a newer version than config
 		if IsCompatibleVersion(config.Version) {
 			// Just update the version and continue
 			config.Version = CurrentConfigVersion
@@ -48,6 +55,11 @@ func MigrateConfig(config *Config) (*Config, error) {
 
 	// Update version
 	config.Version = CurrentConfigVersion
+
+	// Validate config after migration
+	if err := ValidateConfig(config); err != nil {
+		return nil, fmt.Errorf("validation after migration: %w", err)
+	}
 
 	// Save migrated config
 	if err := config.SaveConfig(); err != nil {

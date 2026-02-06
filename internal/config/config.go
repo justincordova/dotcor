@@ -109,6 +109,11 @@ func LoadConfig() (*Config, error) {
 		return migratedCfg, nil
 	}
 
+	// Validate loaded config
+	if err := ValidateConfig(&cfg); err != nil {
+		return nil, fmt.Errorf("validating config: %w", err)
+	}
+
 	return &cfg, nil
 }
 
