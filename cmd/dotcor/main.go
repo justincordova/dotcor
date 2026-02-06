@@ -11,22 +11,22 @@ import (
 )
 
 var (
-	version = "0.1.1"
+	version = "0.1.2" // Updated with release process
 )
 
 // ANSI color codes
 const (
-	colorReset   = "\033[0m"
-	colorDim     = "\033[2m"
-	colorBold    = "\033[1m"
-	colorGreen   = "\033[32m"
-	colorYellow  = "\033[33m"
-	colorCyan    = "\033[36m"
-	colorWhite   = "\033[97m"
-	colorOrange  = "\033[38;5;208m"
-	colorPink    = "\033[38;5;205m"
+	colorReset     = "\033[0m"
+	colorDim       = "\033[2m"
+	colorBold      = "\033[1m"
+	colorGreen     = "\033[32m"
+	colorYellow    = "\033[33m"
+	colorCyan      = "\033[36m"
+	colorWhite     = "\033[97m"
+	colorOrange    = "\033[38;5;208m"
+	colorPink      = "\033[38;5;205m"
 	colorLightPink = "\033[38;5;218m"
-	colorLime    = "\033[38;5;118m"
+	colorLime      = "\033[38;5;118m"
 )
 
 func printBanner() {
