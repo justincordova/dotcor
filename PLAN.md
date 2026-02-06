@@ -22,6 +22,64 @@ DotCor is a CLI-first dotfile manager built in Go. It uses **symlinks** to keep 
 - **Security:** Secret detection and ignore patterns
 
 **Key Differentiator:** GNU Stow's simplicity + Git automation + production-grade safety guarantees
+## Roadmap
+
+### v0.2 - Hooks System
+- Pre/post hooks for add, remove, sync, restore
+- Simple bash files in `~/.dotcor/hooks/` directory
+- Graceful degradation (skip if hook doesn't exist)
+- Hook types: `pre-add`, `post-add`, `pre-remove`, `post-remove`, `pre-sync`, `post-sync`, `pre-restore`, `post-restore`
+
+### v0.3 - Recursive Add
+- `--recursive` flag for adding directories
+- Preserves directory structure in repo
+- Respects ignore patterns
+- Progress indicator for large directories
+
+### v0.4 - Simple Template System
+- Basic substitution: `{{ .Hostname }}`, `{{ .OS }}`, `{{ .User }}`
+- `--template` flag for `add` command
+- Templates stored with `.template` extension in repo
+- New `dotcor rebuild-links` command to render templates
+- No Go template complexity (keep simple substitution)
+- Template variables: `.Hostname`, `.OS`, `.User`, `.Home`
+
+### v0.5 - Improved Doctor
+- More diagnostic checks (permissions, git config, symlink health)
+- Actionable fix suggestions
+- `--fix` flag for automatic repairs
+- Better output formatting
+- Checks: symlink validity, git health, permissions, config validity, locks, git remote, hook permissions
+
+### v0.6 - Polish & Bug Fixes
+- Address bugs and issues discovered during v0.2-v0.5 development
+- Performance improvements
+- UX refinements
+- Documentation updates
+
+### v0.7 - Machine Profiles
+- Machine profiles with separate managed files lists per profile
+- Profile switching (`dotcor set-profile <name>`)
+- List available profiles (`dotcor list-profiles`)
+- Profile structure: Option A - separate lists per profile
+
+### v1.0 - Production Release
+- All pre-v1.0 features complete (v0.2-v0.7)
+- Comprehensive testing finished
+- Stable, production-ready
+- Documentation complete
+
+### v2.0 - Post-Production Features
+**Potential features:**
+- TUI interface (if features warrant complexity)
+- Migration tools from other dotfile managers (Stow, Chezmoi)
+- Better template engine (Go templates vs simple substitution)
+- Profile inheritance (base profile + profile-specific additions)
+
+**Decision point:** After v1.0 release and user feedback, determine which features are actually needed.
+
+---
+
 
 ---
 
@@ -1914,6 +1972,17 @@ func TestRelativeSymlinks(t *testing.T) {
 
 ---
 
+**Milestone v1.0 (Production Release):**
+- [ ] v0.2 - Hooks System
+- [ ] v0.3 - Recursive Add
+- [ ] v0.4 - Simple Template System
+- [ ] v0.5 - Improved Doctor
+- [ ] v0.6 - Polish & Bug Fixes
+- [ ] v0.7 - Machine Profiles
+- [ ] v1.0 - Production Release (testing, docs, stable)
+
+---
+
 ## Security Considerations
 
 **Secrets:**
@@ -1997,56 +2066,6 @@ func TestRelativeSymlinks(t *testing.T) {
 - **Trade-off:** Requires explicit sync command
 
 ---
-
----
-
-## Roadmap
-
-### v1.2 - Hooks System
-- Pre/post hooks for add, remove, sync, restore
-- Simple bash files in `~/.dotcor/hooks/` directory
-- Graceful degradation (skip if hook doesn't exist)
-- Hook types: `pre-add`, `post-add`, `pre-remove`, `post-remove`, `pre-sync`, `post-sync`, `pre-restore`, `post-restore`
-
-### v1.3 - Recursive Add
-- `--recursive` flag for adding directories
-- Preserves directory structure in repo
-- Respects ignore patterns
-- Progress indicator for large directories
-
-### v1.4 - Simple Template System
-- Basic substitution: `{{ .Hostname }}`, `{{ .OS }}`, `{{ .User }}`
-- `--template` flag for `add` command
-- Templates stored with `.template` extension in repo
-- New `dotcor rebuild-links` command to render templates
-- No Go template complexity (keep simple substitution)
-- Template variables: `.Hostname`, `.OS`, `.User`, `.Home`
-
-### v1.5 - Improved Doctor
-- More diagnostic checks (permissions, git config, symlink health)
-- Actionable fix suggestions
-- `--fix` flag for automatic repairs
-- Better output formatting
-- Checks: symlink validity, git health, permissions, config validity, locks, git remote, hook permissions
-
-### v1.6 - Polish & Bug Fixes
-- Address bugs and issues discovered during v1.2-v1.5 development
-- Performance improvements
-- UX refinements
-- Documentation updates
-
-### v2.0 - Machine Profiles
-- Machine profiles with separate managed files lists per profile
-- Profile switching (`dotcor set-profile <name>`)
-- List available profiles (`dotcor list-profiles`)
-- Profile structure: Option A - separate lists per profile
-
-### v3.0 - Undecided (Depends on v2.0 Feedback)
-**Potential features:**
-- TUI interface (if features warrant complexity)
-- Migration tools from other dotfile managers (Stow, Chezmoi)
-- Better template engine (Go templates vs simple substitution)
-- Profile inheritance (base profile + profile-specific additions)
 
 ---
 
