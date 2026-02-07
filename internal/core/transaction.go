@@ -156,9 +156,9 @@ func (op *CreateSymlinkOp) Describe() string {
 
 // RemoveSymlinkOp removes a symlink (saves target for undo)
 type RemoveSymlinkOp struct {
-	Link         string
-	savedTarget  string // Saved for undo
-	wasRelative  bool
+	Link        string
+	savedTarget string // Saved for undo
+	wasRelative bool
 }
 
 func (op *RemoveSymlinkOp) Do() error {
@@ -176,8 +176,8 @@ func (op *RemoveSymlinkOp) Do() error {
 }
 
 func (op *RemoveSymlinkOp) Undo() error {
-	// Recreate the symlink
-	return os.Symlink(op.savedTarget, op.Link)
+	// Use safe symlink creation with validation
+	return fs.CreateSymlink(op.savedTarget, op.Link)
 }
 
 func (op *RemoveSymlinkOp) Describe() string {
@@ -258,8 +258,8 @@ func (op *AddToConfigOp) Describe() string {
 
 // RemoveFromConfigOp removes a managed file from config
 type RemoveFromConfigOp struct {
-	Config    *config.Config
-	savedFile *config.ManagedFile // Saved for undo
+	Config     *config.Config
+	savedFile  *config.ManagedFile // Saved for undo
 	sourcePath string
 }
 
