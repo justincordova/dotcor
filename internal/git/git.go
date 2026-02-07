@@ -240,7 +240,18 @@ func GetFileHistory(repoPath, filePath string, limit int) ([]CommitInfo, error) 
 			continue
 		}
 
-		date, _ := time.Parse(time.RFC3339, parts[2])
+		date, err := time.Parse(time.RFC3339, parts[2])
+		if err != nil {
+			// Try other common formats
+			date, err = time.Parse(time.RFC1123, parts[2])
+			if err != nil {
+				date, err = time.Parse("2006-01-02 15:04:05", parts[2])
+				if err != nil {
+					// If all fail, use zero time and log warning
+					date = time.Time{}
+				}
+			}
+		}
 		commits = append(commits, CommitInfo{
 			Hash:    parts[0],
 			Author:  parts[1],
