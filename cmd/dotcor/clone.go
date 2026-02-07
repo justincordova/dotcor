@@ -13,6 +13,23 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// isValidGitURL checks if URL looks like a valid git remote URL
+func isValidGitURL(url string) bool {
+	prefixes := []string{
+		"http://",
+		"https://",
+		"git://",
+		"git@",
+		"ssh://",
+	}
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(url, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 var cloneCmd = &cobra.Command{
 	Use:   "clone <url>",
 	Short: "Clone dotfiles from a remote repository",
@@ -120,6 +137,15 @@ func runClone(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("[OK] Repository cloned")
+
+	// Set up git remote if this is a remote URL
+	if isValidGitURL(repoURL) {
+		if err := git.SetRemote(filesDir, "origin", repoURL); err != nil {
+			fmt.Fprintf(os.Stderr, "[!] Warning: failed to set git remote: %v\n", err)
+		} else {
+			fmt.Println("[OK] Git remote configured")
+		}
+	}
 
 	// Check for config.yaml in repo
 	configPath := filesDir + "/config.yaml"
