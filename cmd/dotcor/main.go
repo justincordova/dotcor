@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	version = "0.1.2" // Production fixes release
+	version = "0.2.0" // Hooks system
 )
 
 // ANSI color codes
