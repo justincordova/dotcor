@@ -368,7 +368,24 @@ func checkOrphanedFiles(fix bool) (issues, fixed int) {
 func findOrphanedFilesTopLevel(repoPath string, tracked map[string]bool) []string {
 	var orphans []string
 
-	// findOrphanedFilesInDir finds files in subdirectories (non-recursive)
+	entries, err := os.ReadDir(repoPath)
+	if err != nil {
+		return orphans
+	}
+
+	for _, entry := range entries {
+		if entry.Name() == ".git" || entry.Name() == "config.yaml" {
+			continue
+		}
+		if !entry.IsDir() && !tracked[entry.Name()] {
+			orphans = append(orphans, entry.Name())
+		}
+	}
+
+	return orphans
+}
+
+// findOrphanedFilesInDir finds files in subdirectories (non-recursive)
 // Walks entries at a specific directory level, checking if each is a directory or a tracked file
 func findOrphanedFilesInDir(repoPath string, relDir string, tracked map[string]bool) []string {
 	var orphans []string
@@ -384,16 +401,11 @@ func findOrphanedFilesInDir(repoPath string, relDir string, tracked map[string]b
 			continue
 		}
 
-		if entry.IsDir() {
-			// Recursively check subdirectory
-			subOrphans := findOrphanedFilesRecursive(filepath.Join(basePath, relPath), tracked)
-			orphans = append(orphans, subOrphans...)
-		} else {
+		if !entry.IsDir() {
 			relPath := relDir + "/" + entry.Name()
 			if !tracked[relPath] {
 				orphans = append(orphans, relPath)
 			}
-		}
 		}
 	}
 

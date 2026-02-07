@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -15,6 +16,7 @@ const CurrentConfigVersion = "1.0"
 
 // Config represents the DotCor configuration
 type Config struct {
+	Logger         *slog.Logger  `yaml:"-"`               // Structured logger for system logging (not persisted)
 	Version        string        `yaml:"version"`         // Schema version for migrations
 	RepoPath       string        `yaml:"repo_path"`       // ~/.dotcor/files
 	GitEnabled     bool          `yaml:"git_enabled"`     // Whether Git integration is enabled
@@ -125,11 +127,12 @@ func NewDefaultConfig() (*Config, error) {
 	}
 
 	return &Config{
+		Logger:         nil,
 		Version:        CurrentConfigVersion,
 		RepoPath:       filepath.Join(configDir, "files"),
 		GitEnabled:     true,
 		IgnorePatterns: GetDefaultIgnorePatterns(),
-		ManagedFiles:   []ManagedFile{}, // Explicitly initialize empty slice
+		ManagedFiles:   []ManagedFile{},
 	}, nil
 }
 
