@@ -96,7 +96,7 @@ func ExpandPath(path string) (string, error) {
 		}
 
 		// Replace ~ with home directory
-		if strings.HasPrefix(path, "~/") || strings.HasPrefix(path, "~"+string(filepath.Separator)) {
+		if strings.HasPrefix(path, "~/") || strings.HasPrefix(path, "~\\") || strings.HasPrefix(path, "~"+string(filepath.Separator)) {
 			path = filepath.Join(home, path[2:])
 		}
 	}
