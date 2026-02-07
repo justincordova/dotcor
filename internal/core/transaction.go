@@ -38,6 +38,7 @@ func NewTransaction() *Transaction {
 }
 
 // Execute runs an operation and registers it for potential rollback
+// Returns error if operation fails or if rollback also fails
 func (t *Transaction) Execute(op Operation) error {
 	if t.committed {
 		return fmt.Errorf("transaction already committed")
