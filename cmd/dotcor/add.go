@@ -27,6 +27,7 @@ Examples:
   dotcor add ~/.zshrc ~/.bashrc          # Add multiple files
   dotcor add ~/.config/nvim/*            # Add with glob pattern
   dotcor add ~/.config/nvim --recursive  # Add directory recursively
+  dotcor add ~/.zshrc --template         # Add as template file
   dotcor add ~/.zshrc --category shell   # Add with custom category
   dotcor add ~/.zshrc --force            # Skip validation warnings`,
 	Args: cobra.MinimumNArgs(1),
@@ -37,6 +38,7 @@ func init() {
 	addCmd.Flags().StringP("category", "c", "", "Override automatic category detection")
 	addCmd.Flags().BoolP("force", "f", false, "Force add, ignoring warnings (not errors)")
 	addCmd.Flags().BoolP("recursive", "r", false, "Recursively add all files in directory")
+	addCmd.Flags().Bool("template", false, "Treat file as template (adds .template extension)")
 	addCmd.Flags().Bool("dry-run", false, "Show what would be done without making changes")
 	rootCmd.AddCommand(addCmd)
 }
@@ -45,6 +47,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	category, _ := cmd.Flags().GetString("category")
 	force, _ := cmd.Flags().GetBool("force")
 	recursive, _ := cmd.Flags().GetBool("recursive")
+	isTemplate, _ := cmd.Flags().GetBool("template")
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
 
 	// Load config
@@ -129,7 +132,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	var gitFiles []string
 
 	for _, file := range files {
-		result, repoPath, err := processAddFile(cfg, file, category, force, dryRun)
+		result, repoPath, err := processAddFile(cfg, file, category, force, isTemplate, dryRun)
 		switch result {
 		case addResultSuccess:
 			added++
@@ -193,7 +196,7 @@ const (
 )
 
 // processAddFile handles adding a single file
-func processAddFile(cfg *config.Config, sourcePath string, category string, force bool, dryRun bool) (addResult, string, error) {
+func processAddFile(cfg *config.Config, sourcePath string, category string, force bool, isTemplate bool, dryRun bool) (addResult, string, error) {
 	// Expand source path
 	expanded, err := config.ExpandPath(sourcePath)
 	if err != nil {
@@ -254,6 +257,11 @@ func processAddFile(cfg *config.Config, sourcePath string, category string, forc
 		customRepoPath = filepath.Join(category, repoFilename)
 	}
 	repoPath, err := config.GenerateRepoPath(sourcePath, customRepoPath)
+
+	// Add .template extension if template flag is set
+	if isTemplate {
+		repoPath += ".template"
+	}
 	if err != nil {
 		return addResultError, "", fmt.Errorf("generating repo path: %w", err)
 	}

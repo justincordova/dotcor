@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	version = "0.3.0" // Recursive add
+	version = "0.4.0" // Simple template system
 )
 
 // ANSI color codes
