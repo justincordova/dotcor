@@ -130,12 +130,15 @@ func EnsureDir(path string) error {
 func IsDirectory(path string) (bool, error) {
 	info, err := os.Stat(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
 		return false, fmt.Errorf("checking path: %w", err)
 	}
 	return info.IsDir(), nil
+}
+
+// Exists checks if path exists (file or directory)
+func Exists(path string) bool {
+	_, err := os.Stat(path)
+	return !os.IsNotExist(err)
 }
 
 // GetFileSize returns file size in bytes
