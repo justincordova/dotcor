@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	version = "0.4.0" // Simple template system
+	version = "0.5.1" // Critical fixes
 )
 
 // ANSI color codes
