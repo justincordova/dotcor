@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	version = "0.2.0" // Hooks system
+	version = "0.3.0" // Recursive add
 )
 
 // ANSI color codes
