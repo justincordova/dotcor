@@ -23,66 +23,80 @@ type Operation interface {
 //
 // Both patterns track executed operations in 'executed' for rollback.
 type Transaction struct {
-	operations []Operation // Planned operations (for ExecuteAll pattern)
-	executed   []Operation // Operations that have been executed (for rollback)
+	config     *config.Config
+	operations []Operation
+	executed   []Operation
 	committed  bool
 }
 
-// NewTransaction creates a new transaction
-func NewTransaction() *Transaction {
+func NewTransaction(cfg *config.Config) *Transaction {
 	return &Transaction{
+		config:     cfg,
 		operations: []Operation{},
 		executed:   []Operation{},
 		committed:  false,
 	}
 }
 
-// Execute runs an operation and registers it for potential rollback
-// Returns error if operation fails or if rollback also fails
 func (t *Transaction) Execute(op Operation) error {
+	t.config.Logger.Debug("executing operation", "op", op.Describe())
+
 	if t.committed {
+		t.config.Logger.Error("transaction execute failed", "error", fmt.Errorf("already committed"))
 		return fmt.Errorf("transaction already committed")
 	}
 
 	if err := op.Do(); err != nil {
-		// Operation failed, rollback all previously executed operations
+		t.config.Logger.Error("operation failed, rolling back",
+			"op", op.Describe(),
+			"error", err,
+		)
 		rollbackErr := t.Rollback()
 		if rollbackErr != nil {
+			t.config.Logger.Error("rollback failed during execute",
+				"error", rollbackErr,
+			)
 			return fmt.Errorf("executing %s: %w (rollback also failed: %v)", op.Describe(), err, rollbackErr)
 		}
 		return fmt.Errorf("executing %s: %w", op.Describe(), err)
 	}
 
 	t.executed = append(t.executed, op)
+	t.config.Logger.Debug("operation executed successfully", "op", op.Describe())
 	return nil
 }
 
-// Rollback undoes all executed operations in reverse order.
-// If multiple rollback operations fail, all errors are collected and joined.
 func (t *Transaction) Rollback() error {
+	t.config.Logger.Warn("rolling back transaction", "operations", len(t.executed))
+
 	if t.committed {
+		t.config.Logger.Error("rollback failed", "error", fmt.Errorf("already committed"))
 		return fmt.Errorf("cannot rollback committed transaction")
 	}
 
-	// Undo in reverse order
 	for i := len(t.executed) - 1; i >= 0; i-- {
 		op := t.executed[i]
+		t.config.Logger.Debug("rolling back operation", "op", op.Describe(), "index", i)
 		if err := op.Undo(); err != nil {
-			// Stop rollback on first error to preserve consistent state
+			t.config.Logger.Error("rollback failed",
+				"op", op.Describe(),
+				"error", err,
+				"index", i,
+			)
 			t.executed = nil
-			return fmt.Errorf("rolling back %s: %w (rollback stopped at %d/%d operations)",
-				op.Describe(), err, len(t.executed)-i-1, len(t.executed))
+			return fmt.Errorf("rolling back %s: %w", op.Describe(), err)
 		}
 	}
 
+	t.config.Logger.Info("transaction rolled back")
 	t.executed = nil
 	return nil
 }
 
-// Commit marks transaction as successful (clears rollback list)
 func (t *Transaction) Commit() {
+	t.config.Logger.Debug("committing transaction", "operations", len(t.executed))
 	t.committed = true
-	t.executed = nil // Clear executed list, no longer needed
+	t.executed = nil
 }
 
 // IsCommitted returns whether the transaction has been committed
@@ -183,15 +197,14 @@ func (op *RemoveSymlinkOp) Describe() string {
 	return fmt.Sprintf("remove symlink %s", op.Link)
 }
 
-// RemoveFileOp removes a file (backs up for undo)
 type RemoveFileOp struct {
 	Path       string
-	backupPath string // Backup path for undo
+	backupPath string
+	config     *config.Config
 }
 
 func (op *RemoveFileOp) Do() error {
-	// Create backup before removing
-	backupPath, err := CreateBackup(op.Path)
+	backupPath, err := CreateBackup(op.Path, op.config)
 	if err != nil {
 		return fmt.Errorf("creating backup: %w", err)
 	}
@@ -204,7 +217,7 @@ func (op *RemoveFileOp) Undo() error {
 	if op.backupPath == "" {
 		return fmt.Errorf("no backup available for undo")
 	}
-	return RestoreBackup(op.backupPath, op.Path)
+	return RestoreBackup(op.backupPath, op.Path, op.config)
 }
 
 func (op *RemoveFileOp) Describe() string {
@@ -308,13 +321,13 @@ type WriteFileOp struct {
 	Mode       os.FileMode
 	backupPath string
 	existed    bool
+	config     *config.Config
 }
 
 func (op *WriteFileOp) Do() error {
-	// Check if file exists and backup
 	if fs.FileExists(op.Path) {
 		op.existed = true
-		backupPath, err := CreateBackup(op.Path)
+		backupPath, err := CreateBackup(op.Path, op.config)
 		if err != nil {
 			return fmt.Errorf("creating backup: %w", err)
 		}
@@ -326,9 +339,8 @@ func (op *WriteFileOp) Do() error {
 
 func (op *WriteFileOp) Undo() error {
 	if op.existed && op.backupPath != "" {
-		return RestoreBackup(op.backupPath, op.Path)
+		return RestoreBackup(op.backupPath, op.Path, op.config)
 	}
-	// File didn't exist before, remove it
 	return os.Remove(op.Path)
 }
 
@@ -345,9 +357,8 @@ func (op *WriteFileOp) Describe() string {
 // Steps: move to repo -> create symlink -> add to config
 // Note: Backup is handled separately by the caller (backups are kept regardless of rollback).
 func AddFileTransaction(cfg *config.Config, sourcePath string, repoPath string, mf config.ManagedFile) (*Transaction, error) {
-	tx := NewTransaction()
+	tx := NewTransaction(cfg)
 
-	// Get full repo file path
 	fullRepoPath, err := config.GetRepoFilePath(cfg, repoPath)
 	if err != nil {
 		return nil, err
