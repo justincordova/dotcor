@@ -25,6 +25,9 @@ type LockInfo struct {
 // LockTimeout is the duration after which a lock is considered stale
 const LockTimeout = time.Hour
 
+// maxRetries is the maximum number of lock acquisition attempts
+const maxRetries = 3
+
 // ErrLockHeld is returned when lock is already held by another process
 var ErrLockHeld = errors.New("lock is held by another process")
 
@@ -44,63 +47,66 @@ func getLockPath() (string, error) {
 // Uses O_EXCL for atomic lock creation to prevent race conditions
 // Returns error if lock is already held
 func AcquireLock() error {
-	lockPath, err := getLockPath()
-	if err != nil {
-		return err
-	}
-
-	// Ensure config directory exists
-	if err := fs.EnsureDir(filepath.Dir(lockPath)); err != nil {
-		return fmt.Errorf("creating config directory: %w", err)
-	}
-
-	// Try atomic lock creation with O_EXCL
-	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
-	if err != nil {
-		if os.IsExist(err) {
-			// Lock file exists, check if stale
-			stale, staleErr := IsStale(lockPath)
-			if staleErr != nil {
-				return fmt.Errorf("checking stale lock: %w", staleErr)
-			}
-
-			if stale {
-				// Try to remove stale lock and retry
-				if removeErr := os.Remove(lockPath); removeErr != nil {
-					info, _ := ReadLockInfo(lockPath)
-					return fmt.Errorf("%w: PID %d (process appears dead). Run 'dotcor doctor --fix' to clear", ErrStaleLock, info.PID)
-				}
-				// Retry lock acquisition after removing stale lock
-				return AcquireLock()
-			}
-
-			// Lock is held by active process
-			info, _ := ReadLockInfo(lockPath)
-			return fmt.Errorf("%w: PID %d on %s. If this is incorrect, run 'dotcor doctor --fix'", ErrLockHeld, info.PID, info.Hostname)
+	for i := 0; i < maxRetries; i++ {
+		lockPath, err := getLockPath()
+		if err != nil {
+			return err
 		}
-		return fmt.Errorf("creating lock file: %w", err)
+
+		// Ensure config directory exists
+		if err := fs.EnsureDir(filepath.Dir(lockPath)); err != nil {
+			return fmt.Errorf("creating config directory: %w", err)
+		}
+
+		// Try atomic lock creation with O_EXCL
+		f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+		if err != nil {
+			if os.IsExist(err) {
+				// Lock file exists, check if stale
+				stale, staleErr := IsStale(lockPath)
+				if staleErr != nil {
+					return fmt.Errorf("checking stale lock: %w", staleErr)
+				}
+
+				if stale {
+					// Try to remove stale lock and retry
+					if removeErr := os.Remove(lockPath); removeErr != nil {
+						info, _ := ReadLockInfo(lockPath)
+						return fmt.Errorf("%w: PID %d (process appears dead). Run 'dotcor doctor --fix' to clear", ErrStaleLock, info.PID)
+					}
+					// Retry lock acquisition after removing stale lock
+					continue
+				}
+
+				// Lock is held by active process
+				info, _ := ReadLockInfo(lockPath)
+				return fmt.Errorf("%w: PID %d on %s. If this is incorrect, run 'dotcor doctor --fix'", ErrLockHeld, info.PID, info.Hostname)
+			}
+			return fmt.Errorf("creating lock file: %w", err)
+		}
+		defer f.Close()
+
+		// Write lock content
+		hostname, err := os.Hostname()
+		if err != nil {
+			hostname = "unknown"
+		}
+
+		content := fmt.Sprintf("%d\n%s\n%s\n",
+			os.Getpid(),
+			time.Now().Format(time.RFC3339),
+			hostname,
+		)
+
+		if _, err := f.WriteString(content); err != nil {
+			// Clean up on write failure
+			os.Remove(lockPath)
+			return fmt.Errorf("writing lock file: %w", err)
+		}
+
+		return nil
 	}
-	defer f.Close()
-
-	// Write lock content
-	hostname, err := os.Hostname()
-	if err != nil {
-		hostname = "unknown"
-	}
-
-	content := fmt.Sprintf("%d\n%s\n%s\n",
-		os.Getpid(),
-		time.Now().Format(time.RFC3339),
-		hostname,
-	)
-
-	if _, err := f.WriteString(content); err != nil {
-		// Clean up on write failure
-		os.Remove(lockPath)
-		return fmt.Errorf("writing lock file: %w", err)
-	}
-
-	return nil
+	return fmt.Errorf("failed to acquire lock after %d attempts", maxRetries)
 }
 
 // ReleaseLock releases the file lock
