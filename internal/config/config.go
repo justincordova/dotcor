@@ -128,9 +128,8 @@ func NewDefaultConfig() (*Config, error) {
 		Version:        CurrentConfigVersion,
 		RepoPath:       filepath.Join(configDir, "files"),
 		GitEnabled:     true,
-		GitRemote:      "",
 		IgnorePatterns: GetDefaultIgnorePatterns(),
-		ManagedFiles:   []ManagedFile{},
+		ManagedFiles:   []ManagedFile{}, // Explicitly initialize empty slice
 	}, nil
 }
 
