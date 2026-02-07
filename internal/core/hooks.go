@@ -47,7 +47,7 @@ func RunHook(ctx HookContext) error {
 		return nil
 	}
 
-	if info.Mode().Perm()&0111 == 0 {
+	if !info.Mode().IsRegular() || info.Mode().Perm()&0111 == 0 {
 		return nil
 	}
 
