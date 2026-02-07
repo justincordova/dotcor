@@ -345,7 +345,7 @@ func checkOrphanedFiles(fix bool) (issues, fixed int) {
 	}
 
 	// Walk repo directory and find orphans
-	orphans := findOrphanedFiles(repoPath, tracked)
+	orphans := findOrphanedFilesTopLevel(repoPath, tracked)
 
 	if len(orphans) == 0 {
 		fmt.Println("  [OK] No orphaned files")
@@ -364,12 +364,17 @@ func checkOrphanedFiles(fix bool) (issues, fixed int) {
 	return
 }
 
-// findOrphanedFiles finds files in repo not tracked in config
-func findOrphanedFiles(repoPath string, tracked map[string]bool) []string {
+// findOrphanedFilesTopLevel finds files in repo root not tracked in config (non-recursive)
+func findOrphanedFilesTopLevel(repoPath string, tracked map[string]bool) []string {
+	var orphans []string
+
+	// findOrphanedFilesInDir finds files in subdirectories (non-recursive)
+// Walks entries at a specific directory level, checking if each is a directory or a tracked file
+func findOrphanedFilesInDir(repoPath string, relDir string, tracked map[string]bool) []string {
 	var orphans []string
 
 	// Simple walk - look for files not in tracked set
-	entries, err := os.ReadDir(repoPath)
+	entries, err := os.ReadDir(repoPath + "/" + relDir)
 	if err != nil {
 		return orphans
 	}
@@ -381,13 +386,14 @@ func findOrphanedFiles(repoPath string, tracked map[string]bool) []string {
 
 		if entry.IsDir() {
 			// Recursively check subdirectory
-			subOrphans := findOrphanedFilesRecursive(repoPath, entry.Name(), tracked)
+			subOrphans := findOrphanedFilesRecursive(filepath.Join(basePath, relPath), tracked)
 			orphans = append(orphans, subOrphans...)
 		} else {
-			relPath := entry.Name()
+			relPath := relDir + "/" + entry.Name()
 			if !tracked[relPath] {
 				orphans = append(orphans, relPath)
 			}
+		}
 		}
 	}
 
