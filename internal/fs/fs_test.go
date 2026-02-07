@@ -289,9 +289,10 @@ func TestIsDirectory(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "non-existent",
-			path: filepath.Join(tempDir, "nonexistent"),
-			want: false,
+			name:    "non-existent",
+			path:    filepath.Join(tempDir, "nonexistent"),
+			want:    false,
+			wantErr: true, // Now consistently returns error for all failures
 		},
 	}
 
