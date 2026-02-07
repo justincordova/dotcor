@@ -1351,6 +1351,7 @@ Finish any remaining v0.5.0 requirements:
 | #13 | internal/core/transaction.go:43 | Important | v0.5.2 | b5b15d0 |
 | #14 | internal/core/transaction.go:59 | Important | v0.5.2 | 231f93c |
 | #15 | internal/fs/fs.go:89 | Important | v0.5.2 | 7aa9655 |
+| #15-test | internal/fs/fs_test.go:302 | Important | v0.5.2 | a3b303e |
 | #16 | internal/config/paths.go:92 | Important | v0.5.2 | 2ecb152 |
 | #17 | cmd/rebuild-links.go:74 | Important | v0.5.2 | ea3f583 |
 | #18 | internal/core/backup.go:34 | Important | v0.5.2 | f754f56 |
