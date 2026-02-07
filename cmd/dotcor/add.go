@@ -222,6 +222,10 @@ func processAddFile(cfg *config.Config, sourcePath string, category string, forc
 		return addResultSuccess, repoPath, nil
 	}
 
+	if err := core.RunHook(core.HookContext{HookType: "pre-add", FilePath: sourcePath}); err != nil {
+		fmt.Printf("  [!] Pre-add hook warning: %v\n", err)
+	}
+
 	// Create backup
 	backupPath, err := core.CreateBackup(expanded)
 	if err != nil {
@@ -257,6 +261,10 @@ func processAddFile(cfg *config.Config, sourcePath string, category string, forc
 
 	tx.Commit()
 	fmt.Printf("  [OK] %s\n", normalized)
+
+	if err := core.RunHook(core.HookContext{HookType: "post-add", FilePath: sourcePath, RepoPath: repoPath}); err != nil {
+		fmt.Printf("  [!] Post-add hook warning: %v\n", err)
+	}
 
 	// Return relative repoPath (consistent with dry-run return)
 	return addResultSuccess, repoPath, nil

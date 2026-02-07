@@ -93,6 +93,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Create directory structure
 	filesDir := filepath.Join(configDir, "files")
 	backupsDir := filepath.Join(configDir, "backups")
+	hooksDir := filepath.Join(configDir, "hooks")
 
 	fmt.Println("Initializing DotCor...")
 
@@ -107,6 +108,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	if err := fs.EnsureDir(backupsDir); err != nil {
 		return fmt.Errorf("creating backups directory: %w", err)
+	}
+
+	if err := fs.EnsureDir(hooksDir); err != nil {
+		return fmt.Errorf("creating hooks directory: %w", err)
 	}
 
 	// Initialize Git repository
