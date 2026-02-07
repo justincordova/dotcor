@@ -165,6 +165,10 @@ func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool,
 		return nil
 	}
 
+	if err := core.RunHook(core.HookContext{HookType: "pre-remove", FilePath: mf.SourcePath}); err != nil {
+		fmt.Printf("  [!] Pre-remove hook warning: %v\n", err)
+	}
+
 	// Check if source is a symlink
 	isLink, err := fs.IsSymlink(sourcePath)
 	if err != nil {
@@ -182,6 +186,10 @@ func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool,
 		// Remove from config
 		if err := cfg.RemoveManagedFile(mf.SourcePath); err != nil {
 			return fmt.Errorf("updating config: %w", err)
+		}
+
+		if err := core.RunHook(core.HookContext{HookType: "post-remove", FilePath: mf.SourcePath}); err != nil {
+			fmt.Printf("  [!] Post-remove hook warning: %v\n", err)
 		}
 
 		fmt.Printf("  [OK] %s (removed from management, kept in repo)\n", mf.SourcePath)
@@ -227,6 +235,10 @@ func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool,
 	// Remove from config
 	if err := cfg.RemoveManagedFile(mf.SourcePath); err != nil {
 		return fmt.Errorf("updating config: %w", err)
+	}
+
+	if err := core.RunHook(core.HookContext{HookType: "post-remove", FilePath: mf.SourcePath}); err != nil {
+		fmt.Printf("  [!] Post-remove hook warning: %v\n", err)
 	}
 
 	fmt.Printf("  [OK] %s\n", mf.SourcePath)

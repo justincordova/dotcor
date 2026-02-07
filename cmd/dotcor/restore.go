@@ -127,6 +127,10 @@ func restoreFromGit(repoRoot, repoPath, fullRepoPath, ref string, preview, force
 		}
 	}
 
+	if err := core.RunHook(core.HookContext{HookType: "pre-restore", FilePath: repoPath}); err != nil {
+		fmt.Printf("[!] Pre-restore hook warning: %v\n", err)
+	}
+
 	// Acquire lock
 	if err := core.AcquireLock(); err != nil {
 		return fmt.Errorf("acquiring lock: %w", err)
@@ -144,6 +148,10 @@ func restoreFromGit(repoRoot, repoPath, fullRepoPath, ref string, preview, force
 	// Restore from Git
 	if err := git.RestoreFile(repoRoot, repoPath, ref); err != nil {
 		return fmt.Errorf("restoring from git: %w", err)
+	}
+
+	if err := core.RunHook(core.HookContext{HookType: "post-restore", FilePath: repoPath}); err != nil {
+		fmt.Printf("[!] Post-restore hook warning: %v\n", err)
 	}
 
 	fmt.Printf("[OK] Restored %s from %s\n", repoPath, ref)
@@ -189,6 +197,10 @@ func restoreFromBackup(sourcePath, repoPath string, preview, force bool) error {
 		}
 	}
 
+	if err := core.RunHook(core.HookContext{HookType: "pre-restore", FilePath: sourcePath}); err != nil {
+		fmt.Printf("[!] Pre-restore hook warning: %v\n", err)
+	}
+
 	// Acquire lock
 	if err := core.AcquireLock(); err != nil {
 		return fmt.Errorf("acquiring lock: %w", err)
@@ -198,6 +210,10 @@ func restoreFromBackup(sourcePath, repoPath string, preview, force bool) error {
 	// Restore from backup
 	if err := core.RestoreBackup(backup.BackupPath, repoPath); err != nil {
 		return fmt.Errorf("restoring from backup: %w", err)
+	}
+
+	if err := core.RunHook(core.HookContext{HookType: "post-restore", FilePath: sourcePath}); err != nil {
+		fmt.Printf("[!] Post-restore hook warning: %v\n", err)
 	}
 
 	fmt.Printf("[OK] Restored %s from backup\n", sourcePath)
