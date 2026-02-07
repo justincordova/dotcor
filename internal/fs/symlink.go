@@ -59,16 +59,16 @@ func CreateSymlink(target, link string) error {
 		return fmt.Errorf("computing relative path: %w", err)
 	}
 
-	// Remove existing file/symlink if it exists
-	if _, err := os.Lstat(expandedLink); err == nil {
-		if err := os.Remove(expandedLink); err != nil {
-			return fmt.Errorf("removing existing file: %w", err)
-		}
+	// Create symlink in temp location first (atomic rename pattern)
+	tempLink := expandedLink + ".tmp"
+	if err := os.Symlink(relPath, tempLink); err != nil {
+		return fmt.Errorf("creating temp symlink: %w", err)
 	}
 
-	// Create symlink with RELATIVE path
-	if err := os.Symlink(relPath, expandedLink); err != nil {
-		return fmt.Errorf("creating symlink: %w", err)
+	// Atomically rename to target (works on Unix, Windows supports it too)
+	if err := os.Rename(tempLink, expandedLink); err != nil {
+		os.Remove(tempLink)
+		return fmt.Errorf("moving symlink into place: %w", err)
 	}
 
 	return nil
