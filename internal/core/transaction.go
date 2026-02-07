@@ -46,7 +46,10 @@ func (t *Transaction) Execute(op Operation) error {
 
 	if err := op.Do(); err != nil {
 		// Operation failed, rollback all previously executed operations
-		t.Rollback()
+		rollbackErr := t.Rollback()
+		if rollbackErr != nil {
+			return fmt.Errorf("executing %s: %w (rollback also failed: %v)", op.Describe(), err, rollbackErr)
+		}
 		return fmt.Errorf("executing %s: %w", op.Describe(), err)
 	}
 
