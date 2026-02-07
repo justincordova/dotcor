@@ -26,10 +26,15 @@ func MoveFile(src, dst string) error {
 		return fmt.Errorf("copying file: %w", err)
 	}
 
+	// Check if dst existed before copying
+	dstExisted := FileExists(dst)
+
 	// Remove original after successful copy
 	if err := os.Remove(src); err != nil {
-		// Try to clean up the copy if we can't remove original
-		os.Remove(dst)
+		// Only remove dst if we created it (not if it existed before)
+		if !dstExisted {
+			os.Remove(dst)
+		}
 		return fmt.Errorf("removing original file: %w", err)
 	}
 
