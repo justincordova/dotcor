@@ -268,26 +268,34 @@ func (op *AddToConfigOp) Describe() string {
 // RemoveFromConfigOp removes a managed file from config
 type RemoveFromConfigOp struct {
 	Config     *config.Config
-	savedFile  *config.ManagedFile // Saved for undo
+	savedFile  config.ManagedFile // Saved for undo
 	sourcePath string
+	fileIndex  int // Track index of removed file
 }
 
 func (op *RemoveFromConfigOp) Do() error {
-	// Save file info for undo
-	file, err := op.Config.GetManagedFile(op.sourcePath)
-	if err != nil {
-		return err
+	// Find by index instead of source path
+	for i, mf := range op.Config.ManagedFiles {
+		if mf.SourcePath == op.sourcePath {
+			op.savedFile = mf
+			op.fileIndex = i
+			op.Config.ManagedFiles = append(
+				op.Config.ManagedFiles[:i],
+				op.Config.ManagedFiles[i+1:]...,
+			)
+			return op.Config.SaveConfig()
+		}
 	}
-	op.savedFile = file
-
-	return op.Config.RemoveManagedFile(op.sourcePath)
+	return fmt.Errorf("managed file not found: %s", op.sourcePath)
 }
 
 func (op *RemoveFromConfigOp) Undo() error {
-	if op.savedFile == nil {
-		return fmt.Errorf("no saved file info for undo")
-	}
-	return op.Config.AddManagedFile(*op.savedFile)
+	// Insert back at correct position
+	op.Config.ManagedFiles = append(
+		op.Config.ManagedFiles[:op.fileIndex],
+		append([]config.ManagedFile{op.savedFile}, op.Config.ManagedFiles[op.fileIndex:]...)...,
+	)
+	return op.Config.SaveConfig()
 }
 
 func (op *RemoveFromConfigOp) Describe() string {
