@@ -1,7 +1,6 @@
 package core
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
@@ -64,22 +63,18 @@ func (t *Transaction) Rollback() error {
 		return fmt.Errorf("cannot rollback committed transaction")
 	}
 
-	var errs []error
-
 	// Undo in reverse order
 	for i := len(t.executed) - 1; i >= 0; i-- {
 		op := t.executed[i]
 		if err := op.Undo(); err != nil {
-			// Continue rolling back other operations even if one fails
-			errs = append(errs, fmt.Errorf("rolling back %s: %w", op.Describe(), err))
+			// Stop rollback on first error to preserve consistent state
+			t.executed = nil
+			return fmt.Errorf("rolling back %s: %w (rollback stopped at %d/%d operations)",
+				op.Describe(), err, len(t.executed)-i-1, len(t.executed))
 		}
 	}
 
 	t.executed = nil
-
-	if len(errs) > 0 {
-		return fmt.Errorf("rollback errors: %w", errors.Join(errs...))
-	}
 	return nil
 }
 
