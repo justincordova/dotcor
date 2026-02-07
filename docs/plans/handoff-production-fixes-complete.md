@@ -1,144 +1,120 @@
-# Handoff: Production Fixes Complete
-
-## Context
-**Project:** DotCor - Symlink-based dotfile manager
-**Current version:** v0.1.2 (production fixes release)
-**Status:** All critical issues fixed, code review complete, ready for v0.2.0 development
-
-## What Was Completed
-
-### Production Fixes (v0.1.2)
-All critical and important issues identified in code review have been addressed:
-
-1. **Config migration validation** (`internal/config/migrate.go`)
-   - Added validation during migration
-   - Set defaults for empty configs
-   - Prevents data loss on repo_path being empty
-
-2. **Backup path improvements** (`internal/core/backup.go`)
-   - Backups now stored with full source paths
-   - Prevents wrong-file restores when names collide
-   - Preserves directory structure in backups
-
-3. **Adopt command fix** (`cmd/dotcor/adopt.go`)
-   - Now copies external symlinks into repo
-   - Recreates symlinks to point to repo
-   - Matches PLAN specification
-
-4. **Git error tracking** (`cmd/dotcor/add.go`, `sync.go`, `status.go`)
-   - Tracks files with uncommitted changes
-   - Displays uncommitted files in status
-   - Clears uncommitted flags on successful sync
-
-5. **Diff --staged flag** (`cmd/dotcor/diff.go`)
-   - Implemented --staged functionality
-   - Shows staged vs unstaged diffs correctly
-
-6. **Documentation fixes** (`README.md`, `.github/workflows/release.yml`)
-   - Removed Windows copy fallback claim (no such feature exists)
-   - Corrected examples (glob patterns instead of directories)
-   - Added build/test to release workflow
-   - Fixed config example to include required fields
-
-### Plan Updates
-1. **Updated ROADMAP** in PLAN.md with clear versioning:
-   - v0.2.0 - Hooks System
-   - v0.3.0 - Recursive Add
-   - v0.4.0 - Simple Templates
-   - v0.5.0 - Improved Doctor
-   - v0.6.0 - Polish & Bug Fixes
-   - v0.7.0 - Machine Profiles
-   - v1.0.0 - Production Release
-   - v2.0.0 - Post-Production Features
-
-2. **Fixed critical typos** throughout PLAN.md:
-   - "symlinks" → "symlinks"
-   - YAML quote formatting
-   - Removed (NEW) markers
-
-3. **Reorganized PLAN.md:**
-   - Moved Roadmap to beginning (after Overview)
-   - Added v1.0.0 Production Release milestone
-   - Updated config version constant to "0.1"
-
-4. **Removed emojis** from all Go code output messages
-   - Changed to plain text markers: [OK], [X], [!]
-
-### Development Process
-1. **Added rigorous development workflow** to PLAN.md
-   - Per-task build/test/review/commit process
-   - Session handoff protocol
-   - Commit discipline guidelines
+# Handoff: v0.1.2 Complete
 
 ## Current State
+**Version:** v0.1.2 (production fixes release)
+**Status:** Code review complete, ready for v0.2.0 development
 
-**Build status:** ✅ Passing
-**Test status:** ✅ All tests passing (internal/config, core, fs, git, tests)
-**Code quality:** Clean, no lint errors
-**Git status:**
-- Branch: main
-- Ahead of origin/main by 19 commits
-- Working tree clean
+---
 
-**Files modified in recent commits:**
-- `cmd/dotcor/*.go` - Fixed add, adopt, diff, status, sync, restore
-- `internal/config/config.go` - Added validation
-- `internal/config/migrate.go` - Fixed migration
-- `internal/core/backup.go` - Improved backup paths
-- `README.md` - Updated documentation
-- `.github/workflows/release.yml` - Added build/test
-- `PLAN.md` - Comprehensive updates
+## Completed Tasks
 
-## Next Steps
+### From PLAN.md - Milestone v0.1.2
 
-### Immediate: v0.2.0 - Hooks System
+All critical and important issues fixed:
 
-**Next task to implement:** Hooks System
+**1. Config Migration** (PLAN.md → v0.2.0)
+- Added validation during migration
+- Set defaults for empty configs
+- Prevents data loss on empty repo_path
 
-**Key requirements from PLAN.md:**
-- Pre/post hooks for add, remove, sync, restore
-- Simple bash files in ~/.dotcor/hooks/ directory
+**2. Backup System** (PLAN.md → v0.2.0)
+- Backups stored with full source paths
+- Prevents wrong-file restores
+- Preserves directory structure
+
+**3. Adopt Command** (PLAN.md → v0.2.0)
+- Copies external symlinks into repo
+- Recreates symlinks as relative
+- Matches PLAN specification
+
+**4. Git Error Tracking** (PLAN.md → v0.2.0)
+- Tracks uncommitted files
+- Displays in status
+- Clears flags on sync
+
+**5. Diff Command** (PLAN.md → v0.2.0)
+- Implemented --staged flag
+- Shows staged vs unstaged diffs
+
+**6. Documentation** (README.md, PLAN.md)
+- Fixed Windows description (no copy fallback)
+- Corrected examples
+- Updated config example
+
+---
+
+## Next Task: v0.2.0 - Hooks System
+
+**PLAN.md Section:** See "### v0.2.0 - Hooks System"
+
+**Requirements:**
+- Pre/post hooks for: add, remove, sync, restore
+- Simple bash files in `~/.dotcor/hooks/` directory
 - Graceful degradation (skip if hook doesn't exist)
 - Hook types: pre-add, post-add, pre-remove, post-remove, pre-sync, post-sync, pre-restore, post-restore
 
-**Implementation approach:**
-1. Create `internal/core/hooks.go` with hook execution logic
-2. Add hook directory creation in init
-3. Integrate hook calls in relevant commands
-4. Test hook execution and error handling
-5. Write unit tests for hook system
+**Implementation Steps:**
+1. Create `internal/core/hooks.go` - Hook execution logic
+2. Modify `cmd/dotcor/init.go` - Create hooks/ directory
+3. Modify `cmd/dotcor/add.go` - Call pre/post-add hooks
+4. Modify `cmd/dotcor/remove.go` - Call pre/post-remove hooks
+5. Modify `cmd/dotcor/sync.go` - Call pre/post-sync hooks
+6. Modify `cmd/dotcor/restore.go` - Call pre/post-restore hooks
+7. Write unit tests for hook system
 
-**Files to create/modify:**
-- New: `internal/core/hooks.go`
-- Modify: `cmd/dotcor/init.go` (create hooks/ directory)
-- Modify: `cmd/dotcor/add.go` (call pre/post-add hooks)
-- Modify: `cmd/dotcor/remove.go` (call pre/post-remove hooks)
-- Modify: `cmd/dotcor/sync.go` (call pre/post-sync hooks)
-- Modify: `cmd/dotcor/restore.go` (call pre/post-restore hooks)
+**Testing Checklist:**
+- [ ] Hooks execute at correct times
+- [ ] Graceful degradation when hook missing
+- [ ] Hook errors don't break main operation
+- [ ] Bash script execution works
+- [ ] All tests passing
 
-**Testing checklist:**
-- [ ] Test hooks are executed at correct times
-- [ ] Test graceful degradation when hook missing
-- [ ] Test hook errors don't break main operation
-- [ ] Test bash script execution
-- [ ] Test with invalid/missing hook files
+---
 
-### After v0.2.0: v0.3.0 - Recursive Add
+## Development Workflow
 
-Follow same per-task workflow for v0.3.0 and subsequent versions.
+Follow workflow in PLAN.md → "Development Workflow & Session Handoff"
 
-## Notes
+**Pre-commit gate:**
+1. `go build ./...` - Must succeed
+2. `go test ./...` - Must pass
+3. Run lint if configured
+4. **Do NOT commit** if any step fails
 
-**Codebase state:**
-- Clean, production-ready baseline
-- No known critical issues
-- All tests passing
-- Documentation updated
+**Commit per task:**
+- One commit per file/change
+- Conventional format: `type(scope): description`
+- Examples: `feat(core): add hook system`, `fix(backup): path storage`
 
-**Version strategy reminder:**
-- v0.x.x = Pre-1.0 releases
-- v1.0.0 = Production release (all v0.2-v0.7 complete)
-- v2.0.0 = Post-production features
+**Session Handoff:**
+At 80% token budget, create new handoff document in `docs/plans/`
 
-**Development workflow reminder:**
-Follow the workflow documented in PLAN.md section "Development Workflow & Session Handoff" for every task.
+---
+
+## Files Modified (v0.1.2)
+
+**Internal:**
+- `internal/config/migrate.go`
+- `internal/config/config.go`
+- `internal/core/backup.go`
+
+**Commands:**
+- `cmd/dotcor/adopt.go`
+- `cmd/dotcor/add.go`
+- `cmd/dotcor/sync.go`
+- `cmd/dotcor/status.go`
+- `cmd/dotcor/diff.go`
+- `cmd/dotcor/restore.go`
+- `cmd/dotcor/main.go`
+
+**Docs:**
+- `PLAN.md`
+- `README.md`
+- `.github/workflows/release.yml`
+
+---
+
+## Build/Test Status
+✅ Build: Passing
+✅ Tests: All passing
+✅ Lint: No errors
