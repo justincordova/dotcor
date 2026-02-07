@@ -11,6 +11,22 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// containsTemplateVariables checks if file content has any template variables
+func containsTemplateVariables(content string) bool {
+	variables := []string{
+		"{{ .Hostname }}",
+		"{{ .OS }}",
+		"{{ .User }}",
+		"{{ .Home }}",
+	}
+	for _, v := range variables {
+		if strings.Contains(content, v) {
+			return true
+		}
+	}
+	return false
+}
+
 var rebuildLinksCmd = &cobra.Command{
 	Use:   "rebuild-links",
 	Short: "Rebuild symlinks from template files",
@@ -101,6 +117,13 @@ func runRebuildLinks(cmd *cobra.Command, args []string) error {
 		templateContent, err := os.ReadFile(repoPath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  [X] %s (failed to read template: %v)\n", mf.SourcePath, err)
+			continue
+		}
+
+		// Check if file actually contains template variables
+		if !containsTemplateVariables(string(templateContent)) {
+			fmt.Printf("  [!] Skipping %s: no template variables found\n", mf.SourcePath)
+			skipped++
 			continue
 		}
 
