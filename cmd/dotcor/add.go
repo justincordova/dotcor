@@ -283,8 +283,13 @@ func processAddFile(cfg *config.Config, sourcePath string, category string, forc
 	// Create backup
 	backupPath, err := core.CreateBackup(expanded)
 	if err != nil {
-		// Non-fatal, continue but warn
-		fmt.Printf("  [!] Backup failed for %s: %v\n", normalized, err)
+		// Backup creation failed, abort operation
+		return addResultError, "", fmt.Errorf("backup creation failed for %s: %w", normalized, err)
+	}
+
+	// Verify backup was created successfully
+	if backupPath == "" {
+		return addResultError, "", fmt.Errorf("backup creation failed, no backup path returned for %s", normalized)
 	}
 
 	// Create managed file entry
