@@ -97,7 +97,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Print(output)
+	fmt.Print(colorize(output))
 	return nil
 }
 
