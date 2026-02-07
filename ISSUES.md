@@ -1344,21 +1344,21 @@ Finish any remaining v0.5.0 requirements:
 | #6 | internal/core/transaction.go:67 | Critical | v0.5.1 | a671930 |
 | #7 | internal/fs/symlink.go:62 | Critical | v0.5.1 | 559357c |
 | #8 | internal/core/lock.go:70 | Critical | v0.5.1 | 2a0ae2c |
-| #9 | cmd/rebuild-links.go:119 | Important | v0.5.2 | |
-| #10 | internal/git/git.go:43 | Important | v0.5.2 | |
-| #11 | internal/git/git.go:200 | Important | v0.5.2 | |
-| #12 | cmd/clone.go:91 | Important | v0.5.2 | |
-| #13 | internal/core/transaction.go:43 | Important | v0.5.2 | |
-| #14 | internal/core/transaction.go:59 | Important | v0.5.2 | |
-| #15 | internal/fs/fs.go:89 | Important | v0.5.2 | |
-| #16 | internal/config/paths.go:92 | Important | v0.5.2 | |
-| #17 | cmd/rebuild-links.go:74 | Important | v0.5.2 | |
-| #18 | internal/core/backup.go:34 | Important | v0.5.2 | |
-| #19 | cmd/add.go:353 | Important | v0.5.2 | |
-| #20 | internal/fs/fs.go:19 | Important | v0.5.2 | |
-| #21 | internal/config/config.go:90 | Important | v0.5.2 | |
-| #22 | internal/git/git.go:314 | Important | v0.5.2 | |
-| #23 | cmd/diff.go:175 | Important | v0.5.2 | |
+| #9 | cmd/rebuild-links.go:119 | Important | v0.5.2 | 249624f |
+| #10 | internal/git/git.go:43 | Important | v0.5.2 | 2159bb5 |
+| #11 | internal/git/git.go:200 | Important | v0.5.2 | 9451e86 |
+| #12 | cmd/clone.go:91 | Important | v0.5.2 | 01afe97 |
+| #13 | internal/core/transaction.go:43 | Important | v0.5.2 | b5b15d0 |
+| #14 | internal/core/transaction.go:59 | Important | v0.5.2 | 231f93c |
+| #15 | internal/fs/fs.go:89 | Important | v0.5.2 | 7aa9655 |
+| #16 | internal/config/paths.go:92 | Important | v0.5.2 | 2ecb152 |
+| #17 | cmd/rebuild-links.go:74 | Important | v0.5.2 | ea3f583 |
+| #18 | internal/core/backup.go:34 | Important | v0.5.2 | f754f56 |
+| #19 | cmd/add.go:353 | Important | v0.5.2 | (not fixed, deferred) | |
+| #20 | internal/fs/fs.go:19 | Important | v0.5.2 | eda9cc0 |
+| #21 | internal/config/config.go:90 | Important | v0.5.2 | 6df231c |
+| #22 | internal/git/git.go:314 | Important | v0.5.2 | (not fixed, deferred) | |
+| #23 | cmd/diff.go:175 | Important | v0.5.2 | 2666941 |
 | #24-42 | Various | Minor | v0.5.3 | |
 
 ---
