@@ -13,21 +13,28 @@ var categoryMap = map[string]string{
 	".zshrc":        "shell",
 	".zshenv":       "shell",
 	".zprofile":     "shell",
-	".zsh_history":  "shell",
+	".zlogin":       "shell",
+	".zlogout":      "shell",
 	".bashrc":       "shell",
 	".bash_profile": "shell",
-	".bash_history": "shell",
+	".bash_logout":  "shell",
+	".bashenv":      "shell",
 	".profile":      "shell",
+	".sh_history":   "shell",
 
 	// Git
 	".gitconfig":        "git",
 	".gitignore":        "git",
 	".gitignore_global": "git",
 
+	// SSH
+	"ssh/config": "ssh",
+
 	// Editors
-	".vimrc":  "vim",
-	".vim":    "vim",
-	".nvimrc": "nvim",
+	".vimrc":        "vim",
+	".vim":          "vim",
+	".nvimrc":       "nvim",
+	".editorconfig": "editor",
 
 	// Terminal multiplexers
 	".tmux.conf": "tmux",
