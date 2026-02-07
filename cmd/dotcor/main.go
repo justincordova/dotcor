@@ -6,6 +6,7 @@ import (
 
 	"github.com/justincordova/dotcor/internal/config"
 	"github.com/justincordova/dotcor/internal/git"
+	"github.com/justincordova/dotcor/internal/logger"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -44,10 +45,6 @@ func printBanner() {
 	fmt.Println()
 }
 
-func init() {
-	viper.SetDefault("version", version)
-}
-
 var rootCmd = &cobra.Command{
 	Use:   "dotcor",
 	Short: "A simple, fast dotfile manager with symlinks and Git automation",
@@ -59,13 +56,33 @@ appear in your repository. Built-in Git automation handles commits and sync.`,
 	Run:     runRoot,
 }
 
+func init() {
+	viper.SetDefault("version", version)
+
+	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
+	rootCmd.PersistentFlags().Bool("quiet", false, "Suppress INFO messages")
+	rootCmd.PersistentFlags().String("log-file", "", "Write logs to file")
+	rootCmd.PersistentFlags().Bool("json", false, "Output logs in JSON format")
+}
+
+func configureLogger(cmd *cobra.Command, cfg *config.Config) {
+	cfg.Logger = logger.ConfigureFromFlags(cmd)
+}
+
 func runRoot(cmd *cobra.Command, args []string) {
 	printBanner()
 
 	// Try to load config and show status
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		// Not initialized
+		// Not initialized - use default config with logger
+		cfg, err = config.NewDefaultConfig()
+		if err != nil {
+			fmt.Printf("  %s[!] Failed to create default config%s\n", colorYellow, colorReset)
+			return
+		}
+		configureLogger(cmd, cfg)
+
 		fmt.Printf("  %s[!] Not initialized%s\n", colorYellow, colorReset)
 		fmt.Println()
 		fmt.Printf("  %sGet started:%s\n", colorDim, colorReset)
@@ -74,6 +91,9 @@ func runRoot(cmd *cobra.Command, args []string) {
 		fmt.Println()
 		return
 	}
+
+	// Configure logger with loaded config
+	configureLogger(cmd, cfg)
 
 	// Show quick status
 	showQuickStatus(cfg)
