@@ -390,3 +390,24 @@ func UnstageFile(repoPath, filePath string) error {
 	}
 	return nil
 }
+
+// GetConfig retrieves a git config value
+func GetConfig(repoPath, key string) (string, error) {
+	cmd := exec.Command("git", "config", key)
+	cmd.Dir = repoPath
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+// SetConfig sets a git config value
+func SetConfig(repoPath, key, value string) error {
+	cmd := exec.Command("git", "config", key, value)
+	cmd.Dir = repoPath
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return nil
+}
