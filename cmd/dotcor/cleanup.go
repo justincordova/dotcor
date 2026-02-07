@@ -146,11 +146,17 @@ func parseDuration(s string) (time.Duration, error) {
 		if err != nil {
 			return 0, fmt.Errorf("invalid format: %s", s)
 		}
+		if value <= 0 {
+			return 0, fmt.Errorf("duration must be positive")
+		}
 	} else if strings.HasSuffix(s, "w") {
 		multiplier = 7 * 24 * time.Hour
 		_, err := fmt.Sscanf(s, "%dw", &value)
 		if err != nil {
 			return 0, fmt.Errorf("invalid format: %s", s)
+		}
+		if value <= 0 {
+			return 0, fmt.Errorf("duration must be positive")
 		}
 	} else if strings.HasSuffix(s, "m") {
 		multiplier = 30 * 24 * time.Hour // Approximate month
@@ -158,11 +164,17 @@ func parseDuration(s string) (time.Duration, error) {
 		if err != nil {
 			return 0, fmt.Errorf("invalid format: %s", s)
 		}
+		if value <= 0 {
+			return 0, fmt.Errorf("duration must be positive")
+		}
 	} else if strings.HasSuffix(s, "h") {
 		multiplier = time.Hour
 		_, err := fmt.Sscanf(s, "%dh", &value)
 		if err != nil {
 			return 0, fmt.Errorf("invalid format: %s", s)
+		}
+		if value <= 0 {
+			return 0, fmt.Errorf("duration must be positive")
 		}
 	} else {
 		// Try standard Go duration
