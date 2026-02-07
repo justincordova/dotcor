@@ -476,7 +476,7 @@ func checkPermissions(fix bool) (int, int) {
 		}
 
 		// Check if repo file is readable
-		if repoInfo.Mode().Perm()&0400 != 0 {
+		if repoInfo.Mode().Perm()&0400 == 0 {
 			fmt.Printf("  [X] Not readable: %s\n", mf.RepoPath)
 			issues++
 
