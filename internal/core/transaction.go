@@ -239,17 +239,26 @@ func (op *CreateDirOp) Describe() string {
 
 // AddToConfigOp adds a managed file to config
 type AddToConfigOp struct {
-	Config *config.Config
-	File   config.ManagedFile
+	Config    *config.Config
+	File      config.ManagedFile
+	fileIndex int // Track index for proper undo
 }
 
 func (op *AddToConfigOp) Do() error {
 	op.Config.ManagedFiles = append(op.Config.ManagedFiles, op.File)
+	op.fileIndex = len(op.Config.ManagedFiles) - 1
 	return op.Config.SaveConfig()
 }
 
 func (op *AddToConfigOp) Undo() error {
-	return op.Config.RemoveManagedFile(op.File.SourcePath)
+	if op.fileIndex >= 0 && op.fileIndex < len(op.Config.ManagedFiles) {
+		op.Config.ManagedFiles = append(
+			op.Config.ManagedFiles[:op.fileIndex],
+			op.Config.ManagedFiles[op.fileIndex+1:]...,
+		)
+		return op.Config.SaveConfig()
+	}
+	return fmt.Errorf("invalid file index: %d", op.fileIndex)
 }
 
 func (op *AddToConfigOp) Describe() string {
