@@ -467,7 +467,7 @@ func checkPermissions(fix bool) (int, int) {
 
 			if fix {
 				// Remove world-writable permission
-				newMode := mode.Perm() & 0755
+				newMode := mode.Perm() &^ 0002
 				if err := os.Chmod(sourcePath, newMode); err == nil {
 					fmt.Printf("  [OK] Fixed permissions: %s\n", mf.SourcePath)
 					fixed++
