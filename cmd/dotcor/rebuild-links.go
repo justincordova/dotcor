@@ -115,8 +115,14 @@ func runRebuildLinks(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		// Write rendered content
-		if err := os.WriteFile(baseRepoPath, []byte(renderedContent), 0644); err != nil {
+		// Get original file permissions
+		originalMode := os.FileMode(0644)
+		if info, err := os.Stat(baseRepoPath); err == nil {
+			originalMode = info.Mode() & 0777
+		}
+
+		// Write rendered content with preserved permissions
+		if err := os.WriteFile(baseRepoPath, []byte(renderedContent), originalMode); err != nil {
 			fmt.Fprintf(os.Stderr, "  [X] %s (failed to write: %v)\n", mf.SourcePath, err)
 			continue
 		}
