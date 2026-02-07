@@ -57,6 +57,11 @@ func CreateBackup(sourcePath string) (string, error) {
 	timestamp := time.Now().Format(TimestampFormat)
 	timestampDir := filepath.Join(backupDir, timestamp)
 
+	// Check if path exists and is a file (not directory)
+	if info, err := os.Stat(timestampDir); err == nil && !info.IsDir() {
+		return "", fmt.Errorf("backup path exists as file, not directory: %s", timestampDir)
+	}
+
 	if err := fs.EnsureDir(timestampDir); err != nil {
 		return "", fmt.Errorf("creating backup directory: %w", err)
 	}
