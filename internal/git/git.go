@@ -203,8 +203,15 @@ func GetStatus(repoPath string) (StatusInfo, error) {
 		if err == nil {
 			parts := strings.Fields(string(output))
 			if len(parts) >= 2 {
-				status.BehindBy, _ = strconv.Atoi(parts[0])
-				status.AheadBy, _ = strconv.Atoi(parts[1])
+				var err error
+				status.BehindBy, err = strconv.Atoi(parts[0])
+				if err != nil {
+					return status, fmt.Errorf("failed to parse behind count: %w", err)
+				}
+				status.AheadBy, err = strconv.Atoi(parts[1])
+				if err != nil {
+					return status, fmt.Errorf("failed to parse ahead count: %w", err)
+				}
 			}
 		}
 	}
