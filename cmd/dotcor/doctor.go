@@ -74,6 +74,30 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	issues += orphanIssues
 	fixed += orphanFixed
 
+	// Check 6: Permissions
+	fmt.Println("Checking permissions...")
+	permIssues, permFixed := checkPermissions(fix)
+	issues += permIssues
+	fixed += permFixed
+
+	// Check 7: Git config
+	fmt.Println("Checking git configuration...")
+	gitConfigIssues, gitConfigFixed := checkGitConfig(fix)
+	issues += gitConfigIssues
+	fixed += gitConfigFixed
+
+	// Check 8: Git remote
+	fmt.Println("Checking git remote...")
+	gitRemoteIssues, gitRemoteFixed := checkGitRemote(fix)
+	issues += gitRemoteIssues
+	fixed += gitRemoteFixed
+
+	// Check 9: Hook permissions
+	fmt.Println("Checking hook permissions...")
+	hookPermIssues, hookPermFixed := checkHookPermissions(fix)
+	issues += hookPermIssues
+	fixed += hookPermFixed
+
 	// Summary
 	fmt.Println("")
 	fmt.Println("Summary")
@@ -394,4 +418,246 @@ func findOrphanedFilesRecursive(basePath, relDir string, tracked map[string]bool
 	}
 
 	return orphans
+}
+
+// checkPermissions verifies file and directory permissions
+func checkPermissions(fix bool) (int, int) {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return 0, 0
+	}
+
+	issues := 0
+	fixed := 0
+
+	files := cfg.GetManagedFilesForPlatform()
+	if len(files) == 0 {
+		fmt.Println("  - No managed files to check")
+		return 0, 0
+	}
+
+	for _, mf := range files {
+		sourcePath, err := config.ExpandPath(mf.SourcePath)
+		if err != nil {
+			continue
+		}
+
+		repoPath, err := config.GetRepoFilePath(cfg, mf.RepoPath)
+		if err != nil {
+			continue
+		}
+
+		// Check source path permissions
+		sourceInfo, err := os.Stat(sourcePath)
+		if err != nil {
+			continue
+		}
+
+		// Check repo file permissions
+		repoInfo, err := os.Stat(repoPath)
+		if err != nil {
+			continue
+		}
+
+		// Warn about overly permissive files (world-writable)
+		mode := sourceInfo.Mode()
+		if mode.Perm()&0002 != 0 {
+			fmt.Printf("  [X] World-writable: %s\n", mf.SourcePath)
+			issues++
+
+			if fix {
+				// Remove world-writable permission
+				newMode := mode.Perm() & 0755
+				if err := os.Chmod(sourcePath, newMode); err == nil {
+					fmt.Printf("  [OK] Fixed permissions: %s\n", mf.SourcePath)
+					fixed++
+				}
+			}
+		}
+
+		// Check if repo file is readable
+		if repoInfo.Mode().Perm()&0400 != 0 {
+			fmt.Printf("  [X] Not readable: %s\n", mf.RepoPath)
+			issues++
+
+			if fix {
+				if err := os.Chmod(repoPath, repoInfo.Mode()|0400); err == nil {
+					fmt.Printf("  [OK] Made readable: %s\n", mf.RepoPath)
+					fixed++
+				}
+			}
+		}
+	}
+
+	if issues == 0 {
+		fmt.Printf("  [OK] All %d files have correct permissions\n", len(files))
+	}
+
+	return issues, fixed
+}
+
+// checkGitConfig verifies git user configuration
+func checkGitConfig(fix bool) (int, int) {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return 0, 0
+	}
+
+	repoPath, err := config.ExpandPath(cfg.RepoPath)
+	if err != nil {
+		return 0, 0
+	}
+
+	if !git.IsGitInstalled() || !git.IsRepo(repoPath) {
+		return 0, 0
+	}
+
+	issues := 0
+	fixed := 0
+
+	// Check git user.name
+	userName, err := git.GetConfig(repoPath, "user.name")
+	if err != nil || userName == "" {
+		fmt.Println("  [X] Git user.name not configured")
+		issues++
+
+		if fix {
+			// Get current username as default
+			currentUser := os.Getenv("USER")
+			if currentUser == "" {
+				currentUser = os.Getenv("USERNAME")
+			}
+			if currentUser != "" {
+				if err := git.SetConfig(repoPath, "user.name", currentUser); err == nil {
+					fmt.Printf("  [OK] Set user.name to %s\n", currentUser)
+					fixed++
+				}
+			}
+		}
+	}
+
+	// Check git user.email
+	userEmail, err := git.GetConfig(repoPath, "user.email")
+	if err != nil || userEmail == "" {
+		fmt.Println("  [X] Git user.email not configured")
+		issues++
+
+		if fix {
+			// Suggest setting email
+			fmt.Println("  [!] Run: git config --global user.email 'your-email@example.com'")
+		}
+	}
+
+	if issues == 0 {
+		fmt.Println("  [OK] Git user configuration valid")
+	}
+
+	return issues, fixed
+}
+
+// checkGitRemote checks if git remote is configured
+func checkGitRemote(fix bool) (int, int) {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return 0, 0
+	}
+
+	repoPath, err := config.ExpandPath(cfg.RepoPath)
+	if err != nil {
+		return 0, 0
+	}
+
+	if !git.IsGitInstalled() || !git.IsRepo(repoPath) {
+		return 0, 0
+	}
+
+	issues := 0
+	fixed := 0
+
+	remoteURL, err := git.GetRemoteURL(repoPath)
+	if err != nil {
+		return 0, 0
+	}
+
+	if remoteURL == "" {
+		fmt.Println("  [X] No git remote configured")
+		issues++
+
+		if fix {
+			fmt.Println("  [!] Run: git remote add origin <url>")
+			fmt.Println("  [!] Or create a new repository on GitHub/GitLab/Bitbucket")
+		}
+	} else {
+		fmt.Printf("  [OK] Git remote configured: %s\n", remoteURL)
+	}
+
+	return issues, fixed
+}
+
+// checkHookPermissions verifies hooks are executable
+func checkHookPermissions(fix bool) (int, int) {
+	hooksDir, err := core.GetHooksDir()
+	if err != nil {
+		return 0, 0
+	}
+
+	issues := 0
+	fixed := 0
+
+	// Check if hooks directory exists
+	if !fs.PathExists(hooksDir) {
+		fmt.Println("  - No hooks directory")
+		return 0, 0
+	}
+
+	// Common hook names
+	hookNames := []string{
+		"pre-add", "post-add",
+		"pre-remove", "post-remove",
+		"pre-sync", "post-sync",
+		"pre-restore", "post-restore",
+	}
+
+	foundHooks := 0
+	for _, hookName := range hookNames {
+		hookPath := hooksDir + "/" + hookName
+
+		info, err := os.Stat(hookPath)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				fmt.Printf("  [X] Cannot access hook: %s (%v)\n", hookName, err)
+				issues++
+			}
+			continue
+		}
+
+		if info.IsDir() {
+			continue
+		}
+
+		foundHooks++
+
+		// Check if hook is executable
+		if info.Mode().Perm()&0111 == 0 {
+			fmt.Printf("  [X] Hook not executable: %s\n", hookName)
+			issues++
+
+			if fix {
+				if err := os.Chmod(hookPath, 0755); err == nil {
+					fmt.Printf("  [OK] Made executable: %s\n", hookName)
+					fixed++
+				}
+			}
+		}
+	}
+
+	if issues == 0 {
+		if foundHooks == 0 {
+			fmt.Println("  - No hooks found")
+		} else {
+			fmt.Printf("  [OK] All %d hook(s) are executable\n", foundHooks)
+		}
+	}
+
+	return issues, fixed
 }
