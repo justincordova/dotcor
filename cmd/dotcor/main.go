@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	version = "0.5.2" // Important fixes
+	version = "0.5.3" // Minor fixes and documentation
 )
 
 // ANSI color codes
