@@ -1,29 +1,41 @@
 package core
 
 import (
+	"bytes"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/justincordova/dotcor/internal/config"
 )
 
 func TestCreateBackup(t *testing.T) {
-	// Create temp dir structure
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create a source file
+	var buf bytes.Buffer
+	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	})
+	logger := slog.New(handler)
+
+	cfg := &config.Config{
+		Logger:   logger,
+		RepoPath: t.TempDir(),
+	}
+
 	sourceContent := []byte("original content")
 	sourceFile := filepath.Join(tempDir, "source.txt")
 	if err := os.WriteFile(sourceFile, sourceContent, 0644); err != nil {
 		t.Fatalf("failed to create source file: %v", err)
 	}
 
-	// Create backup
-	backupPath, err := CreateBackup(sourceFile)
+	backupPath, err := CreateBackup(sourceFile, cfg)
 	if err != nil {
 		t.Fatalf("CreateBackup() error = %v", err)
 	}
@@ -44,34 +56,45 @@ func TestCreateBackup(t *testing.T) {
 }
 
 func TestCreateBackupNonexistent(t *testing.T) {
-	_, err := CreateBackup("/nonexistent/path/file.txt")
+	cfg := &config.Config{
+		Logger:   slog.Default(),
+		RepoPath: t.TempDir(),
+	}
+	_, err := CreateBackup("/nonexistent/path/file.txt", cfg)
 	if err == nil {
 		t.Error("CreateBackup() should error for nonexistent file")
 	}
 }
 
 func TestRestoreBackup(t *testing.T) {
-	// Create temp dir
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create a backup file
+	var buf bytes.Buffer
+	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	})
+	logger := slog.New(handler)
+
+	cfg := &config.Config{
+		Logger:   logger,
+		RepoPath: t.TempDir(),
+	}
+
 	backupContent := []byte("backup content")
 	backupFile := filepath.Join(tempDir, "backup.txt")
 	if err := os.WriteFile(backupFile, backupContent, 0644); err != nil {
 		t.Fatalf("failed to create backup file: %v", err)
 	}
 
-	// Restore to target
 	targetFile := filepath.Join(tempDir, "restored.txt")
-	if err := RestoreBackup(backupFile, targetFile); err != nil {
+	if err := RestoreBackup(backupFile, targetFile, cfg); err != nil {
 		t.Fatalf("RestoreBackup() error = %v", err)
 	}
 
-	// Verify target exists with correct content
 	targetContent, err := os.ReadFile(targetFile)
 	if err != nil {
 		t.Fatalf("failed to read target file: %v", err)
@@ -82,22 +105,30 @@ func TestRestoreBackup(t *testing.T) {
 }
 
 func TestRestoreBackupCreatesParentDir(t *testing.T) {
-	// Create temp dir
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create a backup file
+	var buf bytes.Buffer
+	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	})
+	logger := slog.New(handler)
+
+	cfg := &config.Config{
+		Logger:   logger,
+		RepoPath: t.TempDir(),
+	}
+
 	backupFile := filepath.Join(tempDir, "backup.txt")
 	if err := os.WriteFile(backupFile, []byte("content"), 0644); err != nil {
 		t.Fatalf("failed to create backup file: %v", err)
 	}
 
-	// Restore to nested path (parent doesn't exist)
 	targetFile := filepath.Join(tempDir, "nested", "dir", "restored.txt")
-	if err := RestoreBackup(backupFile, targetFile); err != nil {
+	if err := RestoreBackup(backupFile, targetFile, cfg); err != nil {
 		t.Fatalf("RestoreBackup() error = %v", err)
 	}
 
@@ -108,17 +139,22 @@ func TestRestoreBackupCreatesParentDir(t *testing.T) {
 }
 
 func TestBackupExists(t *testing.T) {
-	// Without any backups created, BackupExists should return false
-	// for a random filename
-	exists := BackupExists("random_nonexistent_file_12345.txt")
+	cfg := &config.Config{
+		Logger:   slog.Default(),
+		RepoPath: t.TempDir(),
+	}
+	exists := BackupExists("random_nonexistent_file_12345.txt", cfg)
 	if exists {
 		t.Error("BackupExists() should return false for nonexistent backups")
 	}
 }
 
 func TestGetBackupCount(t *testing.T) {
-	// Get current count (may be 0 or have existing backups)
-	count, err := GetBackupCount()
+	cfg := &config.Config{
+		Logger:   slog.Default(),
+		RepoPath: t.TempDir(),
+	}
+	count, err := GetBackupCount(cfg)
 	if err != nil {
 		t.Fatalf("GetBackupCount() error = %v", err)
 	}
@@ -130,12 +166,15 @@ func TestGetBackupCount(t *testing.T) {
 }
 
 func TestGetTotalBackupSize(t *testing.T) {
-	size, err := GetTotalBackupSize()
+	cfg := &config.Config{
+		Logger:   slog.Default(),
+		RepoPath: t.TempDir(),
+	}
+	size, err := GetTotalBackupSize(cfg)
 	if err != nil {
 		t.Fatalf("GetTotalBackupSize() error = %v", err)
 	}
 
-	// Should be non-negative
 	if size < 0 {
 		t.Errorf("GetTotalBackupSize() = %d, should be >= 0", size)
 	}
@@ -163,8 +202,11 @@ func TestTimestampFormat(t *testing.T) {
 }
 
 func TestPreviewCleanup(t *testing.T) {
-	// Preview cleanup with default settings shouldn't error
-	_, _, err := PreviewCleanup(30*24*time.Hour, 5)
+	cfg := &config.Config{
+		Logger:   slog.Default(),
+		RepoPath: t.TempDir(),
+	}
+	_, _, err := PreviewCleanup(30*24*time.Hour, 5, cfg)
 	if err != nil {
 		t.Errorf("PreviewCleanup() error = %v", err)
 	}

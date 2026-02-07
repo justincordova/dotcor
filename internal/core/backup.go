@@ -35,21 +35,24 @@ func GetBackupDir() (string, error) {
 
 // CreateBackup creates a timestamped backup of a file before destructive operations
 // Returns backup path and error
-func CreateBackup(sourcePath string) (string, error) {
-	// Expand source path
+func CreateBackup(sourcePath string, cfg *config.Config) (string, error) {
+	cfg.Logger.Debug("creating backup", "file", sourcePath)
+
 	expanded, err := config.ExpandPath(sourcePath)
 	if err != nil {
+		cfg.Logger.Error("failed to expand path", "file", sourcePath, "error", err)
 		return "", fmt.Errorf("expanding source path: %w", err)
 	}
 
-	// Check if source exists
 	if !fs.FileExists(expanded) {
+		cfg.Logger.Error("source file does not exist", "file", sourcePath)
 		return "", fmt.Errorf("source file does not exist: %s", sourcePath)
 	}
 
 	// Get backup directory
 	backupDir, err := GetBackupDir()
 	if err != nil {
+		cfg.Logger.Error("failed to get backup directory", "error", err)
 		return "", err
 	}
 
@@ -63,6 +66,7 @@ func CreateBackup(sourcePath string) (string, error) {
 	}
 
 	if err := fs.EnsureDir(timestampDir); err != nil {
+		cfg.Logger.Error("failed to create backup directory", "error", err)
 		return "", fmt.Errorf("creating backup directory: %w", err)
 	}
 
@@ -79,52 +83,72 @@ func CreateBackup(sourcePath string) (string, error) {
 
 	// Ensure parent directory exists
 	if err := fs.EnsureDir(filepath.Dir(backupPath)); err != nil {
+		cfg.Logger.Error("failed to create backup subdirectory", "error", err)
 		return "", fmt.Errorf("creating backup subdirectory: %w", err)
 	}
 
-	// Copy file to backup location
 	if err := fs.CopyWithPermissions(expanded, backupPath); err != nil {
+		cfg.Logger.Error("failed to copy to backup", "src", expanded, "dst", backupPath, "error", err)
 		return "", fmt.Errorf("copying to backup: %w", err)
 	}
+
+	cfg.Logger.Info("backup created",
+		"file", sourcePath,
+		"path", backupPath,
+	)
 
 	return backupPath, nil
 }
 
 // RestoreBackup restores a file from backup to target path
-func RestoreBackup(backupPath string, targetPath string) error {
-	// Expand paths
+func RestoreBackup(backupPath, targetPath string, cfg *config.Config) error {
+	cfg.Logger.Debug("restoring from backup",
+		"backup", backupPath,
+		"target", targetPath,
+	)
+
 	expandedBackup, err := config.ExpandPath(backupPath)
 	if err != nil {
+		cfg.Logger.Error("failed to expand backup path", "error", err)
 		return fmt.Errorf("expanding backup path: %w", err)
 	}
 
 	expandedTarget, err := config.ExpandPath(targetPath)
 	if err != nil {
+		cfg.Logger.Error("failed to expand target path", "error", err)
 		return fmt.Errorf("expanding target path: %w", err)
 	}
 
-	// Check if backup exists
 	if !fs.FileExists(expandedBackup) {
+		cfg.Logger.Error("backup file does not exist", "path", backupPath)
 		return fmt.Errorf("backup file does not exist: %s", backupPath)
 	}
 
-	// Ensure target directory exists
 	if err := fs.EnsureDir(filepath.Dir(expandedTarget)); err != nil {
+		cfg.Logger.Error("failed to create target directory", "error", err)
 		return fmt.Errorf("creating target directory: %w", err)
 	}
 
-	// Copy backup to target
 	if err := fs.CopyWithPermissions(expandedBackup, expandedTarget); err != nil {
+		cfg.Logger.Error("failed to restore from backup", "src", expandedBackup, "dst", expandedTarget, "error", err)
 		return fmt.Errorf("restoring from backup: %w", err)
 	}
+
+	cfg.Logger.Info("backup restored",
+		"backup", backupPath,
+		"target", targetPath,
+	)
 
 	return nil
 }
 
 // ListBackups returns list of all backups with timestamps
-func ListBackups() ([]BackupInfo, error) {
+func ListBackups(cfg *config.Config) ([]BackupInfo, error) {
+	cfg.Logger.Debug("listing backups")
+
 	backupDir, err := GetBackupDir()
 	if err != nil {
+		cfg.Logger.Error("failed to get backup directory", "error", err)
 		return nil, err
 	}
 
@@ -214,9 +238,12 @@ type CleanupCandidate struct {
 }
 
 // PreviewCleanup returns what would be deleted without actually deleting
-func PreviewCleanup(olderThan time.Duration, keepLast int) ([]CleanupCandidate, int64, error) {
-	candidates, _, err := getCleanupCandidates(olderThan, keepLast)
+func PreviewCleanup(olderThan time.Duration, keepLast int, cfg *config.Config) ([]CleanupCandidate, int64, error) {
+	cfg.Logger.Debug("previewing backup cleanup", "older_than", olderThan, "keep_last", keepLast)
+
+	candidates, _, err := getCleanupCandidates(olderThan, keepLast, cfg)
 	if err != nil {
+		cfg.Logger.Error("failed to get cleanup candidates", "error", err)
 		return nil, 0, err
 	}
 
@@ -231,8 +258,10 @@ func PreviewCleanup(olderThan time.Duration, keepLast int) ([]CleanupCandidate, 
 // CleanOldBackups removes backups older than specified duration, keeping at least keepLast.
 // Returns: number deleted, number of errors, total freed size, first error encountered.
 // Continues deleting even if some deletions fail.
-func CleanOldBackups(olderThan time.Duration, keepLast int) (deleted int, failed int, freedSize int64, err error) {
-	candidates, _, err := getCleanupCandidates(olderThan, keepLast)
+func CleanOldBackups(olderThan time.Duration, keepLast int, cfg *config.Config) (deleted int, failed int, freedSize int64, err error) {
+	cfg.Logger.Debug("cleaning old backups", "older_than", olderThan, "keep_last", keepLast)
+
+	candidates, _, err := getCleanupCandidates(olderThan, keepLast, cfg)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -240,10 +269,10 @@ func CleanOldBackups(olderThan time.Duration, keepLast int) (deleted int, failed
 	var firstErr error
 	var actualFreed int64
 
-	// Delete old directories
 	for _, candidate := range candidates {
 		if err := fs.RemoveAll(candidate.Path); err != nil {
 			failed++
+			cfg.Logger.Error("failed to remove backup directory", "path", candidate.Path, "error", err)
 			if firstErr == nil {
 				firstErr = fmt.Errorf("removing %s: %w", candidate.Path, err)
 			}
@@ -251,15 +280,23 @@ func CleanOldBackups(olderThan time.Duration, keepLast int) (deleted int, failed
 		}
 		deleted++
 		actualFreed += candidate.Size
+		cfg.Logger.Debug("deleted backup directory", "path", candidate.Path)
 	}
+
+	cfg.Logger.Info("backup cleanup complete",
+		"deleted", deleted,
+		"failed", failed,
+		"freed_bytes", actualFreed,
+	)
 
 	return deleted, failed, actualFreed, firstErr
 }
 
 // getCleanupCandidates returns backup directories that match cleanup criteria
-func getCleanupCandidates(olderThan time.Duration, keepLast int) ([]CleanupCandidate, int64, error) {
+func getCleanupCandidates(olderThan time.Duration, keepLast int, cfg *config.Config) ([]CleanupCandidate, int64, error) {
 	backupDir, err := GetBackupDir()
 	if err != nil {
+		cfg.Logger.Error("failed to get backup directory", "error", err)
 		return nil, 0, err
 	}
 
@@ -349,17 +386,17 @@ func getDirSize(path string) (int64, error) {
 }
 
 // GetBackupsForFile returns backups for a specific file (by normalized source path)
-func GetBackupsForFile(sourcePath string) ([]BackupInfo, error) {
-	// Normalize source path
+func GetBackupsForFile(sourcePath string, cfg *config.Config) ([]BackupInfo, error) {
+	cfg.Logger.Debug("getting backups for file", "file", sourcePath)
+
 	normalized, err := config.NormalizePath(sourcePath)
 	if err != nil {
 		normalized = sourcePath
 	}
 
-	// Strip leading ~ to match backup storage format
 	backupRelativePath := strings.TrimPrefix(normalized, "~/")
 
-	allBackups, err := ListBackups()
+	allBackups, err := ListBackups(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -384,23 +421,24 @@ func GetBackupsForFile(sourcePath string) ([]BackupInfo, error) {
 }
 
 // GetLatestBackup returns the most recent backup for a file
-func GetLatestBackup(sourcePath string) (*BackupInfo, error) {
-	backups, err := GetBackupsForFile(sourcePath)
+func GetLatestBackup(sourcePath string, cfg *config.Config) (*BackupInfo, error) {
+	backups, err := GetBackupsForFile(sourcePath, cfg)
 	if err != nil {
+		cfg.Logger.Error("failed to get backups for file", "file", sourcePath, "error", err)
 		return nil, err
 	}
 
 	if len(backups) == 0 {
+		cfg.Logger.Debug("no backups found for file", "file", sourcePath)
 		return nil, fmt.Errorf("no backups found for: %s", sourcePath)
 	}
 
-	// Already sorted newest first
 	return &backups[0], nil
 }
 
 // BackupExists checks if any backup exists for a file
-func BackupExists(sourcePath string) bool {
-	backups, err := GetBackupsForFile(sourcePath)
+func BackupExists(sourcePath string, cfg *config.Config) bool {
+	backups, err := GetBackupsForFile(sourcePath, cfg)
 	if err != nil {
 		return false
 	}
@@ -408,18 +446,22 @@ func BackupExists(sourcePath string) bool {
 }
 
 // GetBackupCount returns the total number of backups
-func GetBackupCount() (int, error) {
-	backups, err := ListBackups()
+func GetBackupCount(cfg *config.Config) (int, error) {
+	backups, err := ListBackups(cfg)
 	if err != nil {
+		cfg.Logger.Error("failed to list backups", "error", err)
 		return 0, err
 	}
 	return len(backups), nil
 }
 
 // GetTotalBackupSize returns the total size of all backups
-func GetTotalBackupSize() (int64, error) {
+func GetTotalBackupSize(cfg *config.Config) (int64, error) {
+	cfg.Logger.Debug("calculating total backup size")
+
 	backupDir, err := GetBackupDir()
 	if err != nil {
+		cfg.Logger.Error("failed to get backup directory", "error", err)
 		return 0, err
 	}
 
@@ -427,5 +469,10 @@ func GetTotalBackupSize() (int64, error) {
 		return 0, nil
 	}
 
-	return getDirSize(backupDir)
+	size, err := getDirSize(backupDir)
+	if err != nil {
+		cfg.Logger.Error("failed to calculate backup size", "error", err)
+	}
+	cfg.Logger.Info("total backup size calculated", "bytes", size)
+	return size, err
 }
