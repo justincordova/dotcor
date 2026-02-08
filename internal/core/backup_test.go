@@ -9,14 +9,13 @@ import (
 	"time"
 
 	"github.com/justincordova/dotcor/internal/config"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCreateBackup(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	// Arrange
+	tempDir := t.TempDir()
 
 	var buf bytes.Buffer
 	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{
@@ -31,47 +30,41 @@ func TestCreateBackup(t *testing.T) {
 
 	sourceContent := []byte("original content")
 	sourceFile := filepath.Join(tempDir, "source.txt")
-	if err := os.WriteFile(sourceFile, sourceContent, 0644); err != nil {
-		t.Fatalf("failed to create source file: %v", err)
-	}
+	err := os.WriteFile(sourceFile, sourceContent, 0644)
+	require.NoError(t, err, "failed to create source file")
 
+	// Act
 	backupPath, err := CreateBackup(sourceFile, cfg)
-	if err != nil {
-		t.Fatalf("CreateBackup() error = %v", err)
-	}
 
-	// Verify backup exists
-	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
-		t.Error("CreateBackup() backup file not created")
-	}
+	// Assert
+	require.NoError(t, err, "CreateBackup() should not error")
 
-	// Verify backup content matches
+	_, err = os.Stat(backupPath)
+	assert.NoError(t, err, "CreateBackup() backup file not created")
+
 	backupContent, err := os.ReadFile(backupPath)
-	if err != nil {
-		t.Fatalf("failed to read backup file: %v", err)
-	}
-	if string(backupContent) != string(sourceContent) {
-		t.Errorf("CreateBackup() content mismatch: got %q, want %q", backupContent, sourceContent)
-	}
+	require.NoError(t, err, "failed to read backup file")
+
+	assert.Equal(t, string(sourceContent), string(backupContent), "CreateBackup() content mismatch")
 }
 
 func TestCreateBackupNonexistent(t *testing.T) {
+	// Arrange
 	cfg := &config.Config{
 		Logger:   slog.Default(),
 		RepoPath: t.TempDir(),
 	}
+
+	// Act
 	_, err := CreateBackup("/nonexistent/path/file.txt", cfg)
-	if err == nil {
-		t.Error("CreateBackup() should error for nonexistent file")
-	}
+
+	// Assert
+	assert.Error(t, err, "CreateBackup() should error for nonexistent file")
 }
 
 func TestRestoreBackup(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	// Arrange
+	tempDir := t.TempDir()
 
 	var buf bytes.Buffer
 	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{
@@ -86,30 +79,26 @@ func TestRestoreBackup(t *testing.T) {
 
 	backupContent := []byte("backup content")
 	backupFile := filepath.Join(tempDir, "backup.txt")
-	if err := os.WriteFile(backupFile, backupContent, 0644); err != nil {
-		t.Fatalf("failed to create backup file: %v", err)
-	}
+	err := os.WriteFile(backupFile, backupContent, 0644)
+	require.NoError(t, err, "failed to create backup file")
 
 	targetFile := filepath.Join(tempDir, "restored.txt")
-	if err := RestoreBackup(backupFile, targetFile, cfg); err != nil {
-		t.Fatalf("RestoreBackup() error = %v", err)
-	}
+
+	// Act
+	err = RestoreBackup(backupFile, targetFile, cfg)
+
+	// Assert
+	require.NoError(t, err, "RestoreBackup() should not error")
 
 	targetContent, err := os.ReadFile(targetFile)
-	if err != nil {
-		t.Fatalf("failed to read target file: %v", err)
-	}
-	if string(targetContent) != string(backupContent) {
-		t.Errorf("RestoreBackup() content mismatch: got %q, want %q", targetContent, backupContent)
-	}
+	require.NoError(t, err, "failed to read target file")
+
+	assert.Equal(t, string(backupContent), string(targetContent), "RestoreBackup() content mismatch")
 }
 
 func TestRestoreBackupCreatesParentDir(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	// Arrange
+	tempDir := t.TempDir()
 
 	var buf bytes.Buffer
 	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{
@@ -123,107 +112,109 @@ func TestRestoreBackupCreatesParentDir(t *testing.T) {
 	}
 
 	backupFile := filepath.Join(tempDir, "backup.txt")
-	if err := os.WriteFile(backupFile, []byte("content"), 0644); err != nil {
-		t.Fatalf("failed to create backup file: %v", err)
-	}
+	err := os.WriteFile(backupFile, []byte("content"), 0644)
+	require.NoError(t, err, "failed to create backup file")
 
 	targetFile := filepath.Join(tempDir, "nested", "dir", "restored.txt")
-	if err := RestoreBackup(backupFile, targetFile, cfg); err != nil {
-		t.Fatalf("RestoreBackup() error = %v", err)
-	}
 
-	// Verify target exists
-	if _, err := os.Stat(targetFile); os.IsNotExist(err) {
-		t.Error("RestoreBackup() target file not created")
-	}
+	// Act
+	err = RestoreBackup(backupFile, targetFile, cfg)
+
+	// Assert
+	require.NoError(t, err, "RestoreBackup() should not error")
+
+	_, err = os.Stat(targetFile)
+	assert.NoError(t, err, "RestoreBackup() target file not created")
 }
 
 func TestBackupExists(t *testing.T) {
+	// Arrange
 	cfg := &config.Config{
 		Logger:   slog.Default(),
 		RepoPath: t.TempDir(),
 	}
+
+	// Act
 	exists := BackupExists("random_nonexistent_file_12345.txt", cfg)
-	if exists {
-		t.Error("BackupExists() should return false for nonexistent backups")
-	}
+
+	// Assert
+	assert.False(t, exists, "BackupExists() should return false for nonexistent backups")
 }
 
 func TestGetBackupCount(t *testing.T) {
+	// Arrange
 	cfg := &config.Config{
 		Logger:   slog.Default(),
 		RepoPath: t.TempDir(),
 	}
-	count, err := GetBackupCount(cfg)
-	if err != nil {
-		t.Fatalf("GetBackupCount() error = %v", err)
-	}
 
-	// Should be non-negative
-	if count < 0 {
-		t.Errorf("GetBackupCount() = %d, should be >= 0", count)
-	}
+	// Act
+	count, err := GetBackupCount(cfg)
+
+	// Assert
+	require.NoError(t, err, "GetBackupCount() should not error")
+	assert.GreaterOrEqual(t, count, 0, "GetBackupCount() should be >= 0")
 }
 
 func TestGetTotalBackupSize(t *testing.T) {
+	// Arrange
 	cfg := &config.Config{
 		Logger:   slog.Default(),
 		RepoPath: t.TempDir(),
 	}
-	size, err := GetTotalBackupSize(cfg)
-	if err != nil {
-		t.Fatalf("GetTotalBackupSize() error = %v", err)
-	}
 
-	if size < 0 {
-		t.Errorf("GetTotalBackupSize() = %d, should be >= 0", size)
-	}
+	// Act
+	size, err := GetTotalBackupSize(cfg)
+
+	// Assert
+	require.NoError(t, err, "GetTotalBackupSize() should not error")
+	assert.GreaterOrEqual(t, size, int64(0), "GetTotalBackupSize() should be >= 0")
 }
 
 func TestTimestampFormat(t *testing.T) {
-	// Test that TimestampFormat produces parseable timestamps
+	// Arrange
 	now := time.Now()
+
+	// Act
 	formatted := now.Format(TimestampFormat)
-
 	parsed, err := time.Parse(TimestampFormat, formatted)
-	if err != nil {
-		t.Errorf("TimestampFormat not parseable: %v", err)
-	}
 
-	// Verify year, month, day, hour, minute, second match
-	if parsed.Year() != now.Year() ||
-		parsed.Month() != now.Month() ||
-		parsed.Day() != now.Day() ||
-		parsed.Hour() != now.Hour() ||
-		parsed.Minute() != now.Minute() ||
-		parsed.Second() != now.Second() {
-		t.Error("TimestampFormat lost precision")
-	}
+	// Assert
+	require.NoError(t, err, "TimestampFormat not parseable")
+
+	assert.Equal(t, now.Year(), parsed.Year(), "TimestampFormat lost precision (year)")
+	assert.Equal(t, now.Month(), parsed.Month(), "TimestampFormat lost precision (month)")
+	assert.Equal(t, now.Day(), parsed.Day(), "TimestampFormat lost precision (day)")
+	assert.Equal(t, now.Hour(), parsed.Hour(), "TimestampFormat lost precision (hour)")
+	assert.Equal(t, now.Minute(), parsed.Minute(), "TimestampFormat lost precision (minute)")
+	assert.Equal(t, now.Second(), parsed.Second(), "TimestampFormat lost precision (second)")
 }
 
 func TestPreviewCleanup(t *testing.T) {
+	// Arrange
 	cfg := &config.Config{
 		Logger:   slog.Default(),
 		RepoPath: t.TempDir(),
 	}
+
+	// Act
 	_, _, err := PreviewCleanup(30*24*time.Hour, 5, cfg)
-	if err != nil {
-		t.Errorf("PreviewCleanup() error = %v", err)
-	}
+
+	// Assert
+	assert.NoError(t, err, "PreviewCleanup() should not error")
 }
 
 func TestCleanupCandidate(t *testing.T) {
-	// Test that CleanupCandidate struct works correctly
+	// Arrange
 	candidate := CleanupCandidate{
 		Path:      "/some/path",
 		Timestamp: time.Now(),
 		Size:      1024,
 	}
 
-	if candidate.Path != "/some/path" {
-		t.Error("CleanupCandidate.Path not set correctly")
-	}
-	if candidate.Size != 1024 {
-		t.Error("CleanupCandidate.Size not set correctly")
-	}
+	// Act - struct initialization is the action
+
+	// Assert
+	assert.Equal(t, "/some/path", candidate.Path, "CleanupCandidate.Path not set correctly")
+	assert.Equal(t, int64(1024), candidate.Size, "CleanupCandidate.Size not set correctly")
 }

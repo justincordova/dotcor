@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/justincordova/dotcor/internal/config"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func testConfig() *config.Config {
@@ -16,58 +18,52 @@ func testConfig() *config.Config {
 }
 
 func TestGetHooksDir(t *testing.T) {
+	// Arrange
 	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("failed to get home directory: %v", err)
-	}
+	require.NoError(t, err, "failed to get home directory")
 
 	expected := filepath.Join(home, ".dotcor", "hooks")
 	cfg := testConfig()
 
+	// Act
 	got, err := GetHooksDir(cfg)
-	if err != nil {
-		t.Fatalf("GetHooksDir() error = %v", err)
-	}
 
-	if got != expected {
-		t.Errorf("GetHooksDir() = %v, want %v", got, expected)
-	}
+	// Assert
+	require.NoError(t, err, "GetHooksDir() error")
+	assert.Equal(t, expected, got)
 }
 
 func TestRunHook_MissingHook(t *testing.T) {
 	t.Run("missing hook returns nil", func(t *testing.T) {
+		// Arrange
 		ctx := HookContext{
 			HookType: "nonexistent-hook",
 			FilePath: "/tmp/test.txt",
 		}
-
 		cfg := testConfig()
+
+		// Act
 		err := RunHook(ctx, cfg)
-		if err != nil {
-			t.Errorf("RunHook() with missing hook should return nil, got %v", err)
-		}
+
+		// Assert
+		assert.NoError(t, err, "RunHook() with missing hook should return nil")
 	})
 }
 
 func TestRunHook_ExecutableHook(t *testing.T) {
 	t.Run("successful hook execution", func(t *testing.T) {
+		// Arrange
 		tempDir, err := os.MkdirTemp("", "dotcor-hooks-test-*")
-		if err != nil {
-			t.Fatalf("failed to create temp dir: %v", err)
-		}
+		require.NoError(t, err, "failed to create temp dir")
 		defer os.RemoveAll(tempDir)
 
 		dotcorDir := filepath.Join(tempDir, ".dotcor")
 		hooksDir := filepath.Join(dotcorDir, "hooks")
-		if err := os.MkdirAll(hooksDir, 0755); err != nil {
-			t.Fatalf("failed to create hooks directory: %v", err)
-		}
+		require.NoError(t, os.MkdirAll(hooksDir, 0755), "failed to create hooks directory")
 
 		hookPath := filepath.Join(hooksDir, "test-hook")
 		hookContent := "#!/bin/bash\nexit 0\n"
-		if err := os.WriteFile(hookPath, []byte(hookContent), 0755); err != nil {
-			t.Fatalf("failed to create hook: %v", err)
-		}
+		require.NoError(t, os.WriteFile(hookPath, []byte(hookContent), 0755), "failed to create hook")
 
 		oldHome := os.Getenv("HOME")
 		os.Setenv("HOME", tempDir)
@@ -78,32 +74,28 @@ func TestRunHook_ExecutableHook(t *testing.T) {
 			FilePath: "/tmp/test.txt",
 			RepoPath: "test/repo/path.txt",
 		}
-
 		cfg := testConfig()
+
+		// Act
 		err = RunHook(ctx, cfg)
-		if err != nil {
-			t.Errorf("RunHook() with successful hook should return nil, got %v", err)
-		}
+
+		// Assert
+		assert.NoError(t, err, "RunHook() with successful hook should return nil")
 	})
 
 	t.Run("hook that fails", func(t *testing.T) {
+		// Arrange
 		tempDir, err := os.MkdirTemp("", "dotcor-hooks-test-*")
-		if err != nil {
-			t.Fatalf("failed to create temp dir: %v", err)
-		}
+		require.NoError(t, err, "failed to create temp dir")
 		defer os.RemoveAll(tempDir)
 
 		dotcorDir := filepath.Join(tempDir, ".dotcor")
 		hooksDir := filepath.Join(dotcorDir, "hooks")
-		if err := os.MkdirAll(hooksDir, 0755); err != nil {
-			t.Fatalf("failed to create hooks directory: %v", err)
-		}
+		require.NoError(t, os.MkdirAll(hooksDir, 0755), "failed to create hooks directory")
 
 		hookPath := filepath.Join(hooksDir, "test-hook")
 		hookContent := "#!/bin/bash\nexit 1\n"
-		if err := os.WriteFile(hookPath, []byte(hookContent), 0755); err != nil {
-			t.Fatalf("failed to create hook: %v", err)
-		}
+		require.NoError(t, os.WriteFile(hookPath, []byte(hookContent), 0755), "failed to create hook")
 
 		oldHome := os.Getenv("HOME")
 		os.Setenv("HOME", tempDir)
@@ -114,32 +106,28 @@ func TestRunHook_ExecutableHook(t *testing.T) {
 			FilePath: "/tmp/test.txt",
 			RepoPath: "test/repo/path.txt",
 		}
-
 		cfg := testConfig()
+
+		// Act
 		err = RunHook(ctx, cfg)
-		if err != nil {
-			t.Errorf("RunHook() with failed hook should return nil (graceful degradation), got %v", err)
-		}
+
+		// Assert
+		assert.NoError(t, err, "RunHook() with failed hook should return nil (graceful degradation)")
 	})
 
 	t.Run("hook with custom exit code", func(t *testing.T) {
+		// Arrange
 		tempDir, err := os.MkdirTemp("", "dotcor-hooks-test-*")
-		if err != nil {
-			t.Fatalf("failed to create temp dir: %v", err)
-		}
+		require.NoError(t, err, "failed to create temp dir")
 		defer os.RemoveAll(tempDir)
 
 		dotcorDir := filepath.Join(tempDir, ".dotcor")
 		hooksDir := filepath.Join(dotcorDir, "hooks")
-		if err := os.MkdirAll(hooksDir, 0755); err != nil {
-			t.Fatalf("failed to create hooks directory: %v", err)
-		}
+		require.NoError(t, os.MkdirAll(hooksDir, 0755), "failed to create hooks directory")
 
 		hookPath := filepath.Join(hooksDir, "test-hook")
 		hookContent := "#!/bin/bash\nexit 42\n"
-		if err := os.WriteFile(hookPath, []byte(hookContent), 0755); err != nil {
-			t.Fatalf("failed to create hook: %v", err)
-		}
+		require.NoError(t, os.WriteFile(hookPath, []byte(hookContent), 0755), "failed to create hook")
 
 		oldHome := os.Getenv("HOME")
 		os.Setenv("HOME", tempDir)
@@ -150,34 +138,30 @@ func TestRunHook_ExecutableHook(t *testing.T) {
 			FilePath: "/tmp/test.txt",
 			RepoPath: "test/repo/path.txt",
 		}
-
 		cfg := testConfig()
+
+		// Act
 		err = RunHook(ctx, cfg)
-		if err != nil {
-			t.Errorf("RunHook() with failed hook should return nil (graceful degradation), got %v", err)
-		}
+
+		// Assert
+		assert.NoError(t, err, "RunHook() with failed hook should return nil (graceful degradation)")
 	})
 }
 
 func TestRunHook_NonExecutableHook(t *testing.T) {
 	t.Run("non-executable file is skipped", func(t *testing.T) {
+		// Arrange
 		tempDir, err := os.MkdirTemp("", "dotcor-hooks-test-*")
-		if err != nil {
-			t.Fatalf("failed to create temp dir: %v", err)
-		}
+		require.NoError(t, err, "failed to create temp dir")
 		defer os.RemoveAll(tempDir)
 
 		dotcorDir := filepath.Join(tempDir, ".dotcor")
 		hooksDir := filepath.Join(dotcorDir, "hooks")
-		if err := os.MkdirAll(hooksDir, 0755); err != nil {
-			t.Fatalf("failed to create hooks directory: %v", err)
-		}
+		require.NoError(t, os.MkdirAll(hooksDir, 0755), "failed to create hooks directory")
 
 		hookPath := filepath.Join(hooksDir, "test-hook")
 		hookContent := "#!/bin/bash\necho 'should not run'\nexit 0\n"
-		if err := os.WriteFile(hookPath, []byte(hookContent), 0644); err != nil {
-			t.Fatalf("failed to create hook: %v", err)
-		}
+		require.NoError(t, os.WriteFile(hookPath, []byte(hookContent), 0644), "failed to create hook")
 
 		oldHome := os.Getenv("HOME")
 		os.Setenv("HOME", tempDir)
@@ -188,33 +172,29 @@ func TestRunHook_NonExecutableHook(t *testing.T) {
 			FilePath: "/tmp/test.txt",
 			RepoPath: "test/repo/path.txt",
 		}
-
 		cfg := testConfig()
+
+		// Act
 		err = RunHook(ctx, cfg)
-		if err != nil {
-			t.Errorf("RunHook() with non-executable hook should return nil, got %v", err)
-		}
+
+		// Assert
+		assert.NoError(t, err, "RunHook() with non-executable hook should return nil")
 	})
 }
 
 func TestRunHook_DirectoryInsteadOfFile(t *testing.T) {
 	t.Run("directory with hook name is skipped", func(t *testing.T) {
+		// Arrange
 		tempDir, err := os.MkdirTemp("", "dotcor-hooks-test-*")
-		if err != nil {
-			t.Fatalf("failed to create temp dir: %v", err)
-		}
+		require.NoError(t, err, "failed to create temp dir")
 		defer os.RemoveAll(tempDir)
 
 		dotcorDir := filepath.Join(tempDir, ".dotcor")
 		hooksDir := filepath.Join(dotcorDir, "hooks")
-		if err := os.MkdirAll(hooksDir, 0755); err != nil {
-			t.Fatalf("failed to create hooks directory: %v", err)
-		}
+		require.NoError(t, os.MkdirAll(hooksDir, 0755), "failed to create hooks directory")
 
 		hookPath := filepath.Join(hooksDir, "test-hook")
-		if err := os.Mkdir(hookPath, 0755); err != nil {
-			t.Fatalf("failed to create hook directory: %v", err)
-		}
+		require.NoError(t, os.Mkdir(hookPath, 0755), "failed to create hook directory")
 
 		oldHome := os.Getenv("HOME")
 		os.Setenv("HOME", tempDir)
@@ -225,34 +205,30 @@ func TestRunHook_DirectoryInsteadOfFile(t *testing.T) {
 			FilePath: "/tmp/test.txt",
 			RepoPath: "test/repo/path.txt",
 		}
-
 		cfg := testConfig()
+
+		// Act
 		err = RunHook(ctx, cfg)
-		if err != nil {
-			t.Errorf("RunHook() with directory should return nil, got %v", err)
-		}
+
+		// Assert
+		assert.NoError(t, err, "RunHook() with directory should return nil")
 	})
 }
 
 func TestRunHook_EmptyRepoPath(t *testing.T) {
 	t.Run("hook with empty repo path", func(t *testing.T) {
+		// Arrange
 		tempDir, err := os.MkdirTemp("", "dotcor-hooks-test-*")
-		if err != nil {
-			t.Fatalf("failed to create temp dir: %v", err)
-		}
+		require.NoError(t, err, "failed to create temp dir")
 		defer os.RemoveAll(tempDir)
 
 		dotcorDir := filepath.Join(tempDir, ".dotcor")
 		hooksDir := filepath.Join(dotcorDir, "hooks")
-		if err := os.MkdirAll(hooksDir, 0755); err != nil {
-			t.Fatalf("failed to create hooks directory: %v", err)
-		}
+		require.NoError(t, os.MkdirAll(hooksDir, 0755), "failed to create hooks directory")
 
 		hookPath := filepath.Join(hooksDir, "test-hook")
 		hookContent := "#!/bin/bash\nexit 0\n"
-		if err := os.WriteFile(hookPath, []byte(hookContent), 0755); err != nil {
-			t.Fatalf("failed to create hook: %v", err)
-		}
+		require.NoError(t, os.WriteFile(hookPath, []byte(hookContent), 0755), "failed to create hook")
 
 		oldHome := os.Getenv("HOME")
 		os.Setenv("HOME", tempDir)
@@ -263,11 +239,12 @@ func TestRunHook_EmptyRepoPath(t *testing.T) {
 			FilePath: "",
 			RepoPath: "",
 		}
-
 		cfg := testConfig()
+
+		// Act
 		err = RunHook(ctx, cfg)
-		if err != nil {
-			t.Errorf("RunHook() with empty repo path should return nil, got %v", err)
-		}
+
+		// Assert
+		assert.NoError(t, err, "RunHook() with empty repo path should return nil")
 	})
 }

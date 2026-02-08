@@ -7,59 +7,52 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/justincordova/dotcor/internal/config"
 )
 
 func TestLockInfo(t *testing.T) {
+	// Arrange
 	info := LockInfo{
 		PID:       12345,
 		Timestamp: time.Now(),
 		Hostname:  "testhost",
 	}
 
-	if info.PID != 12345 {
-		t.Errorf("LockInfo.PID = %d, want 12345", info.PID)
-	}
-	if info.Hostname != "testhost" {
-		t.Errorf("LockInfo.Hostname = %s, want testhost", info.Hostname)
-	}
+	// Act
+	// (No action - testing struct initialization)
+
+	// Assert
+	assert.Equal(t, 12345, info.PID, "LockInfo.PID should match")
+	assert.Equal(t, "testhost", info.Hostname, "LockInfo.Hostname should match")
 }
 
 func TestReadLockInfo(t *testing.T) {
-	// Create temp dir
+	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Create a valid lock file
 	lockContent := "12345\n2024-01-15T10:30:00Z\ntesthost\n"
 	lockFile := filepath.Join(tempDir, ".lock")
-	if err := os.WriteFile(lockFile, []byte(lockContent), 0644); err != nil {
-		t.Fatalf("failed to create lock file: %v", err)
-	}
+	err = os.WriteFile(lockFile, []byte(lockContent), 0644)
+	require.NoError(t, err, "failed to create lock file")
 
-	// Read lock info
+	// Act
 	info, err := ReadLockInfo(lockFile)
-	if err != nil {
-		t.Fatalf("ReadLockInfo() error = %v", err)
-	}
 
-	if info.PID != 12345 {
-		t.Errorf("ReadLockInfo() PID = %d, want 12345", info.PID)
-	}
-	if info.Hostname != "testhost" {
-		t.Errorf("ReadLockInfo() Hostname = %s, want testhost", info.Hostname)
-	}
+	// Assert
+	require.NoError(t, err, "ReadLockInfo() should not error")
+	assert.Equal(t, 12345, info.PID, "ReadLockInfo() PID should match")
+	assert.Equal(t, "testhost", info.Hostname, "ReadLockInfo() Hostname should match")
 }
 
 func TestReadLockInfoMalformed(t *testing.T) {
-	// Create temp dir
+	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
 	tests := []struct {
@@ -82,44 +75,40 @@ func TestReadLockInfoMalformed(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
 			lockFile := filepath.Join(tempDir, tt.name+".lock")
-			if err := os.WriteFile(lockFile, []byte(tt.content), 0644); err != nil {
-				t.Fatalf("failed to create lock file: %v", err)
-			}
+			err := os.WriteFile(lockFile, []byte(tt.content), 0644)
+			require.NoError(t, err, "failed to create lock file")
 
-			_, err := ReadLockInfo(lockFile)
-			if err == nil {
-				t.Error("ReadLockInfo() should error for malformed content")
-			}
+			// Act
+			_, err = ReadLockInfo(lockFile)
+
+			// Assert
+			assert.Error(t, err, "ReadLockInfo() should error for malformed content")
 		})
 	}
 }
 
 func TestIsStale(t *testing.T) {
-	// Create temp dir
+	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Create an old lock file (timestamp > 1 hour ago)
 	oldTime := time.Now().Add(-2 * time.Hour).Format(time.RFC3339)
 	oldLockContent := "99999\n" + oldTime + "\ntesthost\n"
 	oldLockFile := filepath.Join(tempDir, "old.lock")
-	if err := os.WriteFile(oldLockFile, []byte(oldLockContent), 0644); err != nil {
-		t.Fatalf("failed to create old lock file: %v", err)
-	}
+	err = os.WriteFile(oldLockFile, []byte(oldLockContent), 0644)
+	require.NoError(t, err, "failed to create old lock file")
 
-	// Check if stale (old lock with non-existent PID should be stale)
 	cfg := &config.Config{Logger: slog.Default()}
+
+	// Act
 	stale, err := IsStale(oldLockFile, cfg)
-	if err != nil {
-		t.Fatalf("IsStale() error = %v", err)
-	}
-	if !stale {
-		t.Error("IsStale() should return true for old lock")
-	}
+
+	// Assert
+	require.NoError(t, err, "IsStale() should not error")
+	assert.True(t, stale, "IsStale() should return true for old lock")
 }
 
 func TestIsLocked(t *testing.T) {
@@ -146,43 +135,49 @@ func TestWithLock(t *testing.T) {
 }
 
 func TestIsOwnLock(t *testing.T) {
-	// Without acquiring a lock, IsOwnLock should return false
-	isOwn, err := IsOwnLock()
-	if err != nil {
-		t.Fatalf("IsOwnLock() error = %v", err)
-	}
+	// Arrange
+	// (No arrangement - IsOwnLock has no parameters)
 
-	// The result depends on lock state
-	_ = isOwn
+	// Act
+	isOwn, err := IsOwnLock()
+
+	// Assert
+	require.NoError(t, err, "IsOwnLock() should not error")
+	_ = isOwn // The result depends on lock state
 }
 
 func TestGetLockInfo(t *testing.T) {
-	// GetLockInfo should not error even if no lock exists
-	info, err := GetLockInfo()
-	if err != nil {
-		t.Fatalf("GetLockInfo() error = %v", err)
-	}
+	// Arrange
+	// (No arrangement - GetLockInfo has no parameters)
 
-	// info may be nil (no lock) or non-nil (lock exists)
-	_ = info
+	// Act
+	info, err := GetLockInfo()
+
+	// Assert
+	require.NoError(t, err, "GetLockInfo() should not error")
+	_ = info // info may be nil (no lock) or non-nil (lock exists)
 }
 
 func TestLockTimeout(t *testing.T) {
-	// Verify LockTimeout constant is reasonable
-	if LockTimeout < time.Second {
-		t.Error("LockTimeout is too short")
-	}
-	if LockTimeout > time.Hour {
-		t.Error("LockTimeout is too long")
-	}
+	// Arrange
+	// (No arrangement - testing constant values)
+
+	// Act
+	// (No action - testing constants)
+
+	// Assert
+	assert.GreaterOrEqual(t, LockTimeout, time.Second, "LockTimeout should be at least 1 second")
+	assert.LessOrEqual(t, LockTimeout, time.Hour, "LockTimeout should not exceed 1 hour")
 }
 
 func TestErrLockHeld(t *testing.T) {
-	// Verify error constants exist
-	if ErrLockHeld == nil {
-		t.Error("ErrLockHeld should not be nil")
-	}
-	if ErrStaleLock == nil {
-		t.Error("ErrStaleLock should not be nil")
-	}
+	// Arrange
+	// (No arrangement - testing error constants)
+
+	// Act
+	// (No action - testing constants)
+
+	// Assert
+	assert.NotNil(t, ErrLockHeld, "ErrLockHeld should not be nil")
+	assert.NotNil(t, ErrStaleLock, "ErrStaleLock should not be nil")
 }
