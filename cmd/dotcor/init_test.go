@@ -50,7 +50,6 @@ func TestAddFile(t *testing.T) {
 	repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
 	managedFiles := []config.ManagedFile{}
-
 	// Create source file
 	os.MkdirAll(filepath.Dir(sourceFile), 0755)
 	if err := os.WriteFile(sourceFile, []byte("# Test zshrc\nexport PATH=/bin"), 0644); err != nil {
