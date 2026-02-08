@@ -72,17 +72,18 @@ func configureLogger(cmd *cobra.Command, cfg *config.Config) {
 func runRoot(cmd *cobra.Command, args []string) {
 	printBanner()
 
-	// Try to load config and show status
+	// Configure logger FIRST, before loading config
+	defaultCfg, err := config.NewDefaultConfig()
+	if err != nil {
+		fmt.Printf("  %s[!] Failed to create default config%s\n", colorYellow, colorReset)
+		return
+	}
+	configureLogger(cmd, defaultCfg)
+
+	// Now load config with logger available
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		// Not initialized - use default config with logger
-		cfg, err = config.NewDefaultConfig()
-		if err != nil {
-			fmt.Printf("  %s[!] Failed to create default config%s\n", colorYellow, colorReset)
-			return
-		}
-		configureLogger(cmd, cfg)
-
+		cfg = defaultCfg
 		fmt.Printf("  %s[!] Not initialized%s\n", colorYellow, colorReset)
 		fmt.Println()
 		fmt.Printf("  %sGet started:%s\n", colorDim, colorReset)
@@ -92,8 +93,8 @@ func runRoot(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	// Configure logger with loaded config
-	configureLogger(cmd, cfg)
+	// Transfer logger to loaded config
+	cfg.Logger = defaultCfg.Logger
 
 	// Show quick status
 	showQuickStatus(cfg)

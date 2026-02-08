@@ -55,6 +55,13 @@ func runInit(cmd *cobra.Command, args []string) error {
 	applyFlag, _ := cmd.Flags().GetBool("apply")
 	interactiveFlag, _ := cmd.Flags().GetBool("interactive")
 
+	// Configure logger early
+	defaultCfg, err := config.NewDefaultConfig()
+	if err != nil {
+		return fmt.Errorf("creating default config: %w", err)
+	}
+	configureLogger(cmd, defaultCfg)
+
 	// Check symlink support first
 	supported, err := fs.SupportsSymlinks()
 	if err != nil {
@@ -82,12 +89,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 		fmt.Println("Use 'dotcor status' to check current state.")
 		fmt.Println("Use 'dotcor init --apply' to create symlinks from existing config.")
 		return nil
-	}
-
-	// Create default config for lock operations
-	defaultCfg, err := config.NewDefaultConfig()
-	if err != nil {
-		return fmt.Errorf("creating default config: %w", err)
 	}
 
 	// Acquire lock
