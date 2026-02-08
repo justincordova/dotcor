@@ -84,11 +84,17 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	// Create default config for lock operations
+	defaultCfg, err := config.NewDefaultConfig()
+	if err != nil {
+		return fmt.Errorf("creating default config: %w", err)
+	}
+
 	// Acquire lock
-	if err := core.AcquireLock(); err != nil {
+	if err := core.AcquireLock(defaultCfg); err != nil {
 		return fmt.Errorf("acquiring lock: %w", err)
 	}
-	defer core.ReleaseLock()
+	defer core.ReleaseLock(defaultCfg)
 
 	// Create directory structure
 	filesDir := filepath.Join(configDir, "files")
@@ -97,20 +103,20 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	fmt.Println("Initializing DotCor...")
 
-	if err := fs.EnsureDir(configDir); err != nil {
+	if err := fs.EnsureDir(configDir, defaultCfg); err != nil {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
 	fmt.Printf("[OK] Created %s\n", configDir)
 
-	if err := fs.EnsureDir(filesDir); err != nil {
+	if err := fs.EnsureDir(filesDir, defaultCfg); err != nil {
 		return fmt.Errorf("creating files directory: %w", err)
 	}
 
-	if err := fs.EnsureDir(backupsDir); err != nil {
+	if err := fs.EnsureDir(backupsDir, defaultCfg); err != nil {
 		return fmt.Errorf("creating backups directory: %w", err)
 	}
 
-	if err := fs.EnsureDir(hooksDir); err != nil {
+	if err := fs.EnsureDir(hooksDir, defaultCfg); err != nil {
 		return fmt.Errorf("creating hooks directory: %w", err)
 	}
 
@@ -196,7 +202,7 @@ func applySymlinks(cfg *config.Config) error {
 		}
 
 		// Check if repo file exists
-		if !fs.FileExists(repoPath) {
+		if !fs.PathExists(repoPath) {
 			fmt.Printf("  [X] %s (not in repository)\n", mf.SourcePath)
 			continue
 		}
@@ -211,8 +217,8 @@ func applySymlinks(cfg *config.Config) error {
 		}
 
 		// Backup existing file if it exists
-		if fs.FileExists(sourcePath) {
-			backupPath, err := core.CreateBackup(sourcePath)
+		if fs.PathExists(sourcePath) {
+			backupPath, err := core.CreateBackup(sourcePath, cfg)
 			if err != nil {
 				fmt.Printf("  [X] %s (backup failed: %v)\n", mf.SourcePath, err)
 				continue
@@ -222,7 +228,7 @@ func applySymlinks(cfg *config.Config) error {
 		}
 
 		// Create symlink
-		if err := fs.CreateSymlink(repoPath, sourcePath); err != nil {
+		if err := fs.CreateSymlink(repoPath, sourcePath, cfg); err != nil {
 			fmt.Printf("  [X] %s (%v)\n", mf.SourcePath, err)
 			continue
 		}
@@ -250,7 +256,7 @@ func interactiveInit(cfg *config.Config) error {
 			continue
 		}
 
-		if fs.FileExists(expanded) {
+		if fs.PathExists(expanded) {
 			// Check if it matches ignore patterns
 			shouldIgnore, pattern := core.ShouldIgnore(expanded, cfg.IgnorePatterns)
 			if shouldIgnore {
@@ -351,19 +357,19 @@ func addFile(cfg *config.Config, sourcePath string, customRepoPath string, force
 	}
 
 	// Create backup
-	if _, err := core.CreateBackup(expanded); err != nil {
+	if _, err := core.CreateBackup(expanded, cfg); err != nil {
 		// Non-fatal, continue
 	}
 
 	// Move file to repo
-	if err := fs.MoveFile(expanded, fullRepoPath); err != nil {
+	if err := fs.MoveFile(expanded, fullRepoPath, cfg); err != nil {
 		return fmt.Errorf("moving file: %w", err)
 	}
 
 	// Create symlink
-	if err := fs.CreateSymlink(fullRepoPath, expanded); err != nil {
+	if err := fs.CreateSymlink(fullRepoPath, expanded, cfg); err != nil {
 		// Rollback: move file back
-		fs.MoveFile(fullRepoPath, expanded)
+		fs.MoveFile(fullRepoPath, expanded, cfg)
 		return fmt.Errorf("creating symlink: %w", err)
 	}
 

@@ -162,11 +162,12 @@ func ValidateFileSize(path string) error {
 		return fmt.Errorf("expanding path: %w", err)
 	}
 
-	size, err := fs.GetFileSize(expanded)
+	info, err := os.Stat(expanded)
 	if err != nil {
-		return fmt.Errorf("getting file size: %w", err)
+		return fmt.Errorf("getting file info: %w", err)
 	}
 
+	size := info.Size()
 	if size > LargeFileThreshold {
 		sizeMB := float64(size) / (1024 * 1024)
 		return fmt.Errorf("file is very large (%.1fMB), consider excluding: %s", sizeMB, path)

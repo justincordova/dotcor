@@ -1,10 +1,19 @@
 package core
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/justincordova/dotcor/internal/config"
 )
+
+func testConfig() *config.Config {
+	return &config.Config{
+		Logger: slog.Default(),
+	}
+}
 
 func TestGetHooksDir(t *testing.T) {
 	home, err := os.UserHomeDir()
@@ -13,8 +22,9 @@ func TestGetHooksDir(t *testing.T) {
 	}
 
 	expected := filepath.Join(home, ".dotcor", "hooks")
+	cfg := testConfig()
 
-	got, err := GetHooksDir()
+	got, err := GetHooksDir(cfg)
 	if err != nil {
 		t.Fatalf("GetHooksDir() error = %v", err)
 	}
@@ -31,7 +41,8 @@ func TestRunHook_MissingHook(t *testing.T) {
 			FilePath: "/tmp/test.txt",
 		}
 
-		err := RunHook(ctx)
+		cfg := testConfig()
+		err := RunHook(ctx, cfg)
 		if err != nil {
 			t.Errorf("RunHook() with missing hook should return nil, got %v", err)
 		}
@@ -68,7 +79,8 @@ func TestRunHook_ExecutableHook(t *testing.T) {
 			RepoPath: "test/repo/path.txt",
 		}
 
-		err = RunHook(ctx)
+		cfg := testConfig()
+		err = RunHook(ctx, cfg)
 		if err != nil {
 			t.Errorf("RunHook() with successful hook should return nil, got %v", err)
 		}
@@ -103,7 +115,8 @@ func TestRunHook_ExecutableHook(t *testing.T) {
 			RepoPath: "test/repo/path.txt",
 		}
 
-		err = RunHook(ctx)
+		cfg := testConfig()
+		err = RunHook(ctx, cfg)
 		if err != nil {
 			t.Errorf("RunHook() with failed hook should return nil (graceful degradation), got %v", err)
 		}
@@ -138,7 +151,8 @@ func TestRunHook_ExecutableHook(t *testing.T) {
 			RepoPath: "test/repo/path.txt",
 		}
 
-		err = RunHook(ctx)
+		cfg := testConfig()
+		err = RunHook(ctx, cfg)
 		if err != nil {
 			t.Errorf("RunHook() with failed hook should return nil (graceful degradation), got %v", err)
 		}
@@ -175,7 +189,8 @@ func TestRunHook_NonExecutableHook(t *testing.T) {
 			RepoPath: "test/repo/path.txt",
 		}
 
-		err = RunHook(ctx)
+		cfg := testConfig()
+		err = RunHook(ctx, cfg)
 		if err != nil {
 			t.Errorf("RunHook() with non-executable hook should return nil, got %v", err)
 		}
@@ -211,7 +226,8 @@ func TestRunHook_DirectoryInsteadOfFile(t *testing.T) {
 			RepoPath: "test/repo/path.txt",
 		}
 
-		err = RunHook(ctx)
+		cfg := testConfig()
+		err = RunHook(ctx, cfg)
 		if err != nil {
 			t.Errorf("RunHook() with directory should return nil, got %v", err)
 		}
@@ -248,7 +264,8 @@ func TestRunHook_EmptyRepoPath(t *testing.T) {
 			RepoPath: "",
 		}
 
-		err = RunHook(ctx)
+		cfg := testConfig()
+		err = RunHook(ctx, cfg)
 		if err != nil {
 			t.Errorf("RunHook() with empty repo path should return nil, got %v", err)
 		}

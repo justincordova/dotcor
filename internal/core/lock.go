@@ -46,7 +46,9 @@ func getLockPath() (string, error) {
 // AcquireLock acquires file-based lock for dotcor operations
 // Uses O_EXCL for atomic lock creation to prevent race conditions
 // Returns error if lock is already held
-func AcquireLock() error {
+func AcquireLock(cfg *config.Config) error {
+	cfg.Logger.Debug("acquiring lock")
+
 	for i := 0; i < maxRetries; i++ {
 		lockPath, err := getLockPath()
 		if err != nil {
@@ -54,7 +56,8 @@ func AcquireLock() error {
 		}
 
 		// Ensure config directory exists
-		if err := fs.EnsureDir(filepath.Dir(lockPath)); err != nil {
+		if err := fs.EnsureDir(filepath.Dir(lockPath), cfg); err != nil {
+			cfg.Logger.Error("failed to create config directory", "error", err)
 			return fmt.Errorf("creating config directory: %w", err)
 		}
 
@@ -63,8 +66,9 @@ func AcquireLock() error {
 		if err != nil {
 			if os.IsExist(err) {
 				// Lock file exists, check if stale
-				stale, staleErr := IsStale(lockPath)
+				stale, staleErr := IsStale(lockPath, cfg)
 				if staleErr != nil {
+					cfg.Logger.Error("failed to check stale lock", "error", staleErr)
 					return fmt.Errorf("checking stale lock: %w", staleErr)
 				}
 
@@ -72,16 +76,20 @@ func AcquireLock() error {
 					// Try to remove stale lock and retry
 					if removeErr := os.Remove(lockPath); removeErr != nil {
 						info, _ := ReadLockInfo(lockPath)
+						cfg.Logger.Error("failed to remove stale lock", "pid", info.PID)
 						return fmt.Errorf("%w: PID %d (process appears dead). Run 'dotcor doctor --fix' to clear", ErrStaleLock, info.PID)
 					}
 					// Retry lock acquisition after removing stale lock
+					cfg.Logger.Debug("removed stale lock, retrying")
 					continue
 				}
 
 				// Lock is held by active process
 				info, _ := ReadLockInfo(lockPath)
+				cfg.Logger.Error("lock held by another process", "pid", info.PID, "hostname", info.Hostname)
 				return fmt.Errorf("%w: PID %d on %s. If this is incorrect, run 'dotcor doctor --fix'", ErrLockHeld, info.PID, info.Hostname)
 			}
+			cfg.Logger.Error("failed to create lock file", "error", err)
 			return fmt.Errorf("creating lock file: %w", err)
 		}
 		defer f.Close()
@@ -97,120 +105,55 @@ func AcquireLock() error {
 			time.Now().Format(time.RFC3339),
 			hostname,
 		)
-
 		if _, err := f.WriteString(content); err != nil {
 			// Clean up on write failure
 			os.Remove(lockPath)
+			cfg.Logger.Error("failed to write lock file", "error", err)
 			return fmt.Errorf("writing lock file: %w", err)
 		}
 
+		cfg.Logger.Info("lock acquired")
 		return nil
 	}
+	cfg.Logger.Error("failed to acquire lock after retries", "attempts", maxRetries)
 	return fmt.Errorf("failed to acquire lock after %d attempts", maxRetries)
 }
 
 // ReleaseLock releases the file lock
-func ReleaseLock() error {
+func ReleaseLock(cfg *config.Config) error {
+	cfg.Logger.Debug("releasing lock")
+
 	lockPath, err := getLockPath()
 	if err != nil {
 		return err
 	}
 
 	// Check if we own the lock
-	if !fs.FileExists(lockPath) {
+	if !fs.PathExists(lockPath) {
+		cfg.Logger.Debug("no lock to release")
 		return nil // No lock to release
 	}
 
 	info, err := ReadLockInfo(lockPath)
 	if err != nil {
 		// Can't read lock, try to remove anyway
+		cfg.Logger.Debug("cannot read lock info, attempting removal")
 		return os.Remove(lockPath)
 	}
 
 	// Only remove if we own it
 	if info.PID != os.Getpid() {
+		cfg.Logger.Error("cannot release lock owned by another process", "pid", info.PID)
 		return fmt.Errorf("cannot release lock owned by PID %d", info.PID)
 	}
 
-	return os.Remove(lockPath)
-}
-
-// WithLock executes a function while holding the lock
-// Automatically releases lock on completion or panic
-func WithLock(fn func() error) error {
-	if err := AcquireLock(); err != nil {
+	if err := os.Remove(lockPath); err != nil {
+		cfg.Logger.Error("failed to remove lock file", "error", err)
 		return err
 	}
 
-	defer func() {
-		ReleaseLock()
-		if r := recover(); r != nil {
-			panic(r) // Re-panic after releasing lock
-		}
-	}()
-
-	return fn()
-}
-
-// IsLocked checks if lock is currently held
-func IsLocked() (bool, error) {
-	lockPath, err := getLockPath()
-	if err != nil {
-		return false, err
-	}
-
-	return fs.FileExists(lockPath), nil
-}
-
-// IsStale checks if lock file is stale (process dead)
-func IsStale(lockPath string) (bool, error) {
-	info, err := ReadLockInfo(lockPath)
-	if err != nil {
-		return true, nil // Malformed lock file is considered stale
-	}
-
-	// Check if lock is older than LockTimeout
-	if time.Since(info.Timestamp) > LockTimeout {
-		return true, nil
-	}
-
-	// Check if process is alive
-	alive, err := isProcessAlive(info.PID)
-	if err != nil {
-		return true, nil // Can't check, assume stale
-	}
-
-	return !alive, nil
-}
-
-// ClearStaleLock removes stale lock file
-func ClearStaleLock() error {
-	lockPath, err := getLockPath()
-	if err != nil {
-		return err
-	}
-
-	if !fs.FileExists(lockPath) {
-		return nil // No lock to clear
-	}
-
-	// Read lock info for error messages
-	info, infoErr := ReadLockInfo(lockPath)
-
-	// Verify it's actually stale
-	stale, err := IsStale(lockPath)
-	if err != nil {
-		return fmt.Errorf("checking if stale: %w", err)
-	}
-
-	if !stale {
-		if infoErr == nil {
-			return fmt.Errorf("lock is not stale (process %d is still running)", info.PID)
-		}
-		return fmt.Errorf("lock is not stale")
-	}
-
-	return os.Remove(lockPath)
+	cfg.Logger.Info("lock released")
+	return nil
 }
 
 // ReadLockInfo reads lock information from lock file
@@ -242,6 +185,34 @@ func ReadLockInfo(lockPath string) (LockInfo, error) {
 		Timestamp: timestamp,
 		Hostname:  hostname,
 	}, nil
+}
+
+// IsStale checks if lock file is stale (process dead)
+func IsStale(lockPath string, cfg *config.Config) (bool, error) {
+	info, err := ReadLockInfo(lockPath)
+	if err != nil {
+		cfg.Logger.Debug("malformed lock file", "error", err)
+		return true, nil // Malformed lock file is considered stale
+	}
+
+	// Check if lock is older than LockTimeout
+	if time.Since(info.Timestamp) > LockTimeout {
+		cfg.Logger.Debug("lock is stale due to age", "pid", info.PID, "age", time.Since(info.Timestamp))
+		return true, nil
+	}
+
+	// Check if process is alive
+	alive, err := isProcessAlive(info.PID)
+	if err != nil {
+		cfg.Logger.Debug("cannot check process status, assuming stale", "pid", info.PID, "error", err)
+		return true, nil // Can't check, assume stale
+	}
+
+	if !alive {
+		cfg.Logger.Debug("lock is stale, process not alive", "pid", info.PID)
+	}
+
+	return !alive, nil
 }
 
 // isProcessAlive checks if a process with given PID is still running
@@ -299,7 +270,7 @@ func GetLockInfo() (*LockInfo, error) {
 		return nil, err
 	}
 
-	if !fs.FileExists(lockPath) {
+	if !fs.PathExists(lockPath) {
 		return nil, nil // No lock
 	}
 
@@ -313,17 +284,26 @@ func GetLockInfo() (*LockInfo, error) {
 
 // ForceReleaseLock forcibly removes the lock file regardless of owner
 // Use with caution - only when you're sure the lock is stale
-func ForceReleaseLock() error {
+func ForceReleaseLock(cfg *config.Config) error {
+	cfg.Logger.Debug("force releasing lock")
+
 	lockPath, err := getLockPath()
 	if err != nil {
 		return err
 	}
 
-	if !fs.FileExists(lockPath) {
+	if !fs.PathExists(lockPath) {
+		cfg.Logger.Debug("no lock to release")
 		return nil
 	}
 
-	return os.Remove(lockPath)
+	if err := os.Remove(lockPath); err != nil {
+		cfg.Logger.Error("failed to remove lock file", "error", err)
+		return err
+	}
+
+	cfg.Logger.Info("lock forcibly released")
+	return nil
 }
 
 // IsOwnLock checks if current process owns the lock

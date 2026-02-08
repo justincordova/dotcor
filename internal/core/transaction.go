@@ -115,16 +115,17 @@ func (t *Transaction) ExecutedCount() int {
 
 // MoveFileOp moves a file from Src to Dst
 type MoveFileOp struct {
-	Src string
-	Dst string
+	Src    string
+	Dst    string
+	Config *config.Config
 }
 
 func (op *MoveFileOp) Do() error {
-	return fs.MoveFile(op.Src, op.Dst)
+	return fs.MoveFile(op.Src, op.Dst, op.Config)
 }
 
 func (op *MoveFileOp) Undo() error {
-	return fs.MoveFile(op.Dst, op.Src)
+	return fs.MoveFile(op.Dst, op.Src, op.Config)
 }
 
 func (op *MoveFileOp) Describe() string {
@@ -133,12 +134,13 @@ func (op *MoveFileOp) Describe() string {
 
 // CopyFileOp copies a file from Src to Dst
 type CopyFileOp struct {
-	Src string
-	Dst string
+	Src    string
+	Dst    string
+	Config *config.Config
 }
 
 func (op *CopyFileOp) Do() error {
-	return fs.CopyFile(op.Src, op.Dst)
+	return fs.CopyFile(op.Src, op.Dst, op.Config)
 }
 
 func (op *CopyFileOp) Undo() error {
@@ -153,10 +155,11 @@ func (op *CopyFileOp) Describe() string {
 type CreateSymlinkOp struct {
 	Target string // The file the symlink points to
 	Link   string // The symlink path
+	Config *config.Config
 }
 
 func (op *CreateSymlinkOp) Do() error {
-	return fs.CreateSymlink(op.Target, op.Link)
+	return fs.CreateSymlink(op.Target, op.Link, op.Config)
 }
 
 func (op *CreateSymlinkOp) Undo() error {
@@ -172,6 +175,7 @@ type RemoveSymlinkOp struct {
 	Link        string
 	savedTarget string // Saved for undo
 	wasRelative bool
+	Config      *config.Config
 }
 
 func (op *RemoveSymlinkOp) Do() error {
@@ -190,7 +194,7 @@ func (op *RemoveSymlinkOp) Do() error {
 
 func (op *RemoveSymlinkOp) Undo() error {
 	// Use safe symlink creation with validation
-	return fs.CreateSymlink(op.savedTarget, op.Link)
+	return fs.CreateSymlink(op.savedTarget, op.Link, op.Config)
 }
 
 func (op *RemoveSymlinkOp) Describe() string {
@@ -226,11 +230,12 @@ func (op *RemoveFileOp) Describe() string {
 
 // CreateDirOp creates a directory
 type CreateDirOp struct {
-	Path string
+	Path   string
+	Config *config.Config
 }
 
 func (op *CreateDirOp) Do() error {
-	return fs.EnsureDir(op.Path)
+	return fs.EnsureDir(op.Path, op.Config)
 }
 
 func (op *CreateDirOp) Undo() error {
@@ -325,7 +330,7 @@ type WriteFileOp struct {
 }
 
 func (op *WriteFileOp) Do() error {
-	if fs.FileExists(op.Path) {
+	if fs.PathExists(op.Path) {
 		op.existed = true
 		backupPath, err := CreateBackup(op.Path, op.config)
 		if err != nil {

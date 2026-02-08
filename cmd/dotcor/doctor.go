@@ -153,9 +153,12 @@ func checkConfiguration(fix bool) (issues, fixed int) {
 		issues++
 
 		if fix {
-			if err := fs.EnsureDir(repoPath); err == nil {
-				fmt.Printf("  [OK] Created repository directory: %s\n", repoPath)
-				fixed++
+			cfg, err := config.LoadConfig()
+			if err == nil {
+				if err := fs.EnsureDir(repoPath, cfg); err == nil {
+					fmt.Printf("  [OK] Created repository directory: %s\n", repoPath)
+					fixed++
+				}
 			}
 		}
 	}
@@ -166,6 +169,13 @@ func checkConfiguration(fix bool) (issues, fixed int) {
 
 // checkLockFile checks for stale locks
 func checkLockFile(fix bool) (issues, fixed int) {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		fmt.Printf("  [X] Config error: %v\n", err)
+		issues++
+		return
+	}
+
 	info, err := core.GetLockInfo()
 	if err != nil {
 		return
@@ -188,7 +198,7 @@ func checkLockFile(fix bool) (issues, fixed int) {
 		return
 	}
 
-	stale, _ := core.IsStale(lockPath)
+	stale, _ := core.IsStale(lockPath, cfg)
 	if !stale {
 		fmt.Printf("  [!] Lock held by PID %d on %s\n", info.PID, info.Hostname)
 		fmt.Println("    (Lock appears active - another dotcor process may be running)")
@@ -199,7 +209,7 @@ func checkLockFile(fix bool) (issues, fixed int) {
 	issues++
 
 	if fix {
-		if err := core.ForceReleaseLock(); err == nil {
+		if err := core.ForceReleaseLock(cfg); err == nil {
 			fmt.Println("  [OK] Removed stale lock")
 			fixed++
 		} else {
@@ -285,8 +295,8 @@ func checkSymlinks(fix bool) (issues, fixed int) {
 			fmt.Printf("  [X] Missing symlink: %s\n", mf.SourcePath)
 			issues++
 
-			if fix && fs.FileExists(repoPath) {
-				if err := fs.CreateSymlink(repoPath, sourcePath); err == nil {
+			if fix && fs.PathExists(repoPath) {
+				if err := fs.CreateSymlink(repoPath, sourcePath, cfg); err == nil {
 					fmt.Printf("  [OK] Recreated symlink: %s\n", mf.SourcePath)
 					fixed++
 				}
@@ -308,10 +318,10 @@ func checkSymlinks(fix bool) (issues, fixed int) {
 			fmt.Printf("  [X] Broken symlink: %s\n", mf.SourcePath)
 			issues++
 
-			if fix && fs.FileExists(repoPath) {
+			if fix && fs.PathExists(repoPath) {
 				// Remove broken symlink and recreate
 				os.Remove(sourcePath)
-				if err := fs.CreateSymlink(repoPath, sourcePath); err == nil {
+				if err := fs.CreateSymlink(repoPath, sourcePath, cfg); err == nil {
 					fmt.Printf("  [OK] Fixed symlink: %s\n", mf.SourcePath)
 					fixed++
 				}
@@ -614,7 +624,12 @@ func checkGitRemote(fix bool) (int, int) {
 
 // checkHookPermissions verifies hooks are executable
 func checkHookPermissions(fix bool) (int, int) {
-	hooksDir, err := core.GetHooksDir()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return 0, 0
+	}
+
+	hooksDir, err := core.GetHooksDir(cfg)
 	if err != nil {
 		return 0, 0
 	}

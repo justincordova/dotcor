@@ -96,13 +96,13 @@ func verifyConfig(cfg *config.Config, repoPath string) error {
 	}
 
 	// Check for discrepancies
-	var missing []string    // In config but not in repo
-	var orphaned []string   // In repo but not in config
+	var missing []string  // In config but not in repo
+	var orphaned []string // In repo but not in config
 
 	// Check each tracked file exists in repo
 	for _, mf := range cfg.ManagedFiles {
 		fullPath := filepath.Join(repoPath, mf.RepoPath)
-		if !fs.FileExists(fullPath) {
+		if !fs.PathExists(fullPath) {
 			missing = append(missing, mf.RepoPath)
 		}
 	}
@@ -192,10 +192,10 @@ func scanAndRebuild(cfg *config.Config, repoPath string, force bool) error {
 	}
 
 	// Acquire lock
-	if err := core.AcquireLock(); err != nil {
+	if err := core.AcquireLock(cfg); err != nil {
 		return fmt.Errorf("acquiring lock: %w", err)
 	}
-	defer core.ReleaseLock()
+	defer core.ReleaseLock(cfg)
 
 	// Add files to config
 	added := 0

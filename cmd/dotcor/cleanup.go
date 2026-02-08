@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/justincordova/dotcor/internal/config"
 	"github.com/justincordova/dotcor/internal/core"
 	"github.com/spf13/cobra"
 )
@@ -43,6 +44,12 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
 	force, _ := cmd.Flags().GetBool("force")
 
+	// Load config
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return fmt.Errorf("loading config: %w\nRun 'dotcor init' first", err)
+	}
+
 	// Parse duration
 	duration, err := parseDuration(olderThan)
 	if err != nil {
@@ -55,12 +62,12 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 	}
 
 	// Get current backup stats
-	backupCount, err := core.GetBackupCount()
+	backupCount, err := core.GetBackupCount(cfg)
 	if err != nil {
 		return fmt.Errorf("getting backup count: %w", err)
 	}
 
-	totalSize, err := core.GetTotalBackupSize()
+	totalSize, err := core.GetTotalBackupSize(cfg)
 	if err != nil {
 		return fmt.Errorf("getting backup size: %w", err)
 	}
@@ -74,7 +81,7 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 	fmt.Println("")
 
 	// Preview what would be deleted (doesn't actually delete)
-	candidates, freedSpace, err := core.PreviewCleanup(duration, keep)
+	candidates, freedSpace, err := core.PreviewCleanup(duration, keep, cfg)
 	if err != nil {
 		return fmt.Errorf("previewing cleanup: %w", err)
 	}
@@ -107,7 +114,7 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 	}
 
 	// Actually delete
-	deleted, failed, freedSpace, err := core.CleanOldBackups(duration, keep)
+	deleted, failed, freedSpace, err := core.CleanOldBackups(duration, keep, cfg)
 	if err != nil {
 		// Report partial success if some deletions worked
 		if deleted > 0 {
@@ -121,8 +128,8 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 	}
 
 	// Show new stats
-	newCount, _ := core.GetBackupCount()
-	newSize, _ := core.GetTotalBackupSize()
+	newCount, _ := core.GetBackupCount(cfg)
+	newSize, _ := core.GetTotalBackupSize(cfg)
 	fmt.Printf("Remaining: %d files, %s\n", newCount, formatSize(newSize))
 
 	return nil

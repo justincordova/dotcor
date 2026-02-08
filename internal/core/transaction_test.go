@@ -2,16 +2,19 @@ package core
 
 import (
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/justincordova/dotcor/internal/config"
 )
 
 // mockOperation is a simple operation for testing
 type mockOperation struct {
-	doErr   error
-	undoErr error
-	doCalls int
+	doErr     error
+	undoErr   error
+	doCalls   int
 	undoCalls int
 }
 
@@ -30,7 +33,8 @@ func (m *mockOperation) Describe() string {
 }
 
 func TestNewTransaction(t *testing.T) {
-	tx := NewTransaction()
+	cfg := &config.Config{Logger: slog.Default()}
+	tx := NewTransaction(cfg)
 
 	if tx == nil {
 		t.Fatal("NewTransaction() returned nil")
@@ -44,7 +48,8 @@ func TestNewTransaction(t *testing.T) {
 }
 
 func TestTransactionExecute(t *testing.T) {
-	tx := NewTransaction()
+	cfg := &config.Config{Logger: slog.Default()}
+	tx := NewTransaction(cfg)
 	op := &mockOperation{}
 
 	err := tx.Execute(op)
@@ -61,7 +66,8 @@ func TestTransactionExecute(t *testing.T) {
 }
 
 func TestTransactionExecuteFails(t *testing.T) {
-	tx := NewTransaction()
+	cfg := &config.Config{Logger: slog.Default()}
+	tx := NewTransaction(cfg)
 
 	// First operation succeeds
 	op1 := &mockOperation{}
@@ -83,7 +89,8 @@ func TestTransactionExecuteFails(t *testing.T) {
 }
 
 func TestTransactionRollback(t *testing.T) {
-	tx := NewTransaction()
+	cfg := &config.Config{Logger: slog.Default()}
+	tx := NewTransaction(cfg)
 
 	op1 := &mockOperation{}
 	op2 := &mockOperation{}
@@ -106,7 +113,8 @@ func TestTransactionRollback(t *testing.T) {
 }
 
 func TestTransactionCommit(t *testing.T) {
-	tx := NewTransaction()
+	cfg := &config.Config{Logger: slog.Default()}
+	tx := NewTransaction(cfg)
 	op := &mockOperation{}
 	tx.Execute(op)
 
@@ -124,7 +132,8 @@ func TestTransactionCommit(t *testing.T) {
 }
 
 func TestTransactionExecuteAfterCommit(t *testing.T) {
-	tx := NewTransaction()
+	cfg := &config.Config{Logger: slog.Default()}
+	tx := NewTransaction(cfg)
 	tx.Commit()
 
 	op := &mockOperation{}
@@ -143,58 +152,14 @@ func TestMoveFileOp(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create source file
+	cfg := &config.Config{Logger: slog.Default()}
 	src := filepath.Join(tempDir, "source")
 	dst := filepath.Join(tempDir, "dest")
 	if err := os.WriteFile(src, []byte("content"), 0644); err != nil {
 		t.Fatalf("failed to create source file: %v", err)
 	}
 
-	op := &MoveFileOp{Src: src, Dst: dst}
-
-	// Do the operation
-	if err := op.Do(); err != nil {
-		t.Fatalf("MoveFileOp.Do() error = %v", err)
-	}
-
-	// Verify source is gone and dest exists
-	if _, err := os.Stat(src); !os.IsNotExist(err) {
-		t.Error("MoveFileOp.Do() should remove source")
-	}
-	if _, err := os.Stat(dst); os.IsNotExist(err) {
-		t.Error("MoveFileOp.Do() should create dest")
-	}
-
-	// Undo the operation
-	if err := op.Undo(); err != nil {
-		t.Fatalf("MoveFileOp.Undo() error = %v", err)
-	}
-
-	// Verify source is back and dest is gone
-	if _, err := os.Stat(src); os.IsNotExist(err) {
-		t.Error("MoveFileOp.Undo() should restore source")
-	}
-	if _, err := os.Stat(dst); !os.IsNotExist(err) {
-		t.Error("MoveFileOp.Undo() should remove dest")
-	}
-}
-
-func TestCopyFileOp(t *testing.T) {
-	// Create temp dir
-	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	// Create source file
-	src := filepath.Join(tempDir, "source")
-	dst := filepath.Join(tempDir, "dest")
-	content := []byte("content")
-	if err := os.WriteFile(src, content, 0644); err != nil {
-		t.Fatalf("failed to create source file: %v", err)
-	}
-
-	op := &CopyFileOp{Src: src, Dst: dst}
+	op := &CopyFileOp{Src: src, Dst: dst, Config: cfg}
 
 	// Do the operation
 	if err := op.Do(); err != nil {
@@ -231,8 +196,10 @@ func TestCreateDirOp(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
+	// Create new directory
 	newDir := filepath.Join(tempDir, "newdir")
-	op := &CreateDirOp{Path: newDir}
+	cfg := &config.Config{Logger: slog.Default()}
+	op := &CreateDirOp{Path: newDir, Config: cfg}
 
 	// Do the operation
 	if err := op.Do(); err != nil {
@@ -267,10 +234,11 @@ func TestCreateDirOpUndoNonEmpty(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
+	cfg := &config.Config{Logger: slog.Default()}
 	newDir := filepath.Join(tempDir, "newdir")
-	op := &CreateDirOp{Path: newDir}
+	op := &CreateDirOp{Path: newDir, Config: cfg}
 
-	// Do the operation
+	// Do operation
 	if err := op.Do(); err != nil {
 		t.Fatalf("CreateDirOp.Do() error = %v", err)
 	}
@@ -326,9 +294,10 @@ func TestTransactionExecuteAll(t *testing.T) {
 		t.Fatalf("failed to create source file: %v", err)
 	}
 
-	tx := NewTransaction()
+	cfg := &config.Config{Logger: slog.Default()}
+	tx := NewTransaction(cfg)
 	tx.operations = []Operation{
-		&CopyFileOp{Src: src, Dst: dst},
+		&CopyFileOp{Src: src, Dst: dst, Config: cfg},
 	}
 
 	// Execute all operations

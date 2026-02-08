@@ -72,10 +72,10 @@ func runRebuildLinks(cmd *cobra.Command, args []string) error {
 
 	// Acquire lock (skip for dry-run)
 	if !dryRun {
-		if err := core.AcquireLock(); err != nil {
+		if err := core.AcquireLock(cfg); err != nil {
 			return fmt.Errorf("acquiring lock: %w", err)
 		}
-		defer core.ReleaseLock()
+		defer core.ReleaseLock(cfg)
 	}
 
 	if dryRun {
@@ -108,7 +108,7 @@ func runRebuildLinks(cmd *cobra.Command, args []string) error {
 		}
 
 		// Check if template file exists
-		if !fs.FileExists(repoPath) {
+		if !fs.PathExists(repoPath) {
 			fmt.Printf("  - %s (template not found in repo)\n", mf.SourcePath)
 			continue
 		}
@@ -157,7 +157,7 @@ func runRebuildLinks(cmd *cobra.Command, args []string) error {
 		}
 
 		// Create symlink to rendered file
-		if err := fs.CreateSymlink(baseRepoPath, sourcePath); err != nil {
+		if err := fs.CreateSymlink(baseRepoPath, sourcePath, cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "  [X] %s (failed to create symlink: %v)\n", mf.SourcePath, err)
 			continue
 		}

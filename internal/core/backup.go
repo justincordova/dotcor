@@ -44,7 +44,7 @@ func CreateBackup(sourcePath string, cfg *config.Config) (string, error) {
 		return "", fmt.Errorf("expanding source path: %w", err)
 	}
 
-	if !fs.FileExists(expanded) {
+	if !fs.PathExists(expanded) {
 		cfg.Logger.Error("source file does not exist", "file", sourcePath)
 		return "", fmt.Errorf("source file does not exist: %s", sourcePath)
 	}
@@ -65,7 +65,7 @@ func CreateBackup(sourcePath string, cfg *config.Config) (string, error) {
 		return "", fmt.Errorf("backup path exists as file, not directory: %s", timestampDir)
 	}
 
-	if err := fs.EnsureDir(timestampDir); err != nil {
+	if err := fs.EnsureDir(timestampDir, cfg); err != nil {
 		cfg.Logger.Error("failed to create backup directory", "error", err)
 		return "", fmt.Errorf("creating backup directory: %w", err)
 	}
@@ -82,12 +82,12 @@ func CreateBackup(sourcePath string, cfg *config.Config) (string, error) {
 	backupPath := filepath.Join(timestampDir, backupRelativePath)
 
 	// Ensure parent directory exists
-	if err := fs.EnsureDir(filepath.Dir(backupPath)); err != nil {
+	if err := fs.EnsureDir(filepath.Dir(backupPath), cfg); err != nil {
 		cfg.Logger.Error("failed to create backup subdirectory", "error", err)
 		return "", fmt.Errorf("creating backup subdirectory: %w", err)
 	}
 
-	if err := fs.CopyWithPermissions(expanded, backupPath); err != nil {
+	if err := fs.CopyWithPermissions(expanded, backupPath, cfg); err != nil {
 		cfg.Logger.Error("failed to copy to backup", "src", expanded, "dst", backupPath, "error", err)
 		return "", fmt.Errorf("copying to backup: %w", err)
 	}
@@ -119,17 +119,17 @@ func RestoreBackup(backupPath, targetPath string, cfg *config.Config) error {
 		return fmt.Errorf("expanding target path: %w", err)
 	}
 
-	if !fs.FileExists(expandedBackup) {
+	if !fs.PathExists(expandedBackup) {
 		cfg.Logger.Error("backup file does not exist", "path", backupPath)
 		return fmt.Errorf("backup file does not exist: %s", backupPath)
 	}
 
-	if err := fs.EnsureDir(filepath.Dir(expandedTarget)); err != nil {
+	if err := fs.EnsureDir(filepath.Dir(expandedTarget), cfg); err != nil {
 		cfg.Logger.Error("failed to create target directory", "error", err)
 		return fmt.Errorf("creating target directory: %w", err)
 	}
 
-	if err := fs.CopyWithPermissions(expandedBackup, expandedTarget); err != nil {
+	if err := fs.CopyWithPermissions(expandedBackup, expandedTarget, cfg); err != nil {
 		cfg.Logger.Error("failed to restore from backup", "src", expandedBackup, "dst", expandedTarget, "error", err)
 		return fmt.Errorf("restoring from backup: %w", err)
 	}
@@ -270,7 +270,7 @@ func CleanOldBackups(olderThan time.Duration, keepLast int, cfg *config.Config) 
 	var actualFreed int64
 
 	for _, candidate := range candidates {
-		if err := fs.RemoveAll(candidate.Path); err != nil {
+		if err := fs.RemoveAll(candidate.Path, cfg); err != nil {
 			failed++
 			cfg.Logger.Error("failed to remove backup directory", "path", candidate.Path, "error", err)
 			if firstErr == nil {

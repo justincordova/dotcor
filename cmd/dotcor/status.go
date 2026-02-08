@@ -172,7 +172,7 @@ func checkFileStatus(cfg *config.Config, mf config.ManagedFile) FileStatus {
 	}
 
 	// Check if repo file exists
-	if !fs.FileExists(repoPath) {
+	if !fs.PathExists(repoPath) {
 		status.Status = "missing-repo"
 		status.Problem = "file missing from repository"
 		return status
@@ -434,9 +434,12 @@ func CheckLockStatus() (bool, *core.LockInfo, error) {
 	// Check if it's stale
 	lockPath, _ := getLockPathForCheck()
 	if lockPath != "" {
-		stale, _ := core.IsStale(lockPath)
-		if stale {
-			return true, info, nil // Stale lock
+		cfg, err := config.LoadConfig()
+		if err == nil {
+			stale, _ := core.IsStale(lockPath, cfg)
+			if stale {
+				return true, info, nil // Stale lock
+			}
 		}
 	}
 

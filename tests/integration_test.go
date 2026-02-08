@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +12,12 @@ import (
 	"github.com/justincordova/dotcor/internal/fs"
 	"github.com/justincordova/dotcor/internal/git"
 )
+
+func testConfig() *config.Config {
+	return &config.Config{
+		Logger: slog.Default(),
+	}
+}
 
 // TestIntegration_InitAddListRemove tests the core workflow:
 // init -> add a file -> list -> remove -> verify cleanup
@@ -49,6 +56,7 @@ func TestIntegration_InitAddListRemove(t *testing.T) {
 
 	// Create config
 	cfg := &config.Config{
+		Logger:         slog.Default(),
 		Version:        config.CurrentConfigVersion,
 		RepoPath:       filesDir,
 		GitEnabled:     false,
@@ -58,7 +66,7 @@ func TestIntegration_InitAddListRemove(t *testing.T) {
 
 	// === ADD OPERATION ===
 	// 1. Create backup
-	backupPath, err := core.CreateBackup(dotfile)
+	backupPath, err := core.CreateBackup(dotfile, cfg)
 	if err != nil {
 		t.Fatalf("CreateBackup() error = %v", err)
 	}
@@ -71,13 +79,13 @@ func TestIntegration_InitAddListRemove(t *testing.T) {
 	fullRepoPath := filepath.Join(filesDir, repoPath)
 
 	// 3. Ensure parent directory exists
-	if err := fs.EnsureDir(filepath.Dir(fullRepoPath)); err != nil {
+	if err := fs.EnsureDir(filepath.Dir(fullRepoPath), cfg); err != nil {
 		t.Fatalf("EnsureDir() error = %v", err)
 	}
 
 	// 4. Move file to repo using transaction
-	tx := core.NewTransaction()
-	if err := tx.Execute(&core.MoveFileOp{Src: dotfile, Dst: fullRepoPath}); err != nil {
+	tx := core.NewTransaction(cfg)
+	if err := tx.Execute(&core.MoveFileOp{Src: dotfile, Dst: fullRepoPath, Config: cfg}); err != nil {
 		t.Fatalf("MoveFileOp.Do() error = %v", err)
 	}
 
@@ -146,7 +154,7 @@ func TestIntegration_InitAddListRemove(t *testing.T) {
 	}
 
 	// 2. Remove symlink and restore file
-	removeTx := core.NewTransaction()
+	removeTx := core.NewTransaction(cfg)
 
 	// Remove the symlink
 	if err := os.Remove(dotfile); err != nil {
@@ -154,7 +162,7 @@ func TestIntegration_InitAddListRemove(t *testing.T) {
 	}
 
 	// Move file back from repo
-	if err := removeTx.Execute(&core.MoveFileOp{Src: fullRepoPath, Dst: dotfile}); err != nil {
+	if err := removeTx.Execute(&core.MoveFileOp{Src: fullRepoPath, Dst: dotfile, Config: cfg}); err != nil {
 		t.Fatalf("MoveFileOp.Do() (remove) error = %v", err)
 	}
 
@@ -215,10 +223,11 @@ func TestIntegration_TransactionRollback(t *testing.T) {
 		t.Fatalf("failed to create file2: %v", err)
 	}
 
-	tx := core.NewTransaction()
+	cfg := testConfig()
+	tx := core.NewTransaction(cfg)
 
 	// First operation succeeds
-	if err := tx.Execute(&core.CopyFileOp{Src: file1, Dst: dest1}); err != nil {
+	if err := tx.Execute(&core.CopyFileOp{Src: file1, Dst: dest1, Config: cfg}); err != nil {
 		t.Fatalf("first CopyFileOp error = %v", err)
 	}
 
@@ -233,7 +242,7 @@ func TestIntegration_TransactionRollback(t *testing.T) {
 	}
 
 	// This should fail and trigger rollback
-	err = tx.Execute(&core.CopyFileOp{Src: file2, Dst: dest2})
+	err = tx.Execute(&core.CopyFileOp{Src: file2, Dst: dest2, Config: cfg})
 	if err == nil {
 		t.Error("copying to directory path should fail")
 	}
@@ -344,7 +353,8 @@ func TestIntegration_BackupRestore(t *testing.T) {
 	}
 
 	// Create backup
-	backupPath, err := core.CreateBackup(originalFile)
+	cfg := testConfig()
+	backupPath, err := core.CreateBackup(originalFile, cfg)
 	if err != nil {
 		t.Fatalf("CreateBackup() error = %v", err)
 	}
@@ -366,7 +376,7 @@ func TestIntegration_BackupRestore(t *testing.T) {
 
 	// Restore from backup
 	restoredFile := filepath.Join(tempDir, "restored.txt")
-	if err := core.RestoreBackup(backupPath, restoredFile); err != nil {
+	if err := core.RestoreBackup(backupPath, restoredFile, cfg); err != nil {
 		t.Fatalf("RestoreBackup() error = %v", err)
 	}
 

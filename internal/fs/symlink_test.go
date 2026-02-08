@@ -1,10 +1,13 @@
 package fs
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/justincordova/dotcor/internal/config"
 )
 
 func TestSupportsSymlinks(t *testing.T) {
@@ -378,7 +381,8 @@ func TestRemoveSymlink(t *testing.T) {
 	}
 
 	// Remove symlink
-	if err := RemoveSymlink(symlinkFile); err != nil {
+	cfg := &config.Config{Logger: slog.Default()}
+	if err := RemoveSymlink(symlinkFile, cfg); err != nil {
 		t.Fatalf("RemoveSymlink() error = %v", err)
 	}
 
@@ -388,7 +392,7 @@ func TestRemoveSymlink(t *testing.T) {
 	}
 
 	// Verify target still exists
-	if !FileExists(targetFile) {
+	if !PathExists(targetFile) {
 		t.Error("RemoveSymlink() target was removed")
 	}
 }
@@ -403,18 +407,30 @@ func TestRemoveSymlinkErrorsOnRegularFile(t *testing.T) {
 
 	// Create regular file
 	regularFile := filepath.Join(tempDir, "regular")
-	if err := os.WriteFile(regularFile, []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(regularFile, []byte("content"), 0644); err != nil {
 		t.Fatalf("failed to create regular file: %v", err)
 	}
 
+	// Try to remove regular file as symlink (should error)
+	cfg := &config.Config{Logger: slog.Default()}
+	err = RemoveSymlink(regularFile, cfg)
+	if err == nil {
+		t.Error("RemoveSymlink() should error on regular file")
+	}
+
+	// Verify regular file still exists
+	if !PathExists(regularFile) {
+		t.Error("RemoveSymlink() removed regular file")
+	}
+
 	// Try to remove as symlink - should fail
-	err = RemoveSymlink(regularFile)
+	err = RemoveSymlink(regularFile, cfg)
 	if err == nil {
 		t.Error("RemoveSymlink() should error on regular file")
 	}
 
 	// Verify file still exists
-	if !FileExists(regularFile) {
+	if !PathExists(regularFile) {
 		t.Error("RemoveSymlink() removed regular file")
 	}
 }

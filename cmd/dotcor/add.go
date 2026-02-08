@@ -58,10 +58,10 @@ func runAdd(cmd *cobra.Command, args []string) error {
 
 	// Acquire lock (skip for dry-run)
 	if !dryRun {
-		if err := core.AcquireLock(); err != nil {
+		if err := core.AcquireLock(cfg); err != nil {
 			return fmt.Errorf("acquiring lock: %w", err)
 		}
-		defer core.ReleaseLock()
+		defer core.ReleaseLock(cfg)
 	}
 
 	// Expand glob patterns in args
@@ -85,7 +85,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("expanding %s: %w", file, err)
 			}
 
-			isDir, err := fs.IsDirectory(expandedPath)
+			isDir, err := fs.IsDirectory(expandedPath, cfg)
 			if err == nil && isDir {
 				// Get all files in directory recursively
 				dirFiles, err := fs.GetFilesRecursive(expandedPath)
@@ -210,7 +210,7 @@ func processAddFile(cfg *config.Config, sourcePath string, category string, forc
 	}
 
 	// Check if file exists
-	if !fs.FileExists(expanded) {
+	if !fs.PathExists(expanded) {
 		return addResultError, "", fmt.Errorf("file does not exist")
 	}
 
@@ -276,12 +276,12 @@ func processAddFile(cfg *config.Config, sourcePath string, category string, forc
 		return addResultSuccess, repoPath, nil
 	}
 
-	if err := core.RunHook(core.HookContext{HookType: "pre-add", FilePath: sourcePath}); err != nil {
+	if err := core.RunHook(core.HookContext{HookType: "pre-add", FilePath: sourcePath}, cfg); err != nil {
 		fmt.Printf("  [!] Pre-add hook warning: %v\n", err)
 	}
 
 	// Create backup
-	backupPath, err := core.CreateBackup(expanded)
+	backupPath, err := core.CreateBackup(expanded, cfg)
 	if err != nil {
 		// Backup creation failed, abort operation
 		return addResultError, "", fmt.Errorf("backup creation failed for %s: %w", normalized, err)
@@ -311,7 +311,7 @@ func processAddFile(cfg *config.Config, sourcePath string, category string, forc
 		// Rollback already happened in ExecuteAll
 		// Try to restore from backup if we have one
 		if backupPath != "" {
-			if restoreErr := core.RestoreBackup(backupPath, expanded); restoreErr != nil {
+			if restoreErr := core.RestoreBackup(backupPath, expanded, cfg); restoreErr != nil {
 				fmt.Fprintf(os.Stderr, "  [!] Failed to restore backup: %v\n", restoreErr)
 			}
 		}
@@ -321,7 +321,7 @@ func processAddFile(cfg *config.Config, sourcePath string, category string, forc
 	tx.Commit()
 	fmt.Printf("  [OK] %s\n", normalized)
 
-	if err := core.RunHook(core.HookContext{HookType: "post-add", FilePath: sourcePath, RepoPath: repoPath}); err != nil {
+	if err := core.RunHook(core.HookContext{HookType: "post-add", FilePath: sourcePath, RepoPath: repoPath}, cfg); err != nil {
 		fmt.Printf("  [!] Post-add hook warning: %v\n", err)
 	}
 

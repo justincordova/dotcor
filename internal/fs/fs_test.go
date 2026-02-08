@@ -1,10 +1,19 @@
 package fs
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/justincordova/dotcor/internal/config"
 )
+
+func testConfig() *config.Config {
+	return &config.Config{
+		Logger: slog.Default(),
+	}
+}
 
 func TestFileExists(t *testing.T) {
 	// Create temp dir
@@ -44,9 +53,15 @@ func TestFileExists(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FileExists(tt.path)
-			if got != tt.want {
-				t.Errorf("FileExists() = %v, want %v", got, tt.want)
+			got := PathExists(tt.path)
+			// PathExists returns true for both files and directories
+			// Old FileExists returned false for directories
+			want := tt.want
+			if tt.path == testFile || tt.path == tempDir {
+				want = true
+			}
+			if got != want {
+				t.Errorf("PathExists() = %v, want %v", got, want)
 			}
 		})
 	}
@@ -135,7 +150,8 @@ func TestEnsureDir(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := EnsureDir(tt.path)
+			cfg := testConfig()
+			err := EnsureDir(tt.path, cfg)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("EnsureDir() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -164,13 +180,14 @@ func TestCopyWithPermissions(t *testing.T) {
 	}
 
 	// Copy to destination
+	cfg := testConfig()
 	dstFile := filepath.Join(tempDir, "dest")
-	if err := CopyWithPermissions(srcFile, dstFile); err != nil {
+	if err := CopyWithPermissions(srcFile, dstFile, cfg); err != nil {
 		t.Fatalf("CopyWithPermissions() error = %v", err)
 	}
 
 	// Verify destination exists
-	if !FileExists(dstFile) {
+	if !PathExists(dstFile) {
 		t.Error("CopyWithPermissions() destination file not created")
 	}
 
@@ -208,18 +225,19 @@ func TestMoveFile(t *testing.T) {
 	}
 
 	// Move to destination
+	cfg := testConfig()
 	dstFile := filepath.Join(tempDir, "dest")
-	if err := MoveFile(srcFile, dstFile); err != nil {
+	if err := MoveFile(srcFile, dstFile, cfg); err != nil {
 		t.Fatalf("MoveFile() error = %v", err)
 	}
 
 	// Verify source is gone
-	if FileExists(srcFile) {
+	if PathExists(srcFile) {
 		t.Error("MoveFile() source file still exists")
 	}
 
 	// Verify destination exists with correct content
-	if !FileExists(dstFile) {
+	if !PathExists(dstFile) {
 		t.Error("MoveFile() destination file not created")
 	}
 
@@ -247,13 +265,14 @@ func TestMoveFileCreatesParentDir(t *testing.T) {
 	}
 
 	// Move to nested destination (parent doesn't exist)
+	cfg := testConfig()
 	dstFile := filepath.Join(tempDir, "nested", "dir", "dest")
-	if err := MoveFile(srcFile, dstFile); err != nil {
+	if err := MoveFile(srcFile, dstFile, cfg); err != nil {
 		t.Fatalf("MoveFile() error = %v", err)
 	}
 
 	// Verify destination exists
-	if !FileExists(dstFile) {
+	if !PathExists(dstFile) {
 		t.Error("MoveFile() destination file not created")
 	}
 }
@@ -298,7 +317,8 @@ func TestIsDirectory(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := IsDirectory(tt.path)
+			cfg := testConfig()
+			got, err := IsDirectory(tt.path, cfg)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("IsDirectory() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -324,7 +344,8 @@ func TestGetFileSize(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	size, err := GetFileSize(testFile)
+	cfg := testConfig()
+	size, err := GetFileSize(testFile, cfg)
 	if err != nil {
 		t.Fatalf("GetFileSize() error = %v", err)
 	}
@@ -348,12 +369,13 @@ func TestRemoveFile(t *testing.T) {
 	}
 
 	// Remove it
-	if err := RemoveFile(testFile); err != nil {
+	cfg := testConfig()
+	if err := RemoveFile(testFile, cfg); err != nil {
 		t.Fatalf("RemoveFile() error = %v", err)
 	}
 
 	// Verify it's gone
-	if FileExists(testFile) {
+	if PathExists(testFile) {
 		t.Error("RemoveFile() file still exists")
 	}
 }
@@ -373,8 +395,9 @@ func TestGetFilesRecursive(t *testing.T) {
 		filepath.Join(tempDir, "subdir", "nested", "file3.txt"),
 	}
 
+	cfg := testConfig()
 	for _, f := range files {
-		if err := EnsureDir(filepath.Dir(f)); err != nil {
+		if err := EnsureDir(filepath.Dir(f), cfg); err != nil {
 			t.Fatalf("failed to create parent dir: %v", err)
 		}
 		if err := os.WriteFile(f, []byte("test"), 0644); err != nil {

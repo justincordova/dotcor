@@ -3,7 +3,6 @@ package fs
 import (
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"path/filepath"
 

@@ -113,15 +113,15 @@ func runSync(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if err := core.RunHook(core.HookContext{HookType: "pre-sync", FilePath: ""}); err != nil {
+	if err := core.RunHook(core.HookContext{HookType: "pre-sync", FilePath: ""}, cfg); err != nil {
 		fmt.Printf("[!] Pre-sync hook warning: %v\n", err)
 	}
 
 	// Acquire lock
-	if err := core.AcquireLock(); err != nil {
+	if err := core.AcquireLock(cfg); err != nil {
 		return fmt.Errorf("acquiring lock: %w", err)
 	}
-	defer core.ReleaseLock()
+	defer core.ReleaseLock(cfg)
 
 	// Commit changes
 	if hasChanges {
@@ -158,7 +158,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if err := core.RunHook(core.HookContext{HookType: "post-sync", FilePath: ""}); err != nil {
+	if err := core.RunHook(core.HookContext{HookType: "post-sync", FilePath: ""}, cfg); err != nil {
 		fmt.Printf("[!] Post-sync hook warning: %v\n", err)
 	}
 

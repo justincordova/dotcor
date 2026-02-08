@@ -61,6 +61,16 @@ func runClone(cmd *cobra.Command, args []string) error {
 	apply, _ := cmd.Flags().GetBool("apply")
 	force, _ := cmd.Flags().GetBool("force")
 
+	// Load or create config
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		// Config doesn't exist, create default
+		cfg, err = config.NewDefaultConfig()
+		if err != nil {
+			return fmt.Errorf("creating config: %w", err)
+		}
+	}
+
 	// Check symlink support first
 	supported, err := fs.SupportsSymlinks()
 	if err != nil {
@@ -105,27 +115,27 @@ func runClone(cmd *cobra.Command, args []string) error {
 
 		// Remove existing
 		fmt.Println("Removing existing DotCor directory...")
-		if err := fs.RemoveAll(configDir); err != nil {
+		if err := fs.RemoveAll(configDir, cfg); err != nil {
 			return fmt.Errorf("removing existing directory: %w", err)
 		}
 	}
 
 	// Acquire lock - may fail if directory is new, which is expected
-	lockErr := core.AcquireLock()
+	lockErr := core.AcquireLock(cfg)
 	if lockErr == nil {
-		defer core.ReleaseLock()
+		defer core.ReleaseLock(cfg)
 	}
 	// Note: Lock acquisition failure is expected when cloning to a new directory
 
 	// Create config directory structure
 	fmt.Println("Setting up DotCor...")
 
-	if err := fs.EnsureDir(configDir); err != nil {
+	if err := fs.EnsureDir(configDir, cfg); err != nil {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
 
 	backupsDir := configDir + "/backups"
-	if err := fs.EnsureDir(backupsDir); err != nil {
+	if err := fs.EnsureDir(backupsDir, cfg); err != nil {
 		return fmt.Errorf("creating backups directory: %w", err)
 	}
 
@@ -149,20 +159,20 @@ func runClone(cmd *cobra.Command, args []string) error {
 
 	// Check for config.yaml in repo
 	configPath := filesDir + "/config.yaml"
-	if fs.FileExists(configPath) {
+	if fs.PathExists(configPath) {
 		// Copy config to correct location
 		destConfig := configDir + "/config.yaml"
-		if err := fs.CopyFile(configPath, destConfig); err != nil {
+		if err := fs.CopyFile(configPath, destConfig, cfg); err != nil {
 			fmt.Printf("[!] Could not copy config: %v\n", err)
 		} else {
-			fmt.Println("[OK] Configuration loaded from repository")
+			// Reload the config from the copied location
+			cfg, err = config.LoadConfig()
+			if err == nil {
+				fmt.Println("[OK] Configuration loaded from repository")
+			}
 		}
 	} else {
-		// Create default config
-		cfg, err := config.NewDefaultConfig()
-		if err != nil {
-			return fmt.Errorf("creating config: %w", err)
-		}
+		// Save the default config we created earlier
 		if err := cfg.SaveConfig(); err != nil {
 			return fmt.Errorf("saving config: %w", err)
 		}
@@ -174,11 +184,6 @@ func runClone(cmd *cobra.Command, args []string) error {
 	if apply {
 		fmt.Println("")
 		fmt.Println("Creating symlinks...")
-
-		cfg, err := config.LoadConfig()
-		if err != nil {
-			return fmt.Errorf("loading config: %w", err)
-		}
 
 		return applySymlinks(cfg)
 	}

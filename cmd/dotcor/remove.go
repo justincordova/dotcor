@@ -56,10 +56,10 @@ func runRemove(cmd *cobra.Command, args []string) error {
 
 	// Acquire lock (skip for dry-run)
 	if !dryRun {
-		if err := core.AcquireLock(); err != nil {
+		if err := core.AcquireLock(cfg); err != nil {
 			return fmt.Errorf("acquiring lock: %w", err)
 		}
-		defer core.ReleaseLock()
+		defer core.ReleaseLock(cfg)
 	}
 
 	// Determine which files to remove
@@ -165,7 +165,7 @@ func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool,
 		return nil
 	}
 
-	if err := core.RunHook(core.HookContext{HookType: "pre-remove", FilePath: mf.SourcePath}); err != nil {
+	if err := core.RunHook(core.HookContext{HookType: "pre-remove", FilePath: mf.SourcePath}, cfg); err != nil {
 		fmt.Printf("  [!] Pre-remove hook warning: %v\n", err)
 	}
 
@@ -188,7 +188,7 @@ func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool,
 			return fmt.Errorf("updating config: %w", err)
 		}
 
-		if err := core.RunHook(core.HookContext{HookType: "post-remove", FilePath: mf.SourcePath}); err != nil {
+		if err := core.RunHook(core.HookContext{HookType: "post-remove", FilePath: mf.SourcePath}, cfg); err != nil {
 			fmt.Printf("  [!] Post-remove hook warning: %v\n", err)
 		}
 
@@ -198,15 +198,15 @@ func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool,
 
 	// Full removal: copy back and delete from repo
 
-	// First, create backup of the repo file
-	if fs.FileExists(repoPath) {
-		if _, err := core.CreateBackup(repoPath); err != nil {
+	// First, create backup of repo file
+	if fs.PathExists(repoPath) {
+		if _, err := core.CreateBackup(repoPath, cfg); err != nil {
 			fmt.Printf("  [!] Backup failed for %s: %v\n", mf.RepoPath, err)
 		}
 	}
 
 	// Ensure parent directory exists
-	if err := fs.EnsureDir(filepath.Dir(sourcePath)); err != nil {
+	if err := fs.EnsureDir(filepath.Dir(sourcePath), cfg); err != nil {
 		return fmt.Errorf("creating parent directory: %w", err)
 	}
 
@@ -218,8 +218,8 @@ func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool,
 	}
 
 	// Copy file from repo to source location
-	if fs.FileExists(repoPath) {
-		if err := fs.CopyWithPermissions(repoPath, sourcePath); err != nil {
+	if fs.PathExists(repoPath) {
+		if err := fs.CopyWithPermissions(repoPath, sourcePath, cfg); err != nil {
 			return fmt.Errorf("copying file back: %w", err)
 		}
 
@@ -237,7 +237,7 @@ func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool,
 		return fmt.Errorf("updating config: %w", err)
 	}
 
-	if err := core.RunHook(core.HookContext{HookType: "post-remove", FilePath: mf.SourcePath}); err != nil {
+	if err := core.RunHook(core.HookContext{HookType: "post-remove", FilePath: mf.SourcePath}, cfg); err != nil {
 		fmt.Printf("  [!] Post-remove hook warning: %v\n", err)
 	}
 

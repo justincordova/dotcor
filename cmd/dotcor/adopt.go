@@ -51,10 +51,10 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 
 	// Acquire lock (skip for dry-run)
 	if !dryRun {
-		if err := core.AcquireLock(); err != nil {
+		if err := core.AcquireLock(cfg); err != nil {
 			return fmt.Errorf("acquiring lock: %w", err)
 		}
-		defer core.ReleaseLock()
+		defer core.ReleaseLock(cfg)
 	}
 
 	var symlinks []string
@@ -178,7 +178,7 @@ func processAdoptSymlink(cfg *config.Config, symlinkPath string, dryRun bool) (a
 	}
 
 	// Check if target exists
-	if !fs.FileExists(absoluteTarget) {
+	if !fs.PathExists(absoluteTarget) {
 		return adoptResultError, fmt.Errorf("symlink target does not exist: %s", target)
 	}
 
@@ -222,7 +222,7 @@ func processAdoptSymlink(cfg *config.Config, symlinkPath string, dryRun bool) (a
 			return adoptResultError, fmt.Errorf("getting repo file path: %w", err)
 		}
 
-		if err := fs.CopyWithPermissions(absoluteTarget, repoFilePath); err != nil {
+		if err := fs.CopyWithPermissions(absoluteTarget, repoFilePath, cfg); err != nil {
 			return adoptResultError, fmt.Errorf("copying target to repo: %w", err)
 		}
 
@@ -244,7 +244,7 @@ func processAdoptSymlink(cfg *config.Config, symlinkPath string, dryRun bool) (a
 	}
 
 	// Create new relative symlink
-	if err := fs.CreateSymlink(repoFilePath, expanded); err != nil {
+	if err := fs.CreateSymlink(repoFilePath, expanded, cfg); err != nil {
 		return adoptResultError, fmt.Errorf("creating new symlink: %w", err)
 	}
 

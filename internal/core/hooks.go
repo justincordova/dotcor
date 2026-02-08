@@ -6,12 +6,16 @@ import (
 	"os/exec"
 	"path/filepath"
 	"syscall"
+
+	"github.com/justincordova/dotcor/internal/config"
 )
 
 // GetHooksDir returns the hooks directory path (~/.dotcor/hooks)
-func GetHooksDir() (string, error) {
+func GetHooksDir(cfg *config.Config) (string, error) {
+	cfg.Logger.Debug("getting hooks directory")
 	home, err := os.UserHomeDir()
 	if err != nil {
+		cfg.Logger.Error("failed to get home directory", "error", err)
 		return "", fmt.Errorf("getting home directory: %w", err)
 	}
 	return filepath.Join(home, ".dotcor", "hooks"), nil
@@ -27,8 +31,9 @@ type HookContext struct {
 // RunHook executes a hook script if it exists
 // Gracefully skips if hook doesn't exist or isn't executable
 // Logs errors but doesn't fail the main operation
-func RunHook(ctx HookContext) error {
-	hooksDir, err := GetHooksDir()
+func RunHook(ctx HookContext, cfg *config.Config) error {
+	cfg.Logger.Debug("running hook", "type", ctx.HookType, "file", ctx.FilePath)
+	hooksDir, err := GetHooksDir(cfg)
 	if err != nil {
 		return fmt.Errorf("getting hooks directory: %w", err)
 	}
