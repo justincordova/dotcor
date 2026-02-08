@@ -5,11 +5,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/justincordova/dotcor/internal/config"
 )
 
 func MoveFile(src, dst string, cfg *config.Config) error {
+	start := time.Now()
 	cfg.Logger.Debug("moving file", "src", src, "dst", dst)
 
 	if err := EnsureDir(filepath.Dir(dst), cfg); err != nil {
@@ -18,7 +20,8 @@ func MoveFile(src, dst string, cfg *config.Config) error {
 
 	err := os.Rename(src, dst)
 	if err == nil {
-		cfg.Logger.Info("file moved successfully", "src", src, "dst", dst)
+		durationMs := time.Since(start).Milliseconds()
+		cfg.Logger.Info("file moved successfully", "src", src, "dst", dst, "duration_ms", durationMs)
 		return nil
 	}
 
@@ -36,7 +39,8 @@ func MoveFile(src, dst string, cfg *config.Config) error {
 		return fmt.Errorf("removing original file: %w", err)
 	}
 
-	cfg.Logger.Info("file moved", "src", src, "dst", dst)
+	durationMs := time.Since(start).Milliseconds()
+	cfg.Logger.Info("file moved", "src", src, "dst", dst, "duration_ms", durationMs)
 	return nil
 }
 
