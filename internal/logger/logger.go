@@ -45,9 +45,15 @@ func ConfigureFromFlags(cmd *cobra.Command) *slog.Logger {
 				Level: level,
 			}))
 		}
-		handler = slog.NewTextHandler(file, &slog.HandlerOptions{
-			Level: level,
-		})
+		if jsonFormat {
+			handler = slog.NewJSONHandler(file, &slog.HandlerOptions{
+				Level: level,
+			})
+		} else {
+			handler = slog.NewTextHandler(file, &slog.HandlerOptions{
+				Level: level,
+			})
+		}
 	}
 
 	return slog.New(handler)
