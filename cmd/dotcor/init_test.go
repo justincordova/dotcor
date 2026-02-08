@@ -96,8 +96,6 @@ func TestApplySymlinks(t *testing.T) {
 	sourceFile := filepath.Join(homeDir, ".zshrc")
 	repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
-	managedFiles := []config.ManagedFile{}
-
 	// Create source file
 	if err := os.MkdirAll(homeDir, 0755); err != nil {
 		t.Fatalf("failed to create home dir: %v", err)
