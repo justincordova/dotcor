@@ -53,12 +53,12 @@ const LargeFileThreshold = 100 * 1024 * 1024
 
 // ValidateSourceFile checks if source file is valid for adding
 func ValidateSourceFile(path string, cfg *config.Config) error {
-	cfg.Logger.Debug("validating source file", "path", path)
+	cfg.Logger.Debug("validating source file", "file", path)
 
 	// Expand path
 	expanded, err := config.ExpandPath(path, cfg)
 	if err != nil {
-		cfg.Logger.Error("failed to expand path", "path", path, "error", err)
+		cfg.Logger.Error("failed to expand path", "file", path, "error", err)
 		return fmt.Errorf("invalid path: %w", err)
 	}
 
@@ -66,10 +66,10 @@ func ValidateSourceFile(path string, cfg *config.Config) error {
 	info, err := os.Stat(expanded)
 	if err != nil {
 		if os.IsNotExist(err) {
-			cfg.Logger.Error("file does not exist", "path", path)
+			cfg.Logger.Error("file does not exist", "file", path)
 			return fmt.Errorf("file does not exist: %s", path)
 		}
-		cfg.Logger.Error("failed to check file", "path", path, "error", err)
+		cfg.Logger.Error("failed to check file", "file", path, "error", err)
 		return fmt.Errorf("checking file: %w", err)
 	}
 
@@ -81,38 +81,38 @@ func ValidateSourceFile(path string, cfg *config.Config) error {
 
 	// Check if file is readable
 	if !fs.IsReadable(expanded) {
-		cfg.Logger.Error("file is not readable", "path", path)
+		cfg.Logger.Error("file is not readable", "file", path)
 		return fmt.Errorf("file is not readable: %s", path)
 	}
 
 	// Check if file is inside dotcor directory
 	if err := ValidateNotInDotcorDir(path, cfg); err != nil {
-		cfg.Logger.Error("file is in dotcor directory", "path", path, "error", err)
+		cfg.Logger.Error("file is in dotcor directory", "file", path, "error", err)
 		return err
 	}
 
 	// Check if already a symlink pointing to our repo
 	isLink, err := fs.IsSymlink(expanded)
 	if err != nil {
-		cfg.Logger.Error("failed to check symlink", "path", path, "error", err)
+		cfg.Logger.Error("failed to check symlink", "file", path, "error", err)
 		return fmt.Errorf("checking symlink: %w", err)
 	}
 	if isLink {
 		pointsToRepo, err := fs.SymlinkPointsToRepo(expanded, cfg.RepoPath)
 		if err != nil {
-			cfg.Logger.Error("failed to check symlink target", "path", path, "error", err)
+			cfg.Logger.Error("failed to check symlink target", "file", path, "error", err)
 			return fmt.Errorf("checking symlink target: %w", err)
 		}
 		if pointsToRepo {
-			cfg.Logger.Debug("file already managed by dotcor", "path", path)
+			cfg.Logger.Debug("file already managed by dotcor", "file", path)
 			return fmt.Errorf("file is already a symlink pointing to dotcor repo: %s", path)
 		}
 		// It's a symlink but points elsewhere - suggest using adopt
-		cfg.Logger.Debug("file is symlink pointing elsewhere", "path", path)
+		cfg.Logger.Debug("file is symlink pointing elsewhere", "file", path)
 		return fmt.Errorf("file is a symlink pointing elsewhere, use 'dotcor adopt' instead: %s", path)
 	}
 
-	cfg.Logger.Debug("validation complete", "path", path, "valid", true)
+	cfg.Logger.Debug("validation complete", "file", path, "valid", true)
 	return nil
 }
 
@@ -170,26 +170,26 @@ func ValidateNotInDotcorDir(path string, cfg *config.Config) error {
 
 // ValidateFileSize checks file isn't unreasonably large (>100MB warning)
 func ValidateFileSize(path string, cfg *config.Config) error {
-	cfg.Logger.Debug("validating file size", "path", path)
+	cfg.Logger.Debug("validating file size", "file", path)
 
 	expanded, err := config.ExpandPath(path, cfg)
 	if err != nil {
-		cfg.Logger.Error("failed to expand path for validation", "path", path, "error", err)
+		cfg.Logger.Error("failed to expand path for validation", "file", path, "error", err)
 		return fmt.Errorf("expanding path: %w", err)
 	}
 
 	info, err := os.Stat(expanded)
 	if err != nil {
-		cfg.Logger.Error("failed to get file info", "path", path, "error", err)
+		cfg.Logger.Error("failed to get file info", "file", path, "error", err)
 		return fmt.Errorf("getting file info: %w", err)
 	}
 
 	size := info.Size()
-	cfg.Logger.Debug("file size check", "path", path, "size", size, "threshold", LargeFileThreshold)
+	cfg.Logger.Debug("file size check", "file", path, "size", size, "threshold", LargeFileThreshold)
 
 	if size > LargeFileThreshold {
 		sizeMB := float64(size) / (1024 * 1024)
-		cfg.Logger.Warn("file is very large", "path", path, "size_mb", sizeMB)
+		cfg.Logger.Warn("file is very large", "file", path, "size_mb", sizeMB)
 		return fmt.Errorf("file is very large (%.1fMB), consider excluding: %s", sizeMB, path)
 	}
 
@@ -236,7 +236,7 @@ func ShouldWarnAboutSecrets(path string, warnings []string) bool {
 
 // ValidateAll runs all validations on a file
 func ValidateAll(path string, cfg *config.Config) (warnings []string, err error) {
-	cfg.Logger.Debug("running all validations", "path", path)
+	cfg.Logger.Debug("running all validations", "file", path)
 
 	// Basic validations
 	if err := ValidateSourceFile(path, cfg); err != nil {
@@ -256,15 +256,15 @@ func ValidateAll(path string, cfg *config.Config) (warnings []string, err error)
 	secretWarnings, err := DetectSecrets(path)
 	if err != nil {
 		// Non-fatal, just skip secret detection
-		cfg.Logger.Warn("secret detection failed, skipping", "path", path, "error", err)
+		cfg.Logger.Warn("secret detection failed, skipping", "file", path, "error", err)
 	} else {
 		if len(secretWarnings) > 0 {
-			cfg.Logger.Warn("potential secrets detected", "path", path, "count", len(secretWarnings))
+			cfg.Logger.Warn("potential secrets detected", "file", path, "count", len(secretWarnings))
 		}
 		warnings = append(warnings, secretWarnings...)
 	}
 
-	cfg.Logger.Debug("all validations complete", "path", path, "warnings", len(warnings))
+	cfg.Logger.Debug("all validations complete", "file", path, "warnings", len(warnings))
 	return warnings, nil
 }
 
