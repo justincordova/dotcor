@@ -25,35 +25,32 @@ DotCor follows a comprehensive testing strategy focusing on:
 
 ## Testing Philosophy
 
-### Test-Driven Development (TDD)
+DotCor ensures important functionality is well-tested and organized. Since DotCor manipulates user dotfiles and system state, bugs can corrupt configuration files, leave broken symlinks, create incomplete transactions, or lose user data. Comprehensive testing catches these issues early.
 
-DotCor follows Test-Driven Development (TDD) to ensure safety, reliability, and confidence in every commit. Since DotCor manipulates user dotfiles and system state, a bug can corrupt configuration files, leave broken symlinks, create incomplete transactions, or lose user data. TDD catches these issues early, before they affect real user systems.
+**Approach:**
 
-**TDD Approach:**
+1. **Write code first** - Implement feature with pragmatic iterations
+2. **Write tests** - Ensure all important paths and edge cases are covered
+3. **Organize tests** - Structure tests logically alongside code
 
-1. **Write failing test first** - Define expected behavior
-2. **Run test** - Confirm it fails
-3. **Implement minimum code** - Make test pass
-4. **Refactor** - Clean up while keeping tests passing
-
-This approach forces you to think about API and edge cases before writing implementation code.
+This approach enables rapid development while ensuring critical functionality is tested and reliable.
 
 ### Test for New Features
 
 **MANDATORY:** When adding new features or making significant changes:
 
-1. Write tests before implementing (TDD)
-2. Ensure tests cover:
-   - Happy path (normal operation)
-   - Error paths (edge cases, invalid inputs)
-   - Integration with other components
+1. **Write implementation** - Implement feature with pragmatic iterations
+2. **Write tests** - Ensure tests cover:
+    - Happy path (normal operation)
+    - Error paths (edge cases, invalid inputs)
+    - Integration with other components
+3. **Organize tests** - Structure tests logically alongside code
 
 3. Example workflow:
-   ```
-   - Implement new command
-   - Write command_test.go with comprehensive coverage
-   - Write integration tests in tests/integration/
-   - Update docs/TESTING.md if new patterns emerge
+    - Implement new command with error handling
+    - Write command_test.go with comprehensive coverage
+    - Write integration tests in tests/integration/
+    - Update docs/TESTING.md if new patterns emerge
    ```
 
 ## AAA Pattern
