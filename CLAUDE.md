@@ -391,3 +391,27 @@ For detailed logging documentation, see [LOGGING.md](LOGGING.md).
 - Follow existing patterns in the codebase
 - Be conservative with external dependencies
 - Test suggestions mentally before proposing
+
+## Testing Requirements
+
+**CRITICAL:** When working with tests, always:
+1. Reference [docs/TESTING.md](TESTING.md) for testing conventions, patterns, and best practices
+2. Write tests for new features, especially big features or significant code changes
+3. Ensure tests cover happy paths, error paths, and edge cases
+4. Follow AAA pattern (Arrange-Act-Assert) with testify framework
+5. Organize tests logically: unit tests alongside code, integration tests in tests/
+6. Pre-commit workflow: `go build ./... && go test ./...` before any commit
+
+**When to write tests:**
+- All new features must have tests
+- Significant changes to existing features need test updates
+- Bug fixes should include regression tests
+- Core packages (config, core, fs, git) require comprehensive coverage (target 85%+)
+- Command tests should cover major CLI commands (init, add, remove, list, status, sync, restore, history, diff, adopt, doctor, rebuild-config, clone, cleanup)
+
+Testing documentation at docs/TESTING.md includes:
+- testify framework usage (assert/require packages)
+- AAA pattern examples
+- Test naming conventions
+- Helper functions (cmd/dotcor/test_helpers.go)
+- Coverage goals and pre-commit workflow
