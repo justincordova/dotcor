@@ -115,6 +115,12 @@ func EnsureDir(path string, cfg *config.Config) error {
 	return fmt.Errorf("checking directory: %w", err)
 }
 
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return !os.IsNotExist(err)
+}
+
+// PathExists checks if path exists (file or directory)
 func PathExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
