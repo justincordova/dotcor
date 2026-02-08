@@ -1,12 +1,29 @@
 package core
 
 import (
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/justincordova/dotcor/internal/config"
 )
+
+// createTestConfig creates a test config with logger
+func createTestConfig(t *testing.T) *config.Config {
+	t.Helper()
+
+	// Create logger that writes to nowhere for tests
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}))
+
+	return &config.Config{
+		Logger:   logger,
+		RepoPath: t.TempDir(),
+	}
+}
 
 func TestValidateRepoPath(t *testing.T) {
 	tests := []struct {
@@ -167,12 +184,8 @@ func TestValidateNotAlreadyManaged(t *testing.T) {
 }
 
 func TestValidateFileSize(t *testing.T) {
-	// Create temp dir
-	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
+	cfg := createTestConfig(t)
 
 	// Create a small file (should pass)
 	smallFile := filepath.Join(tempDir, "small")
@@ -181,9 +194,10 @@ func TestValidateFileSize(t *testing.T) {
 	}
 
 	// Test small file
-	if err := ValidateFileSize(smallFile); err != nil {
+	if err := ValidateFileSize(smallFile, cfg); err != nil {
 		t.Errorf("ValidateFileSize() error = %v for small file", err)
 	}
+	defer os.RemoveAll(tempDir)
 
 	// Note: We don't test large files as creating 100MB+ files is slow
 	// The function logic is straightforward

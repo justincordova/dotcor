@@ -48,7 +48,7 @@ func TestExpandPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ExpandPath(tt.input)
+			got, err := ExpandPath(tt.input, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ExpandPath() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -174,7 +174,7 @@ func TestGenerateRepoPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := GenerateRepoPath(tt.sourcePath, tt.customPath)
+			got, err := GenerateRepoPath(tt.sourcePath, tt.customPath, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GenerateRepoPath() error = %v, wantErr %v", err, tt.wantErr)
 				return
