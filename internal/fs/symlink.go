@@ -38,12 +38,12 @@ func CreateSymlink(target, link string, cfg *config.Config) error {
 	}
 
 	// Expand paths
-	expandedTarget, err := config.ExpandPath(target)
+	expandedTarget, err := config.ExpandPath(target, cfg)
 	if err != nil {
 		return fmt.Errorf("expanding target path: %w", err)
 	}
 
-	expandedLink, err := config.ExpandPath(link)
+	expandedLink, err := config.ExpandPath(link, cfg)
 	if err != nil {
 		return fmt.Errorf("expanding link path: %w", err)
 	}
@@ -76,7 +76,7 @@ func CreateSymlink(target, link string, cfg *config.Config) error {
 
 // RemoveSymlink removes a symlink (validates it's actually a symlink first)
 func RemoveSymlink(link string, cfg *config.Config) error {
-	expandedLink, err := config.ExpandPath(link)
+	expandedLink, err := config.ExpandPath(link, cfg)
 	if err != nil {
 		return fmt.Errorf("expanding link path: %w", err)
 	}
@@ -99,7 +99,7 @@ func RemoveSymlink(link string, cfg *config.Config) error {
 
 // IsSymlink checks if path is a symlink
 func IsSymlink(path string) (bool, error) {
-	expandedPath, err := config.ExpandPath(path)
+	expandedPath, err := config.ExpandPath(path, nil)
 	if err != nil {
 		return false, fmt.Errorf("expanding path: %w", err)
 	}
@@ -115,9 +115,9 @@ func IsSymlink(path string) (bool, error) {
 	return info.Mode()&os.ModeSymlink != 0, nil
 }
 
-// ReadSymlink reads the target of a symlink (returns raw target, may be relative)
+// ReadSymlink reads symlink target (returns raw target, may be relative)
 func ReadSymlink(link string) (string, error) {
-	expandedLink, err := config.ExpandPath(link)
+	expandedLink, err := config.ExpandPath(link, nil)
 	if err != nil {
 		return "", fmt.Errorf("expanding path: %w", err)
 	}
@@ -133,7 +133,7 @@ func ReadSymlink(link string) (string, error) {
 // IsValidSymlink checks if symlink exists and points to existing target
 // Resolves relative paths to check target existence
 func IsValidSymlink(link string) (bool, error) {
-	expandedLink, err := config.ExpandPath(link)
+	expandedLink, err := config.ExpandPath(link, nil)
 	if err != nil {
 		return false, fmt.Errorf("expanding path: %w", err)
 	}
@@ -147,7 +147,7 @@ func IsValidSymlink(link string) (bool, error) {
 		return false, nil
 	}
 
-	// Read the target
+	// Read target
 	target, err := ReadSymlink(expandedLink)
 	if err != nil {
 		return false, err
@@ -210,7 +210,7 @@ func SupportsSymlinks() (bool, error) {
 func GetSymlinkStatus(linkPath string, expectedTarget string) (SymlinkStatus, error) {
 	status := SymlinkStatus{}
 
-	expandedLink, err := config.ExpandPath(linkPath)
+	expandedLink, err := config.ExpandPath(linkPath, nil)
 	if err != nil {
 		return status, fmt.Errorf("expanding link path: %w", err)
 	}
@@ -255,7 +255,7 @@ func GetSymlinkStatus(linkPath string, expectedTarget string) (SymlinkStatus, er
 
 	// Check if target points to our repo
 	if expectedTarget != "" {
-		expandedExpected, err := config.ExpandPath(expectedTarget)
+		expandedExpected, err := config.ExpandPath(expectedTarget, nil)
 		if err != nil {
 			return status, fmt.Errorf("expanding expected target path: %w", err)
 		}
@@ -271,7 +271,7 @@ func GetSymlinkStatus(linkPath string, expectedTarget string) (SymlinkStatus, er
 
 // ResolveSymlink returns the absolute path that a symlink points to
 func ResolveSymlink(link string) (string, error) {
-	expandedLink, err := config.ExpandPath(link)
+	expandedLink, err := config.ExpandPath(link, nil)
 	if err != nil {
 		return "", fmt.Errorf("expanding path: %w", err)
 	}
@@ -306,7 +306,7 @@ func SymlinkPointsToRepo(link string, repoPath string) (bool, error) {
 		return false, err
 	}
 
-	expandedRepo, err := config.ExpandPath(repoPath)
+	expandedRepo, err := config.ExpandPath(repoPath, nil)
 	if err != nil {
 		return false, fmt.Errorf("expanding repo path: %w", err)
 	}
