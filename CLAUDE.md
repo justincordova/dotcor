@@ -23,46 +23,62 @@ DotCor is a symlink-based dotfile manager built in Go. It combines the simplicit
 
 ```
 dotcor/
-├── cmd/dotcor/           # CLI commands (Cobra)
-│   ├── main.go           # Entry point, root command
-│   ├── init.go           # dotcor init
-│   ├── add.go            # dotcor add
-│   ├── remove.go         # dotcor remove
-│   ├── list.go           # dotcor list
-│   ├── status.go         # dotcor status
-│   ├── sync.go           # dotcor sync
-│   ├── restore.go        # dotcor restore
-│   ├── history.go        # dotcor history
-│   ├── diff.go           # dotcor diff
-│   ├── adopt.go          # dotcor adopt
-│   ├── doctor.go         # dotcor doctor
-│   ├── rebuild.go        # dotcor rebuild-config
-│   ├── clone.go          # dotcor clone
-│   └── cleanup.go        # dotcor cleanup-backups
+├── cmd/dotcor/               # CLI commands (Cobra)
+│   ├── main.go               # Entry point, root command
+│   ├── init.go               # dotcor init
+│   ├── add.go                # dotcor add
+│   ├── remove.go             # dotcor remove
+│   ├── list.go               # dotcor list
+│   ├── status.go             # dotcor status
+│   ├── sync.go               # dotcor sync
+│   ├── restore.go            # dotcor restore
+│   ├── history.go            # dotcor history
+│   ├── diff.go               # dotcor diff
+│   ├── adopt.go              # dotcor adopt
+│   ├── doctor.go             # dotcor doctor
+│   ├── rebuild.go            # dotcor rebuild-config
+│   ├── rebuild-links.go      # dotcor rebuild-links (render templates)
+│   ├── clone.go              # dotcor clone
+│   ├── cleanup.go            # dotcor cleanup-backups
+│   ├── test_helpers.go       # Test utilities
+│   └── *_test.go            # Command tests
 │
 ├── internal/
-│   ├── config/           # Configuration management
-│   │   ├── config.go     # Config struct, Load/Save
-│   │   ├── paths.go      # Path normalization, glob expansion
-│   │   └── migrate.go    # Config version migrations
+│   ├── config/               # Configuration management
+│   │   ├── config.go         # Config struct, Load/Save
+│   │   ├── paths.go          # Path normalization, glob expansion
+│   │   └── migrate.go        # Config version migrations
 │   │
-│   ├── core/             # Business logic
-│   │   ├── linker.go     # Symlink creation/removal
-│   │   ├── validator.go  # Validation, secret detection
-│   │   ├── backup.go     # Backup/restore operations
-│   │   ├── lock.go       # File-based locking
-│   │   ├── transaction.go # Transaction/rollback semantics
-│   │   └── ignore.go     # Ignore pattern matching
+│   ├── core/                 # Business logic
+│   │   ├── validator.go      # Validation, secret detection
+│   │   ├── backup.go         # Backup/restore operations
+│   │   ├── lock.go           # File-based locking
+│   │   ├── transaction.go    # Transaction/rollback semantics
+│   │   ├── ignore.go         # Ignore pattern matching
+│   │   ├── hooks.go          # Hook system (pre/post operations)
+│   │   └── templates.go      # Simple template substitution
 │   │
-│   ├── fs/               # File system operations
-│   │   ├── fs.go         # File operations (move, copy)
-│   │   └── symlink.go    # Cross-platform symlink handling
+│   ├── fs/                   # File system operations
+│   │   ├── fs.go             # File operations (move, copy)
+│   │   └── symlink.go        # Cross-platform symlink handling
 │   │
-│   └── git/              # Git integration
-│       └── git.go        # Git command wrapper
+│   ├── git/                  # Git integration
+│   │   └── git.go            # Git command wrapper
+│   │
+│   └── logger/               # Structured logging
+│       └── logger.go         # slog configuration
 │
-├── PLAN.md               # Detailed implementation plan
-└── README.md             # User documentation
+├── tests/
+│   └── integration_test.go    # Integration tests
+│
+├── docs/
+│   ├── LOGGING.md            # Logging guide
+│   ├── TESTING.md            # Testing conventions and patterns
+│   ├── RELEASING.md          # Release process
+│   └── PLAN.md               # Implementation plan
+│
+├── README.md                 # User documentation
+└── CLAUDE.md                 # This file
 ```
 
 ### Key Design Decisions
@@ -73,6 +89,9 @@ dotcor/
 4. **File-Based Locking:** Prevent concurrent operations with stale lock detection
 5. **Secret Detection:** Scan for API keys, passwords, tokens before adding files
 6. **Versioned Config:** Include version field for future schema migrations
+7. **Structured Logging:** Use `log/slog` with dependency injection, separate from user-facing output
+8. **Hook System:** Pre/post operation hooks in `~/.dotcor/hooks/` for extensibility
+9. **Simple Templates:** Basic `{{ .Hostname }}` substitution via `rebuild-links` command
 
 ### Data Flow
 
@@ -276,7 +295,7 @@ Binaries get version from git tag via ldflags:
 
 ### For Detailed Instructions
 
-See `RELEASING.md` for:
+See [docs/RELEASING.md](docs/RELEASING.md) for:
 - Pre-release checklist
 - Monitoring releases
 - Rollback procedures
@@ -288,11 +307,16 @@ See `RELEASING.md` for:
 |------|---------|
 | `PLAN.md` | Detailed implementation plan with code examples |
 | `README.md` | User-facing documentation |
-| `docs/TESTING.md` | Comprehensive testing guide with conventions and best practices |
+| `docs/TESTING.md` | Testing conventions, patterns, and best practices |
+| `docs/LOGGING.md` | Structured logging guide with level guidelines and examples |
+| `docs/RELEASING.md` | Release process and GoReleaser workflow |
 | `internal/config/config.go` | Config struct and Load/Save operations |
 | `internal/core/transaction.go` | Transaction/rollback semantics |
+| `internal/core/hooks.go` | Hook system for pre/post operations |
+| `internal/core/templates.go` | Template variable substitution |
 | `internal/fs/symlink.go` | Cross-platform symlink handling |
 | `internal/git/git.go` | Git command wrapper |
+| `internal/logger/logger.go` | Structured logging configuration |
 
 ## Common Patterns
 
@@ -335,6 +359,44 @@ normalized, err := paths.NormalizePath(absolutePath)
 
 // Always expand paths before file operations
 expanded, err := paths.ExpandPath(normalizedPath)
+```
+
+### Hook Usage
+
+```go
+// Before an operation (e.g., add)
+ctx := core.HookContext{
+    HookType: "pre-add",
+    FilePath: sourcePath,
+}
+core.RunHook(ctx, cfg)  // Gracefully skips if hook doesn't exist
+
+// After an operation (e.g., add)
+ctx = core.HookContext{
+    HookType: "post-add",
+    FilePath: sourcePath,
+    RepoPath: repoPath,
+}
+core.RunHook(ctx, cfg)  // Logs errors but doesn't fail operation
+```
+
+### Template Usage
+
+```go
+// Get template context
+ctx, err := core.GetTemplateContext()
+if err != nil {
+    return err
+}
+
+// Substitute variables in content
+rendered := core.SubstituteTemplate(originalContent, ctx)
+
+// Check if file is a template
+if core.IsTemplateFile(filename) {
+    // Strip .template extension and render
+    actualFile := core.StripTemplateExtension(filename)
+}
 ```
 
 ### Structured Logging
@@ -380,7 +442,7 @@ func BackupFile(path string, cfg *config.Config) error {
 - `error`: Error object (for ERROR level logs)
 - `duration`: Operation duration (useful for performance tracking)
 
-For detailed logging documentation, see [LOGGING.md](LOGGING.md).
+For detailed logging documentation, see [docs/LOGGING.md](docs/LOGGING.md).
 
 ## Notes for AI Assistants
 
@@ -395,7 +457,7 @@ For detailed logging documentation, see [LOGGING.md](LOGGING.md).
 ## Testing Requirements
 
 **CRITICAL:** When working with tests, always:
-1. Reference [docs/TESTING.md](TESTING.md) for testing conventions, patterns, and best practices
+1. Reference [docs/TESTING.md](docs/TESTING.md) for testing conventions, patterns, and best practices
 2. Write tests for new features, especially big features or significant code changes
 3. Ensure tests cover happy paths, error paths, and edge cases
 4. Follow AAA pattern (Arrange-Act-Assert) with testify framework
@@ -406,7 +468,7 @@ For detailed logging documentation, see [LOGGING.md](LOGGING.md).
 - All new features must have tests
 - Significant changes to existing features need test updates
 - Bug fixes should include regression tests
-- Core packages (config, core, fs, git) require comprehensive coverage (target 85%+)
+- Core packages (config, core, fs, git, logger) require comprehensive coverage (target 85%+)
 - Command tests should cover major CLI commands (init, add, remove, list, status, sync, restore, history, diff, adopt, doctor, rebuild-config, clone, cleanup)
 
 Testing documentation at docs/TESTING.md includes:
