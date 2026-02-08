@@ -3,171 +3,169 @@ package fs
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
+
+	"github.com/justincordova/dotcor/internal/config"
 )
 
-// MoveFile moves a file from src to dst, preserving permissions
-// Uses os.Rename when possible, falls back to copy+delete for cross-device moves
-func MoveFile(src, dst string) error {
-	// Ensure destination directory exists
-	if err := EnsureDir(filepath.Dir(dst)); err != nil {
+func MoveFile(src, dst string, cfg *config.Config) error {
+	cfg.Logger.Debug("moving file", "src", src, "dst", dst)
+
+	if err := EnsureDir(filepath.Dir(dst), cfg); err != nil {
 		return fmt.Errorf("creating destination directory: %w", err)
 	}
 
-	// Try rename first (fast, atomic on same filesystem)
 	err := os.Rename(src, dst)
 	if err == nil {
+		cfg.Logger.Info("file moved successfully", "src", src, "dst", dst)
 		return nil
 	}
 
-	// If rename failed (likely cross-device), fall back to copy+delete
-	if err := CopyWithPermissions(src, dst); err != nil {
+	cfg.Logger.Debug("rename failed, trying copy", "src", src, "dst", dst, "error", err)
+	if err := CopyWithPermissions(src, dst, cfg); err != nil {
 		return fmt.Errorf("copying file: %w", err)
 	}
 
-	// Check if dst existed before copying
-	dstExisted := FileExists(dst)
-
-	// Remove original after successful copy
+	dstExisted := PathExists(dst)
 	if err := os.Remove(src); err != nil {
-		// Only remove dst if we created it (not if it existed before)
 		if !dstExisted {
 			os.Remove(dst)
 		}
+		cfg.Logger.Error("failed to remove original file", "error", err)
 		return fmt.Errorf("removing original file: %w", err)
 	}
 
+	cfg.Logger.Info("file moved", "src", src, "dst", dst)
 	return nil
 }
 
-// CopyFile copies file with permissions preserved
-func CopyFile(src, dst string) error {
-	return CopyWithPermissions(src, dst)
+func CopyFile(src, dst string, cfg *config.Config) error {
+	cfg.Logger.Debug("copying file", "src", src, "dst", dst)
+	return CopyWithPermissions(src, dst, cfg)
 }
 
-// CopyWithPermissions copies file preserving all metadata (permissions, timestamps)
-func CopyWithPermissions(src, dst string) error {
-	// Get source file info
+func CopyWithPermissions(src, dst string, cfg *config.Config) error {
 	srcInfo, err := os.Stat(src)
 	if err != nil {
+		cfg.Logger.Error("failed to get source file info", "path", src, "error", err)
 		return fmt.Errorf("getting source file info: %w", err)
 	}
 
-	// Ensure destination directory exists
-	if err := EnsureDir(filepath.Dir(dst)); err != nil {
+	if err := EnsureDir(filepath.Dir(dst), cfg); err != nil {
 		return fmt.Errorf("creating destination directory: %w", err)
 	}
 
-	// Open source file
 	srcFile, err := os.Open(src)
 	if err != nil {
+		cfg.Logger.Error("failed to open source file", "path", src, "error", err)
 		return fmt.Errorf("opening source file: %w", err)
 	}
 	defer srcFile.Close()
 
-	// Create destination file with same permissions
 	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, srcInfo.Mode())
 	if err != nil {
+		cfg.Logger.Error("failed to create destination file", "path", dst, "error", err)
 		return fmt.Errorf("creating destination file: %w", err)
 	}
 	defer dstFile.Close()
 
-	// Copy contents
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		cfg.Logger.Error("failed to copy file contents", "src", src, "dst", dst, "error", err)
 		return fmt.Errorf("copying file contents: %w", err)
 	}
 
-	// Sync to ensure data is written
 	if err := dstFile.Sync(); err != nil {
+		cfg.Logger.Error("failed to sync file", "dst", dst, "error", err)
 		return fmt.Errorf("syncing destination file: %w", err)
 	}
 
-	// Preserve timestamps
 	if err := os.Chtimes(dst, srcInfo.ModTime(), srcInfo.ModTime()); err != nil {
-		// Non-fatal, just log or ignore
-		// Some filesystems don't support this
 	}
 
 	return nil
 }
 
-// FileExists checks if file exists (and is not a directory)
-func FileExists(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-	return !info.IsDir()
-}
-
-// PathExists checks if a path exists (file or directory)
-func PathExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
-
-// EnsureDir creates directory if it doesn't exist (including parents)
-func EnsureDir(path string) error {
+func EnsureDir(path string, cfg *config.Config) error {
 	if path == "" {
 		return nil
 	}
 
+	cfg.Logger.Debug("ensuring directory exists", "path", path)
+
 	info, err := os.Stat(path)
 	if err == nil {
 		if info.IsDir() {
-			return nil // Directory already exists
+			cfg.Logger.Debug("directory already exists", "path", path)
+			return nil
 		}
 		return fmt.Errorf("path exists but is not a directory: %s", path)
 	}
 
 	if os.IsNotExist(err) {
 		if err := os.MkdirAll(path, 0755); err != nil {
+			cfg.Logger.Error("failed to create directory", "path", path, "error", err)
 			return fmt.Errorf("creating directory: %w", err)
 		}
+		cfg.Logger.Debug("directory created", "path", path)
 		return nil
 	}
 
 	return fmt.Errorf("checking directory: %w", err)
 }
 
-// IsDirectory checks if path is a directory
-func IsDirectory(path string) (bool, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return false, fmt.Errorf("checking path: %w", err)
-	}
-	return info.IsDir(), nil
+func PathExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
-// Exists checks if path exists (file or directory)
+func IsDirectory(path string, cfg *config.Config) (bool, error) {
+	cfg.Logger.Debug("checking if path is directory", "path", path)
+	info, err := os.Stat(path)
+	if err != nil {
+		cfg.Logger.Error("failed to stat path", "path", path, "error", err)
+		return false, fmt.Errorf("checking path: %w", err)
+	}
+	isDir := info.IsDir()
+	cfg.Logger.Debug("directory check result", "path", path, "is_dir", isDir)
+	return isDir, nil
+}
+
 func Exists(path string) bool {
 	_, err := os.Stat(path)
 	return !os.IsNotExist(err)
 }
 
-// GetFileSize returns file size in bytes
-func GetFileSize(path string) (int64, error) {
+func GetFileSize(path string, cfg *config.Config) (int64, error) {
+	cfg.Logger.Debug("getting file size", "path", path)
 	info, err := os.Stat(path)
 	if err != nil {
+		cfg.Logger.Error("failed to stat file", "path", path, "error", err)
 		return 0, fmt.Errorf("getting file info: %w", err)
 	}
-	return info.Size(), nil
+	size := info.Size()
+	cfg.Logger.Debug("file size retrieved", "path", path, "size", size)
+	return size, nil
 }
 
-// RemoveFile removes a file or empty directory
-func RemoveFile(path string) error {
+func RemoveFile(path string, cfg *config.Config) error {
+	cfg.Logger.Debug("removing file", "path", path)
 	if err := os.Remove(path); err != nil {
+		cfg.Logger.Error("failed to remove file", "path", path, "error", err)
 		return fmt.Errorf("removing file: %w", err)
 	}
+	cfg.Logger.Debug("file removed", "path", path)
 	return nil
 }
 
-// RemoveAll removes a file or directory and all its contents
-func RemoveAll(path string) error {
+func RemoveAll(path string, cfg *config.Config) error {
+	cfg.Logger.Debug("removing path", "path", path)
 	if err := os.RemoveAll(path); err != nil {
+		cfg.Logger.Error("failed to remove path", "path", path, "error", err)
 		return fmt.Errorf("removing path: %w", err)
 	}
+	cfg.Logger.Debug("path removed", "path", path)
 	return nil
 }
 

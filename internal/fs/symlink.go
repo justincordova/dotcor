@@ -27,7 +27,7 @@ type SymlinkStatus struct {
 // CreateSymlink creates a RELATIVE symlink at `link` pointing to `target`.
 // The symlink uses a relative path computed from link's location to target.
 // Returns error if symlink fails (NO COPY FALLBACK).
-func CreateSymlink(target, link string) error {
+func CreateSymlink(target, link string, cfg *config.Config) error {
 	// Check if platform supports symlinks
 	supported, err := SupportsSymlinks()
 	if err != nil {
@@ -49,7 +49,7 @@ func CreateSymlink(target, link string) error {
 	}
 
 	// Ensure parent directory exists
-	if err := EnsureDir(filepath.Dir(expandedLink)); err != nil {
+	if err := EnsureDir(filepath.Dir(expandedLink), cfg); err != nil {
 		return fmt.Errorf("creating parent directory: %w", err)
 	}
 
@@ -75,7 +75,7 @@ func CreateSymlink(target, link string) error {
 }
 
 // RemoveSymlink removes a symlink (validates it's actually a symlink first)
-func RemoveSymlink(link string) error {
+func RemoveSymlink(link string, cfg *config.Config) error {
 	expandedLink, err := config.ExpandPath(link)
 	if err != nil {
 		return fmt.Errorf("expanding link path: %w", err)
