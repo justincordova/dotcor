@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/justincordova/dotcor/internal/config"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func testConfig() *config.Config {
@@ -16,18 +18,14 @@ func testConfig() *config.Config {
 }
 
 func TestFileExists(t *testing.T) {
-	// Create temp dir
+	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Create a test file
 	testFile := filepath.Join(tempDir, "testfile")
-	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
+	err = os.WriteFile(testFile, []byte("test"), 0644)
+	require.NoError(t, err, "failed to create test file")
 
 	tests := []struct {
 		name string
@@ -53,33 +51,30 @@ func TestFileExists(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := PathExists(tt.path)
-			// PathExists returns true for both files and directories
-			// Old FileExists returned false for directories
+			// Arrange
 			want := tt.want
 			if tt.path == testFile || tt.path == tempDir {
 				want = true
 			}
-			if got != want {
-				t.Errorf("PathExists() = %v, want %v", got, want)
-			}
+
+			// Act
+			got := PathExists(tt.path)
+
+			// Assert
+			assert.Equal(t, want, got, "PathExists()")
 		})
 	}
 }
 
 func TestPathExists(t *testing.T) {
-	// Create temp dir
+	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Create a test file
 	testFile := filepath.Join(tempDir, "testfile")
-	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
+	err = os.WriteFile(testFile, []byte("test"), 0644)
+	require.NoError(t, err, "failed to create test file")
 
 	tests := []struct {
 		name string
@@ -105,20 +100,19 @@ func TestPathExists(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Act
 			got := PathExists(tt.path)
-			if got != tt.want {
-				t.Errorf("PathExists() = %v, want %v", got, tt.want)
-			}
+
+			// Assert
+			assert.Equal(t, tt.want, got, "PathExists()")
 		})
 	}
 }
 
 func TestEnsureDir(t *testing.T) {
-	// Create temp dir
+	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
 	tests := []struct {
@@ -150,14 +144,19 @@ func TestEnsureDir(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
 			cfg := testConfig()
+
+			// Act
 			err := EnsureDir(tt.path, cfg)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("EnsureDir() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if tt.path != "" && !tt.wantErr {
-				if !PathExists(tt.path) {
-					t.Errorf("EnsureDir() directory not created: %s", tt.path)
+
+			// Assert
+			if tt.wantErr {
+				assert.Error(t, err, "EnsureDir() should return error")
+			} else {
+				assert.NoError(t, err, "EnsureDir()")
+				if tt.path != "" {
+					assert.True(t, PathExists(tt.path), "EnsureDir() directory should be created: %s", tt.path)
 				}
 			}
 		})
@@ -165,131 +164,93 @@ func TestEnsureDir(t *testing.T) {
 }
 
 func TestCopyWithPermissions(t *testing.T) {
-	// Create temp dir
+	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Create source file with specific content and permissions
 	srcFile := filepath.Join(tempDir, "source")
 	content := []byte("test content for copy")
-	if err := os.WriteFile(srcFile, content, 0755); err != nil {
-		t.Fatalf("failed to create source file: %v", err)
-	}
+	err = os.WriteFile(srcFile, content, 0755)
+	require.NoError(t, err, "failed to create source file")
 
-	// Copy to destination
 	cfg := testConfig()
 	dstFile := filepath.Join(tempDir, "dest")
-	if err := CopyWithPermissions(srcFile, dstFile, cfg); err != nil {
-		t.Fatalf("CopyWithPermissions() error = %v", err)
-	}
 
-	// Verify destination exists
-	if !PathExists(dstFile) {
-		t.Error("CopyWithPermissions() destination file not created")
-	}
+	// Act
+	err = CopyWithPermissions(srcFile, dstFile, cfg)
 
-	// Verify content
+	// Assert
+	require.NoError(t, err, "CopyWithPermissions()")
+	assert.True(t, PathExists(dstFile), "CopyWithPermissions() destination file should be created")
+
 	dstContent, err := os.ReadFile(dstFile)
-	if err != nil {
-		t.Fatalf("failed to read destination file: %v", err)
-	}
-	if string(dstContent) != string(content) {
-		t.Errorf("CopyWithPermissions() content mismatch: got %q, want %q", dstContent, content)
-	}
+	require.NoError(t, err, "failed to read destination file")
+	assert.Equal(t, string(content), string(dstContent), "CopyWithPermissions() content mismatch")
 
-	// Verify permissions preserved
 	srcInfo, _ := os.Stat(srcFile)
 	dstInfo, _ := os.Stat(dstFile)
-	if srcInfo.Mode().Perm() != dstInfo.Mode().Perm() {
-		t.Errorf("CopyWithPermissions() permissions mismatch: got %v, want %v",
-			dstInfo.Mode().Perm(), srcInfo.Mode().Perm())
-	}
+	assert.Equal(t, srcInfo.Mode().Perm(), dstInfo.Mode().Perm(), "CopyWithPermissions() permissions mismatch")
 }
 
 func TestMoveFile(t *testing.T) {
-	// Create temp dir
+	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Create source file
 	srcFile := filepath.Join(tempDir, "source")
 	content := []byte("move me")
-	if err := os.WriteFile(srcFile, content, 0644); err != nil {
-		t.Fatalf("failed to create source file: %v", err)
-	}
+	err = os.WriteFile(srcFile, content, 0644)
+	require.NoError(t, err, "failed to create source file")
 
-	// Move to destination
 	cfg := testConfig()
 	dstFile := filepath.Join(tempDir, "dest")
-	if err := MoveFile(srcFile, dstFile, cfg); err != nil {
-		t.Fatalf("MoveFile() error = %v", err)
-	}
 
-	// Verify source is gone
-	if PathExists(srcFile) {
-		t.Error("MoveFile() source file still exists")
-	}
+	// Act
+	err = MoveFile(srcFile, dstFile, cfg)
 
-	// Verify destination exists with correct content
-	if !PathExists(dstFile) {
-		t.Error("MoveFile() destination file not created")
-	}
+	// Assert
+	require.NoError(t, err, "MoveFile()")
+	assert.False(t, PathExists(srcFile), "MoveFile() source file should not exist")
+
+	assert.True(t, PathExists(dstFile), "MoveFile() destination file should be created")
 
 	dstContent, err := os.ReadFile(dstFile)
-	if err != nil {
-		t.Fatalf("failed to read destination file: %v", err)
-	}
-	if string(dstContent) != string(content) {
-		t.Errorf("MoveFile() content mismatch: got %q, want %q", dstContent, content)
-	}
+	require.NoError(t, err, "failed to read destination file")
+	assert.Equal(t, string(content), string(dstContent), "MoveFile() content mismatch")
 }
 
 func TestMoveFileCreatesParentDir(t *testing.T) {
-	// Create temp dir
+	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Create source file
 	srcFile := filepath.Join(tempDir, "source")
-	if err := os.WriteFile(srcFile, []byte("test"), 0644); err != nil {
-		t.Fatalf("failed to create source file: %v", err)
-	}
+	err = os.WriteFile(srcFile, []byte("test"), 0644)
+	require.NoError(t, err, "failed to create source file")
 
-	// Move to nested destination (parent doesn't exist)
 	cfg := testConfig()
 	dstFile := filepath.Join(tempDir, "nested", "dir", "dest")
-	if err := MoveFile(srcFile, dstFile, cfg); err != nil {
-		t.Fatalf("MoveFile() error = %v", err)
-	}
 
-	// Verify destination exists
-	if !PathExists(dstFile) {
-		t.Error("MoveFile() destination file not created")
-	}
+	// Act
+	err = MoveFile(srcFile, dstFile, cfg)
+
+	// Assert
+	require.NoError(t, err, "MoveFile()")
+	assert.True(t, PathExists(dstFile), "MoveFile() destination file should be created")
 }
 
 func TestIsDirectory(t *testing.T) {
-	// Create temp dir
+	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Create a test file
 	testFile := filepath.Join(tempDir, "testfile")
-	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
+	err = os.WriteFile(testFile, []byte("test"), 0644)
+	require.NoError(t, err, "failed to create test file")
 
 	tests := []struct {
 		name    string
@@ -311,84 +272,76 @@ func TestIsDirectory(t *testing.T) {
 			name:    "non-existent",
 			path:    filepath.Join(tempDir, "nonexistent"),
 			want:    false,
-			wantErr: true, // Now consistently returns error for all failures
+			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
 			cfg := testConfig()
+
+			// Act
 			got, err := IsDirectory(tt.path, cfg)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("IsDirectory() error = %v, wantErr %v", err, tt.wantErr)
+
+			// Assert
+			if tt.wantErr {
+				assert.Error(t, err, "IsDirectory() should return error")
+			} else {
+				assert.NoError(t, err, "IsDirectory()")
 			}
-			if got != tt.want {
-				t.Errorf("IsDirectory() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, got, "IsDirectory()")
 		})
 	}
 }
 
 func TestGetFileSize(t *testing.T) {
-	// Create temp dir
+	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Create a test file with known content
 	content := []byte("hello world")
 	testFile := filepath.Join(tempDir, "testfile")
-	if err := os.WriteFile(testFile, content, 0644); err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
+	err = os.WriteFile(testFile, content, 0644)
+	require.NoError(t, err, "failed to create test file")
 
 	cfg := testConfig()
+
+	// Act
 	size, err := GetFileSize(testFile, cfg)
-	if err != nil {
-		t.Fatalf("GetFileSize() error = %v", err)
-	}
-	if size != int64(len(content)) {
-		t.Errorf("GetFileSize() = %v, want %v", size, len(content))
-	}
+
+	// Assert
+	require.NoError(t, err, "GetFileSize()")
+	assert.Equal(t, int64(len(content)), size, "GetFileSize()")
 }
 
 func TestRemoveFile(t *testing.T) {
-	// Create temp dir
+	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Create a test file
 	testFile := filepath.Join(tempDir, "testfile")
-	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
+	err = os.WriteFile(testFile, []byte("test"), 0644)
+	require.NoError(t, err, "failed to create test file")
 
-	// Remove it
 	cfg := testConfig()
-	if err := RemoveFile(testFile, cfg); err != nil {
-		t.Fatalf("RemoveFile() error = %v", err)
-	}
 
-	// Verify it's gone
-	if PathExists(testFile) {
-		t.Error("RemoveFile() file still exists")
-	}
+	// Act
+	err = RemoveFile(testFile, cfg)
+
+	// Assert
+	require.NoError(t, err, "RemoveFile()")
+	assert.False(t, PathExists(testFile), "RemoveFile() file should not exist")
 }
 
 func TestGetFilesRecursive(t *testing.T) {
-	// Create temp dir with nested structure
+	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Create nested files
 	files := []string{
 		filepath.Join(tempDir, "file1.txt"),
 		filepath.Join(tempDir, "subdir", "file2.txt"),
@@ -397,44 +350,31 @@ func TestGetFilesRecursive(t *testing.T) {
 
 	cfg := testConfig()
 	for _, f := range files {
-		if err := EnsureDir(filepath.Dir(f), cfg); err != nil {
-			t.Fatalf("failed to create parent dir: %v", err)
-		}
-		if err := os.WriteFile(f, []byte("test"), 0644); err != nil {
-			t.Fatalf("failed to create file: %v", err)
-		}
+		err = EnsureDir(filepath.Dir(f), cfg)
+		require.NoError(t, err, "failed to create parent dir")
+		err = os.WriteFile(f, []byte("test"), 0644)
+		require.NoError(t, err, "failed to create file")
 	}
 
-	// Get all files
+	// Act
 	got, err := GetFilesRecursive(tempDir)
-	if err != nil {
-		t.Fatalf("GetFilesRecursive() error = %v", err)
-	}
 
-	if len(got) != len(files) {
-		t.Errorf("GetFilesRecursive() returned %d files, want %d", len(got), len(files))
-	}
+	// Assert
+	require.NoError(t, err, "GetFilesRecursive()")
+	assert.Equal(t, len(files), len(got), "GetFilesRecursive() should return correct number of files")
 }
 
 func TestIsReadable(t *testing.T) {
-	// Create temp dir
+	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Create a readable file
 	testFile := filepath.Join(tempDir, "testfile")
-	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
+	err = os.WriteFile(testFile, []byte("test"), 0644)
+	require.NoError(t, err, "failed to create test file")
 
-	if !IsReadable(testFile) {
-		t.Error("IsReadable() = false for readable file")
-	}
-
-	if IsReadable(filepath.Join(tempDir, "nonexistent")) {
-		t.Error("IsReadable() = true for non-existent file")
-	}
+	// Act & Assert
+	assert.True(t, IsReadable(testFile), "IsReadable() should return true for readable file")
+	assert.False(t, IsReadable(filepath.Join(tempDir, "nonexistent")), "IsReadable() should return false for non-existent file")
 }

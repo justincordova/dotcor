@@ -6,505 +6,313 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIsGitInstalled(t *testing.T) {
-	// Git should be installed on dev machines
 	if !IsGitInstalled() {
 		t.Skip("git not installed, skipping tests")
 	}
 }
 
 func TestInitRepo(t *testing.T) {
-	if !IsGitInstalled() {
-		t.Skip("git not installed")
-	}
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Initialize repo
-	if err := InitRepo(tempDir); err != nil {
-		t.Fatalf("InitRepo() error = %v", err)
-	}
+	err = InitRepo(tempDir)
+	require.NoError(t, err, "InitRepo() should not error")
 
-	// Verify .git directory exists
 	gitDir := filepath.Join(tempDir, ".git")
-	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
-		t.Error("InitRepo() did not create .git directory")
-	}
+	_, err = os.Stat(gitDir)
+	assert.NoError(t, err, "InitRepo() should create .git directory")
 }
 
 func TestIsRepo(t *testing.T) {
-	if !IsGitInstalled() {
-		t.Skip("git not installed")
-	}
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Should not be a repo initially
-	if IsRepo(tempDir) {
-		t.Error("IsRepo() should return false for non-repo directory")
-	}
+	isRepo := IsRepo(tempDir)
+	assert.False(t, isRepo, "IsRepo() should return false for non-repo directory")
 
-	// Initialize and check again
-	if err := InitRepo(tempDir); err != nil {
-		t.Fatalf("InitRepo() error = %v", err)
-	}
+	err = InitRepo(tempDir)
+	require.NoError(t, err, "InitRepo() should not error")
 
-	if !IsRepo(tempDir) {
-		t.Error("IsRepo() should return true after InitRepo()")
-	}
+	isRepo = IsRepo(tempDir)
+	assert.True(t, isRepo, "IsRepo() should return true after InitRepo()")
 }
 
 func TestHasChanges(t *testing.T) {
-	if !IsGitInstalled() {
-		t.Skip("git not installed")
-	}
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Initialize repo
-	if err := InitRepo(tempDir); err != nil {
-		t.Fatalf("InitRepo() error = %v", err)
-	}
+	err = InitRepo(tempDir)
+	require.NoError(t, err, "InitRepo() should not error")
 
-	// No changes initially
 	hasChanges, err := HasChanges(tempDir)
-	if err != nil {
-		t.Fatalf("HasChanges() error = %v", err)
-	}
-	if hasChanges {
-		t.Error("HasChanges() should return false for clean repo")
-	}
+	assert.NoError(t, err, "HasChanges() should not error")
+	assert.False(t, hasChanges, "HasChanges() should return false for clean repo")
 
-	// Create a file
 	testFile := filepath.Join(tempDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("content"), 0644); err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
+	err = os.WriteFile(testFile, []byte("content"), 0644)
+	require.NoError(t, err, "failed to create test file")
 
-	// Should have changes now
 	hasChanges, err = HasChanges(tempDir)
-	if err != nil {
-		t.Fatalf("HasChanges() error = %v", err)
-	}
-	if !hasChanges {
-		t.Error("HasChanges() should return true after adding file")
-	}
+	assert.NoError(t, err, "HasChanges() should not error")
+	assert.True(t, hasChanges, "HasChanges() should return true after adding file")
 }
 
 func TestAutoCommit(t *testing.T) {
-	if !IsGitInstalled() {
-		t.Skip("git not installed")
-	}
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Initialize repo
-	if err := InitRepo(tempDir); err != nil {
-		t.Fatalf("InitRepo() error = %v", err)
-	}
+	err = InitRepo(tempDir)
+	require.NoError(t, err, "InitRepo() should not error")
 
-	// Configure git user (required for commits)
 	configureGitUser(t, tempDir)
 
-	// AutoCommit with no changes should succeed silently
-	if err := AutoCommit(tempDir, "test commit"); err != nil {
-		t.Fatalf("AutoCommit() with no changes error = %v", err)
-	}
+	err = AutoCommit(tempDir, "test commit")
+	assert.NoError(t, err, "AutoCommit() with no changes should not error")
 
-	// Create a file
 	testFile := filepath.Join(tempDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("content"), 0644); err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
+	err = os.WriteFile(testFile, []byte("content"), 0644)
+	require.NoError(t, err, "failed to create test file")
 
-	// AutoCommit should commit the file
-	if err := AutoCommit(tempDir, "add test file"); err != nil {
-		t.Fatalf("AutoCommit() error = %v", err)
-	}
+	err = AutoCommit(tempDir, "add test file")
+	require.NoError(t, err, "AutoCommit() should not error")
 
-	// Verify no more changes
 	hasChanges, err := HasChanges(tempDir)
-	if err != nil {
-		t.Fatalf("HasChanges() error = %v", err)
-	}
-	if hasChanges {
-		t.Error("AutoCommit() should have committed all changes")
-	}
+	assert.NoError(t, err, "HasChanges() should not error")
+	assert.False(t, hasChanges, "AutoCommit() should have committed all changes")
 }
 
 func TestGetStatus(t *testing.T) {
-	if !IsGitInstalled() {
-		t.Skip("git not installed")
-	}
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Initialize repo
-	if err := InitRepo(tempDir); err != nil {
-		t.Fatalf("InitRepo() error = %v", err)
-	}
+	err = InitRepo(tempDir)
+	require.NoError(t, err, "InitRepo() should not error")
 
 	configureGitUser(t, tempDir)
 
 	status, err := GetStatus(tempDir)
-	if err != nil {
-		t.Fatalf("GetStatus() error = %v", err)
-	}
+	require.NoError(t, err, "GetStatus() should not error")
 
-	// No remote configured
-	if status.RemoteExists {
-		t.Error("GetStatus().RemoteExists should be false without remote")
-	}
+	assert.False(t, status.RemoteExists, "GetStatus().RemoteExists should be false without remote")
+	assert.False(t, status.HasUncommitted, "GetStatus().HasUncommitted should be false for clean repo")
 
-	// No changes
-	if status.HasUncommitted {
-		t.Error("GetStatus().HasUncommitted should be false for clean repo")
-	}
-
-	// Add uncommitted file
 	testFile := filepath.Join(tempDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("content"), 0644); err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
+	err = os.WriteFile(testFile, []byte("content"), 0644)
+	require.NoError(t, err, "failed to create test file")
 
 	status, err = GetStatus(tempDir)
-	if err != nil {
-		t.Fatalf("GetStatus() error = %v", err)
-	}
+	require.NoError(t, err, "GetStatus() should not error")
 
-	if !status.HasUncommitted {
-		t.Error("GetStatus().HasUncommitted should be true with changes")
-	}
+	assert.True(t, status.HasUncommitted, "GetStatus().HasUncommitted should be true with changes")
 }
 
 func TestGetRemoteURL(t *testing.T) {
-	if !IsGitInstalled() {
-		t.Skip("git not installed")
-	}
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Initialize repo
-	if err := InitRepo(tempDir); err != nil {
-		t.Fatalf("InitRepo() error = %v", err)
-	}
+	err = InitRepo(tempDir)
+	require.NoError(t, err, "InitRepo() should not error")
 
-	// No remote initially
 	url, err := GetRemoteURL(tempDir)
-	if err != nil {
-		t.Fatalf("GetRemoteURL() error = %v", err)
-	}
-	if url != "" {
-		t.Errorf("GetRemoteURL() = %q, want empty string", url)
-	}
+	assert.NoError(t, err, "GetRemoteURL() should not error")
+	assert.Empty(t, url, "GetRemoteURL() should return empty string for repo without remote")
 }
 
 func TestSetRemote(t *testing.T) {
-	if !IsGitInstalled() {
-		t.Skip("git not installed")
-	}
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Initialize repo
-	if err := InitRepo(tempDir); err != nil {
-		t.Fatalf("InitRepo() error = %v", err)
-	}
+	err = InitRepo(tempDir)
+	require.NoError(t, err, "InitRepo() should not error")
 
-	// Set remote
 	testURL := "https://github.com/test/repo.git"
-	if err := SetRemote(tempDir, "origin", testURL); err != nil {
-		t.Fatalf("SetRemote() error = %v", err)
-	}
+	err = SetRemote(tempDir, "origin", testURL)
+	require.NoError(t, err, "SetRemote() should not error")
 
-	// Verify remote was set
 	url, err := GetRemoteURL(tempDir)
-	if err != nil {
-		t.Fatalf("GetRemoteURL() error = %v", err)
-	}
-	if url != testURL {
-		t.Errorf("GetRemoteURL() = %q, want %q", url, testURL)
-	}
+	require.NoError(t, err, "GetRemoteURL() should not error")
+	assert.Equal(t, testURL, url, "GetRemoteURL() should return set remote URL")
 
-	// Update remote
 	newURL := "https://github.com/test/new-repo.git"
-	if err := SetRemote(tempDir, "origin", newURL); err != nil {
-		t.Fatalf("SetRemote() update error = %v", err)
-	}
+	err = SetRemote(tempDir, "origin", newURL)
+	require.NoError(t, err, "SetRemote() update should not error")
 
 	url, err = GetRemoteURL(tempDir)
-	if err != nil {
-		t.Fatalf("GetRemoteURL() error = %v", err)
-	}
-	if url != newURL {
-		t.Errorf("GetRemoteURL() after update = %q, want %q", url, newURL)
-	}
+	require.NoError(t, err, "GetRemoteURL() should not error")
+	assert.Equal(t, newURL, url, "GetRemoteURL() should return updated remote URL")
 }
 
 func TestGetFileHistory(t *testing.T) {
-	if !IsGitInstalled() {
-		t.Skip("git not installed")
-	}
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Initialize repo
-	if err := InitRepo(tempDir); err != nil {
-		t.Fatalf("InitRepo() error = %v", err)
-	}
+	err = InitRepo(tempDir)
+	require.NoError(t, err, "InitRepo() should not error")
 
 	configureGitUser(t, tempDir)
 
-	// Create and commit a file
 	testFile := filepath.Join(tempDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("v1"), 0644); err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
+	err = os.WriteFile(testFile, []byte("v1"), 0644)
+	require.NoError(t, err, "failed to create test file")
 
-	if err := AutoCommit(tempDir, "initial commit"); err != nil {
-		t.Fatalf("AutoCommit() error = %v", err)
-	}
+	err = AutoCommit(tempDir, "initial commit")
+	require.NoError(t, err, "AutoCommit() should not error")
 
-	// Update and commit again
-	if err := os.WriteFile(testFile, []byte("v2"), 0644); err != nil {
-		t.Fatalf("failed to update test file: %v", err)
-	}
+	err = os.WriteFile(testFile, []byte("v2"), 0644)
+	require.NoError(t, err, "failed to update test file")
 
-	if err := AutoCommit(tempDir, "second commit"); err != nil {
-		t.Fatalf("AutoCommit() error = %v", err)
-	}
+	err = AutoCommit(tempDir, "second commit")
+	require.NoError(t, err, "AutoCommit() should not error")
 
-	// Get history
 	history, err := GetFileHistory(tempDir, "test.txt", 10)
-	if err != nil {
-		t.Fatalf("GetFileHistory() error = %v", err)
-	}
+	require.NoError(t, err, "GetFileHistory() should not error")
 
-	if len(history) != 2 {
-		t.Errorf("GetFileHistory() returned %d commits, want 2", len(history))
-	}
-
-	// Most recent first
-	if len(history) > 0 && history[0].Message != "second commit" {
-		t.Errorf("GetFileHistory()[0].Message = %q, want %q", history[0].Message, "second commit")
-	}
+	assert.Len(t, history, 2, "GetFileHistory() should return 2 commits")
+	assert.Equal(t, "second commit", history[0].Message, "Most recent commit should be first")
 }
 
 func TestGetCurrentCommit(t *testing.T) {
-	if !IsGitInstalled() {
-		t.Skip("git not installed")
-	}
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Initialize repo
-	if err := InitRepo(tempDir); err != nil {
-		t.Fatalf("InitRepo() error = %v", err)
-	}
+	err = InitRepo(tempDir)
+	require.NoError(t, err, "InitRepo() should not error")
 
 	configureGitUser(t, tempDir)
 
-	// Create and commit a file
 	testFile := filepath.Join(tempDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("content"), 0644); err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
+	err = os.WriteFile(testFile, []byte("content"), 0644)
+	require.NoError(t, err, "failed to create test file")
 
-	if err := AutoCommit(tempDir, "test commit"); err != nil {
-		t.Fatalf("AutoCommit() error = %v", err)
-	}
+	err = AutoCommit(tempDir, "test commit")
+	require.NoError(t, err, "AutoCommit() should not error")
 
-	// Get current commit
 	commit, err := GetCurrentCommit(tempDir)
-	if err != nil {
-		t.Fatalf("GetCurrentCommit() error = %v", err)
-	}
+	require.NoError(t, err, "GetCurrentCommit() should not error")
 
-	// Should be a 40-character hex string
-	if len(commit) != 40 {
-		t.Errorf("GetCurrentCommit() returned %q (len=%d), want 40 chars", commit, len(commit))
-	}
+	assert.Len(t, commit, 40, "GetCurrentCommit() should return 40-character hash")
 }
 
 func TestGetChangedFiles(t *testing.T) {
-	if !IsGitInstalled() {
-		t.Skip("git not installed")
-	}
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Initialize repo
-	if err := InitRepo(tempDir); err != nil {
-		t.Fatalf("InitRepo() error = %v", err)
-	}
+	err = InitRepo(tempDir)
+	require.NoError(t, err, "InitRepo() should not error")
 
-	// No changes initially
 	files, err := GetChangedFiles(tempDir)
-	if err != nil {
-		t.Fatalf("GetChangedFiles() error = %v", err)
-	}
-	if len(files) != 0 {
-		t.Errorf("GetChangedFiles() returned %d files, want 0", len(files))
-	}
+	assert.NoError(t, err, "GetChangedFiles() should not error")
+	assert.Empty(t, files, "GetChangedFiles() should return empty slice for clean repo")
 
-	// Create files
 	for _, name := range []string{"a.txt", "b.txt", "c.txt"} {
 		testFile := filepath.Join(tempDir, name)
-		if err := os.WriteFile(testFile, []byte("content"), 0644); err != nil {
-			t.Fatalf("failed to create test file: %v", err)
-		}
+		err = os.WriteFile(testFile, []byte("content"), 0644)
+		require.NoError(t, err, "failed to create test file")
 	}
 
-	// Should have 3 changed files
 	files, err = GetChangedFiles(tempDir)
-	if err != nil {
-		t.Fatalf("GetChangedFiles() error = %v", err)
-	}
-	if len(files) != 3 {
-		t.Errorf("GetChangedFiles() returned %d files, want 3", len(files))
-	}
+	assert.NoError(t, err, "GetChangedFiles() should not error")
+	assert.Len(t, files, 3, "GetChangedFiles() should return 3 changed files")
 }
 
 func TestGetDiff(t *testing.T) {
-	if !IsGitInstalled() {
-		t.Skip("git not installed")
-	}
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Initialize repo
-	if err := InitRepo(tempDir); err != nil {
-		t.Fatalf("InitRepo() error = %v", err)
-	}
+	err = InitRepo(tempDir)
+	require.NoError(t, err, "InitRepo() should not error")
 
 	configureGitUser(t, tempDir)
 
-	// Create and commit a file
 	testFile := filepath.Join(tempDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("original"), 0644); err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
+	err = os.WriteFile(testFile, []byte("original"), 0644)
+	require.NoError(t, err, "failed to create test file")
 
-	if err := AutoCommit(tempDir, "initial commit"); err != nil {
-		t.Fatalf("AutoCommit() error = %v", err)
-	}
+	err = AutoCommit(tempDir, "initial commit")
+	require.NoError(t, err, "AutoCommit() should not error")
 
-	// No diff after commit
 	diff, err := GetDiff(tempDir)
-	if err != nil {
-		t.Fatalf("GetDiff() error = %v", err)
-	}
-	if diff != "" {
-		t.Error("GetDiff() should return empty string for clean repo")
-	}
+	assert.NoError(t, err, "GetDiff() should not error")
+	assert.Empty(t, diff, "GetDiff() should return empty string for clean repo")
 
-	// Modify file
-	if err := os.WriteFile(testFile, []byte("modified"), 0644); err != nil {
-		t.Fatalf("failed to modify test file: %v", err)
-	}
+	err = os.WriteFile(testFile, []byte("modified"), 0644)
+	require.NoError(t, err, "failed to modify test file")
 
-	// Should have diff now
 	diff, err = GetDiff(tempDir)
-	if err != nil {
-		t.Fatalf("GetDiff() error = %v", err)
-	}
-	if diff == "" {
-		t.Error("GetDiff() should return diff for modified file")
-	}
+	assert.NoError(t, err, "GetDiff() should not error")
+	assert.NotEmpty(t, diff, "GetDiff() should return diff for modified file")
 }
 
 func TestStageAndUnstageFile(t *testing.T) {
-	if !IsGitInstalled() {
-		t.Skip("git not installed")
-	}
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "failed to create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Initialize repo
-	if err := InitRepo(tempDir); err != nil {
-		t.Fatalf("InitRepo() error = %v", err)
-	}
+	err = InitRepo(tempDir)
+	require.NoError(t, err, "InitRepo() should not error")
 
 	configureGitUser(t, tempDir)
 
-	// Create and commit initial file to have HEAD
 	initialFile := filepath.Join(tempDir, "initial.txt")
-	if err := os.WriteFile(initialFile, []byte("initial"), 0644); err != nil {
-		t.Fatalf("failed to create initial file: %v", err)
-	}
-	if err := AutoCommit(tempDir, "initial commit"); err != nil {
-		t.Fatalf("AutoCommit() error = %v", err)
-	}
+	err = os.WriteFile(initialFile, []byte("initial"), 0644)
+	require.NoError(t, err, "failed to create initial file")
 
-	// Create a new file
+	err = AutoCommit(tempDir, "initial commit")
+	require.NoError(t, err, "AutoCommit() should not error")
+
 	testFile := filepath.Join(tempDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("content"), 0644); err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
+	err = os.WriteFile(testFile, []byte("content"), 0644)
+	require.NoError(t, err, "failed to create test file")
 
-	// Stage the file
-	if err := StageFile(tempDir, "test.txt"); err != nil {
-		t.Fatalf("StageFile() error = %v", err)
-	}
+	err = StageFile(tempDir, "test.txt")
+	assert.NoError(t, err, "StageFile() should not error")
 
-	// Unstage the file
-	if err := UnstageFile(tempDir, "test.txt"); err != nil {
-		t.Fatalf("UnstageFile() error = %v", err)
-	}
+	err = UnstageFile(tempDir, "test.txt")
+	assert.NoError(t, err, "UnstageFile() should not error")
 }
 
 func TestStatusInfo(t *testing.T) {
-	// Test StatusInfo struct fields
 	info := StatusInfo{
 		HasUncommitted: true,
 		AheadBy:        2,
@@ -513,25 +321,14 @@ func TestStatusInfo(t *testing.T) {
 		RemoteExists:   true,
 	}
 
-	if !info.HasUncommitted {
-		t.Error("StatusInfo.HasUncommitted not set")
-	}
-	if info.AheadBy != 2 {
-		t.Errorf("StatusInfo.AheadBy = %d, want 2", info.AheadBy)
-	}
-	if info.BehindBy != 1 {
-		t.Errorf("StatusInfo.BehindBy = %d, want 1", info.BehindBy)
-	}
-	if info.Branch != "main" {
-		t.Errorf("StatusInfo.Branch = %q, want %q", info.Branch, "main")
-	}
-	if !info.RemoteExists {
-		t.Error("StatusInfo.RemoteExists not set")
-	}
+	assert.True(t, info.HasUncommitted, "StatusInfo.HasUncommitted should be true")
+	assert.Equal(t, 2, info.AheadBy, "StatusInfo.AheadBy should be 2")
+	assert.Equal(t, 1, info.BehindBy, "StatusInfo.BehindBy should be 1")
+	assert.Equal(t, "main", info.Branch, "StatusInfo.Branch should be 'main'")
+	assert.True(t, info.RemoteExists, "StatusInfo.RemoteExists should be true")
 }
 
 func TestCommitInfo(t *testing.T) {
-	// Test CommitInfo struct fields
 	now := time.Now()
 	info := CommitInfo{
 		Hash:    "abc123",
@@ -540,32 +337,21 @@ func TestCommitInfo(t *testing.T) {
 		Message: "test commit",
 	}
 
-	if info.Hash != "abc123" {
-		t.Errorf("CommitInfo.Hash = %q, want %q", info.Hash, "abc123")
-	}
-	if info.Author != "Test User" {
-		t.Errorf("CommitInfo.Author = %q, want %q", info.Author, "Test User")
-	}
-	if info.Message != "test commit" {
-		t.Errorf("CommitInfo.Message = %q, want %q", info.Message, "test commit")
-	}
+	assert.Equal(t, "abc123", info.Hash, "CommitInfo.Hash should be 'abc123'")
+	assert.Equal(t, "Test User", info.Author, "CommitInfo.Author should be 'Test User'")
+	assert.Equal(t, "test commit", info.Message, "CommitInfo.Message should be 'test commit'")
 }
 
-// Helper function to configure git user in test repos
 func configureGitUser(t *testing.T, repoPath string) {
 	t.Helper()
 
-	// Set user.email
 	cmd := exec.Command("git", "config", "user.email", "test@example.com")
 	cmd.Dir = repoPath
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("failed to configure git user.email: %v", err)
-	}
+	err := cmd.Run()
+	require.NoError(t, err, "failed to configure git user.email")
 
-	// Set user.name
 	cmd = exec.Command("git", "config", "user.name", "Test User")
 	cmd.Dir = repoPath
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("failed to configure git user.name: %v", err)
-	}
+	err = cmd.Run()
+	require.NoError(t, err, "failed to configure git user.name")
 }
