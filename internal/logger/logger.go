@@ -17,11 +17,11 @@ func ConfigureFromFlags(cmd *cobra.Command) *slog.Logger {
 
 	var handler slog.Handler
 	if jsonFormat {
-		handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		handler = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
 			Level: level,
 		})
 	} else {
-		handler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		handler = slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 			Level: level,
 			ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
 				if a.Key == "source_path" {
