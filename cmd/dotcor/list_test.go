@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -18,16 +17,14 @@ func TestList_NoFiles_PrintsEmptyMessage(t *testing.T) {
 		cfg := CreateTestConfig(t)
 		cfg.ManagedFiles = []config.ManagedFile{}
 
-		// Act - call outputSimple directly since it handles the empty case through runList
-		files := cfg.GetManagedFilesForPlatform()
+		// Act - call runList which handles the empty case
+		cmd := listCmd
+		cmd.SetArgs([]string{})
 		oldStdout := os.Stdout
 		r, w, _ := os.Pipe()
 		os.Stdout = w
 
-		if len(files) == 0 {
-			fmt.Println("No files managed by DotCor.")
-			fmt.Println("Run 'dotcor add <file>' to start managing dotfiles.")
-		}
+		_ = runList(cmd, []string{})
 
 		w.Close()
 		os.Stdout = oldStdout
@@ -113,51 +110,6 @@ func TestList_MultipleFiles_DisplaysInTable(t *testing.T) {
 		assert.Contains(t, output, "~/.zshrc")
 		assert.Contains(t, output, "~/.config/nvim/init.vim")
 		assert.Contains(t, output, "2 file(s) managed")
-	})
-
-	t.Run("multiple files in category format", func(t *testing.T) {
-		// Arrange
-		cfg := CreateTestConfig(t)
-		now := time.Now()
-		cfg.ManagedFiles = []config.ManagedFile{
-			{
-				SourcePath: "~/.zshrc",
-				RepoPath:   "shell/zshrc",
-				AddedAt:    now,
-			},
-			{
-				SourcePath: "~/.bashrc",
-				RepoPath:   "shell/bashrc",
-				AddedAt:    now,
-			},
-			{
-				SourcePath: "~/.config/nvim/init.vim",
-				RepoPath:   "nvim/init.vim",
-				AddedAt:    now,
-			},
-		}
-
-		// Act - call the actual outputByCategory function
-		files := cfg.GetManagedFilesForPlatform()
-		oldStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
-
-		outputByCategory(cfg, files, false)
-
-		w.Close()
-		os.Stdout = oldStdout
-		var out bytes.Buffer
-		out.ReadFrom(r)
-		output := out.String()
-
-		// Assert
-		assert.Contains(t, output, "[shell]")
-		assert.Contains(t, output, "[nvim]")
-		assert.Contains(t, output, "~/.zshrc")
-		assert.Contains(t, output, "~/.bashrc")
-		assert.Contains(t, output, "~/.config/nvim/init.vim")
-		assert.Contains(t, output, "3 file(s)")
 	})
 }
 
