@@ -128,7 +128,7 @@ func showQuickStatus(cfg *config.Config) {
 	}
 
 	// Git status
-	repoPath, err := config.ExpandPath(cfg.RepoPath)
+	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
 	if err == nil && git.IsGitInstalled() && git.IsRepo(repoPath) {
 		gitStatus, err := git.GetStatus(repoPath)
 		if err == nil {

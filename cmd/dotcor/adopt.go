@@ -117,7 +117,7 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 
 	// Git commit (config changed, but no new files)
 	if git.IsGitInstalled() && adopted > 0 && !dryRun {
-		repoPath, err := config.ExpandPath(cfg.RepoPath)
+		repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
 		if err != nil {
 			fmt.Printf("[!] Git commit skipped: invalid repo path: %v\n", err)
 		} else {
@@ -142,9 +142,9 @@ const (
 // processAdoptSymlink handles adopting a single symlink
 func processAdoptSymlink(cfg *config.Config, symlinkPath string, dryRun bool) (adoptResult, error) {
 	// Expand and normalize path
-	expanded, err := config.ExpandPath(symlinkPath)
+	expanded, err := config.ExpandPath(symlinkPath, cfg)
 	if err != nil {
-		return adoptResultError, fmt.Errorf("invalid path: %w", err)
+		return adoptResultError, fmt.Errorf("expanding path: %w", err)
 	}
 
 	normalized, err := config.NormalizePath(symlinkPath)
@@ -183,7 +183,7 @@ func processAdoptSymlink(cfg *config.Config, symlinkPath string, dryRun bool) (a
 	}
 
 	// Check if target is inside dotcor repo
-	repoFilesPath, err := config.ExpandPath(cfg.RepoPath)
+	repoFilesPath, err := config.ExpandPath(cfg.RepoPath, cfg)
 	if err != nil {
 		return adoptResultError, fmt.Errorf("expanding repo path: %w", err)
 	}
@@ -210,7 +210,7 @@ func processAdoptSymlink(cfg *config.Config, symlinkPath string, dryRun bool) (a
 	var actualRepoPath string
 	if !targetInRepo {
 		// Generate repo path for the source
-		generatedRepoPath, err := config.GenerateRepoPath(symlinkPath, "")
+		generatedRepoPath, err := config.GenerateRepoPath(symlinkPath, "", cfg)
 		if err != nil {
 			return adoptResultError, fmt.Errorf("generating repo path: %w", err)
 		}
@@ -271,7 +271,7 @@ func scanForAdoptableSymlinks(cfg *config.Config) ([]string, error) {
 		return nil, fmt.Errorf("getting home directory: %w", err)
 	}
 
-	repoFilesPath, err := config.ExpandPath(cfg.RepoPath)
+	repoFilesPath, err := config.ExpandPath(cfg.RepoPath, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("expanding repo path: %w", err)
 	}

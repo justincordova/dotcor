@@ -95,7 +95,7 @@ func runRebuildLinks(cmd *cobra.Command, args []string) error {
 		}
 
 		// Get paths
-		sourcePath, err := config.ExpandPath(mf.SourcePath)
+		sourcePath, err := config.ExpandPath(mf.SourcePath, cfg)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  [X] %s (invalid source path)\n", mf.SourcePath)
 			continue

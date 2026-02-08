@@ -75,7 +75,7 @@ func runRestore(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting repo path: %w", err)
 	}
 
-	repoRoot, err := config.ExpandPath(cfg.RepoPath)
+	repoRoot, err := config.ExpandPath(cfg.RepoPath, cfg)
 	if err != nil {
 		return fmt.Errorf("expanding repo root: %w", err)
 	}

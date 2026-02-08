@@ -128,7 +128,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 
 	// Git commit
 	if git.IsGitInstalled() && removed > 0 && !keepRepo {
-		repoPath, err := config.ExpandPath(cfg.RepoPath)
+		repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
 		if err != nil {
 			fmt.Printf("[!] Git commit skipped: invalid repo path: %v\n", err)
 		} else {
@@ -146,7 +146,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 
 // processRemoveFile handles removing a single file
 func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool, dryRun bool) error {
-	sourcePath, err := config.ExpandPath(mf.SourcePath)
+	sourcePath, err := config.ExpandPath(mf.SourcePath, cfg)
 	if err != nil {
 		return fmt.Errorf("invalid source path: %w", err)
 	}

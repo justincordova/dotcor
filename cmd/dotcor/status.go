@@ -133,7 +133,7 @@ func collectStatus(cfg *config.Config) StatusReport {
 	}
 
 	// Get git status
-	repoPath, err := config.ExpandPath(cfg.RepoPath)
+	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
 	if err == nil && git.IsGitInstalled() && git.IsRepo(repoPath) {
 		gitStatus, _ := git.GetStatus(repoPath)
 		report.GitStatus = GitStatusInfo{
@@ -157,7 +157,7 @@ func checkFileStatus(cfg *config.Config, mf config.ManagedFile) FileStatus {
 	}
 
 	// Expand paths
-	sourcePath, err := config.ExpandPath(mf.SourcePath)
+	sourcePath, err := config.ExpandPath(mf.SourcePath, cfg)
 	if err != nil {
 		status.Status = "error"
 		status.Problem = "invalid source path"

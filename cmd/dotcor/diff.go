@@ -51,7 +51,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	}
 
 	// Get repo path
-	repoPath, err := config.ExpandPath(cfg.RepoPath)
+	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
 	if err != nil {
 		return fmt.Errorf("expanding repo path: %w", err)
 	}

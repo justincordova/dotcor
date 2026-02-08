@@ -524,7 +524,7 @@ func TestIntegration_PathNormalization(t *testing.T) {
 	}
 
 	// Test expansion
-	expanded, err := config.ExpandPath(normalized)
+	expanded, err := config.ExpandPath(normalized, nil)
 	if err != nil {
 		t.Fatalf("ExpandPath() error = %v", err)
 	}
@@ -575,7 +575,7 @@ func TestIntegration_GenerateRepoPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.sourcePath, func(t *testing.T) {
-			result, err := config.GenerateRepoPath(tt.sourcePath, tt.customPath)
+			result, err := config.GenerateRepoPath(tt.sourcePath, tt.customPath, nil)
 			if err != nil {
 				t.Fatalf("GenerateRepoPath() error = %v", err)
 			}

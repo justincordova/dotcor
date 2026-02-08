@@ -141,7 +141,7 @@ func checkConfiguration(fix bool) (issues, fixed int) {
 	}
 
 	// Check repo path
-	repoPath, err := config.ExpandPath(cfg.RepoPath)
+	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
 	if err != nil {
 		fmt.Printf("  [X] Invalid repo path: %v\n", err)
 		issues++
@@ -227,7 +227,7 @@ func checkRepository(fix bool) (issues, fixed int) {
 		return
 	}
 
-	repoPath, err := config.ExpandPath(cfg.RepoPath)
+	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
 	if err != nil {
 		return
 	}
@@ -280,7 +280,7 @@ func checkSymlinks(fix bool) (issues, fixed int) {
 	}
 
 	for _, mf := range files {
-		sourcePath, err := config.ExpandPath(mf.SourcePath)
+		sourcePath, err := config.ExpandPath(mf.SourcePath, cfg)
 		if err != nil {
 			continue
 		}
@@ -343,7 +343,7 @@ func checkOrphanedFiles(fix bool) (issues, fixed int) {
 		return
 	}
 
-	repoPath, err := config.ExpandPath(cfg.RepoPath)
+	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
 	if err != nil {
 		return
 	}
@@ -465,7 +465,7 @@ func checkPermissions(fix bool) (int, int) {
 	}
 
 	for _, mf := range files {
-		sourcePath, err := config.ExpandPath(mf.SourcePath)
+		sourcePath, err := config.ExpandPath(mf.SourcePath, cfg)
 		if err != nil {
 			continue
 		}
@@ -531,7 +531,7 @@ func checkGitConfig(fix bool) (int, int) {
 		return 0, 0
 	}
 
-	repoPath, err := config.ExpandPath(cfg.RepoPath)
+	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
 	if err != nil {
 		return 0, 0
 	}
@@ -590,7 +590,7 @@ func checkGitRemote(fix bool) (int, int) {
 		return 0, 0
 	}
 
-	repoPath, err := config.ExpandPath(cfg.RepoPath)
+	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
 	if err != nil {
 		return 0, 0
 	}

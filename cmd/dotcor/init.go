@@ -189,7 +189,7 @@ func applySymlinks(cfg *config.Config) error {
 
 	for _, mf := range files {
 		// Get full paths
-		sourcePath, err := config.ExpandPath(mf.SourcePath)
+		sourcePath, err := config.ExpandPath(mf.SourcePath, cfg)
 		if err != nil {
 			fmt.Printf("  [X] %s (invalid path)\n", mf.SourcePath)
 			continue
@@ -251,7 +251,7 @@ func interactiveInit(cfg *config.Config) error {
 	var ignored []string
 
 	for _, dotfile := range commonDotfiles {
-		expanded, err := config.ExpandPath(dotfile)
+		expanded, err := config.ExpandPath(dotfile, cfg)
 		if err != nil {
 			continue
 		}
@@ -311,7 +311,7 @@ func interactiveInit(cfg *config.Config) error {
 
 	// Git commit
 	if git.IsGitInstalled() && added > 0 {
-		repoPath, err := config.ExpandPath(cfg.RepoPath)
+		repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
 		if err != nil {
 			fmt.Printf("[!] Git commit skipped: invalid repo path: %v\n", err)
 		} else {
@@ -330,7 +330,7 @@ func interactiveInit(cfg *config.Config) error {
 // addFile adds a single file to dotcor management (used by interactive init)
 func addFile(cfg *config.Config, sourcePath string, customRepoPath string, force bool) error {
 	// Expand source path
-	expanded, err := config.ExpandPath(sourcePath)
+	expanded, err := config.ExpandPath(sourcePath, cfg)
 	if err != nil {
 		return fmt.Errorf("invalid path: %w", err)
 	}
@@ -345,7 +345,7 @@ func addFile(cfg *config.Config, sourcePath string, customRepoPath string, force
 	}
 
 	// Generate repo path
-	repoPath, err := config.GenerateRepoPath(sourcePath, customRepoPath)
+	repoPath, err := config.GenerateRepoPath(sourcePath, customRepoPath, cfg)
 	if err != nil {
 		return fmt.Errorf("generating repo path: %w", err)
 	}

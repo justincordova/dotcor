@@ -80,7 +80,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		totalFiles := 0
 
 		for _, file := range files {
-			expandedPath, err := config.ExpandPath(file)
+			expandedPath, err := config.ExpandPath(file, cfg)
 			if err != nil {
 				return fmt.Errorf("expanding %s: %w", file, err)
 			}
@@ -164,23 +164,15 @@ func runAdd(cmd *cobra.Command, args []string) error {
 
 	// Git commit
 	if git.IsGitInstalled() && added > 0 {
-		repoPath, err := config.ExpandPath(cfg.RepoPath)
+		repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
 		if err != nil {
-			fmt.Printf("[!] Git commit skipped: invalid repo path: %v\n", err)
+			return fmt.Errorf("expanding repo path: %w", err)
+		}
+		if err := git.AutoCommit(repoPath, "Add dotfiles"); err != nil {
+			fmt.Printf("[!] Git commit failed: %v (files marked as uncommitted)\n", err)
+			fmt.Println("Run 'dotcor sync' to commit these changes.")
 		} else {
-			message := formatCommitMessage(gitFiles)
-			if err := git.AutoCommit(repoPath, message); err != nil {
-				// Mark all added files as uncommitted
-				for _, file := range files {
-					if err := cfg.MarkAsUncommitted(file); err != nil {
-						fmt.Printf("[!] Failed to mark as uncommitted: %v\n", err)
-					}
-				}
-				fmt.Printf("[!] Git commit failed: %v (files marked as uncommitted)\n", err)
-				fmt.Println("Run 'dotcor sync' to commit these changes.")
-			} else {
-				fmt.Println("[OK] Committed to Git")
-			}
+			fmt.Println("[OK] Committed to Git")
 		}
 	}
 
@@ -198,7 +190,7 @@ const (
 // processAddFile handles adding a single file
 func processAddFile(cfg *config.Config, sourcePath string, category string, force bool, isTemplate bool, dryRun bool) (addResult, string, error) {
 	// Expand source path
-	expanded, err := config.ExpandPath(sourcePath)
+	expanded, err := config.ExpandPath(sourcePath, cfg)
 	if err != nil {
 		return addResultError, "", fmt.Errorf("invalid path: %w", err)
 	}
@@ -256,7 +248,7 @@ func processAddFile(cfg *config.Config, sourcePath string, category string, forc
 		repoFilename := strings.TrimPrefix(filename, ".")
 		customRepoPath = filepath.Join(category, repoFilename)
 	}
-	repoPath, err := config.GenerateRepoPath(sourcePath, customRepoPath)
+	repoPath, err := config.GenerateRepoPath(sourcePath, customRepoPath, cfg)
 
 	// Add .template extension if template flag is set
 	if isTemplate {
@@ -332,7 +324,7 @@ func processAddFile(cfg *config.Config, sourcePath string, category string, forc
 // expandGlobArg expands a single argument that may contain glob patterns
 func expandGlobArg(arg string) ([]string, error) {
 	// First expand ~ if present
-	expanded, err := config.ExpandPath(arg)
+	expanded, err := config.ExpandPath(arg, nil)
 	if err != nil {
 		return nil, err
 	}

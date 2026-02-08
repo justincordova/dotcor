@@ -197,7 +197,7 @@ func getCategory(repoPath string) string {
 
 // getSymlinkStatus checks the status of a symlink
 func getSymlinkStatus(cfg *config.Config, f config.ManagedFile) string {
-	sourcePath, err := config.ExpandPath(f.SourcePath)
+	sourcePath, err := config.ExpandPath(f.SourcePath, cfg)
 	if err != nil {
 		return "error"
 	}
