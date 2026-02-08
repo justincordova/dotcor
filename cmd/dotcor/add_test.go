@@ -29,7 +29,9 @@ func TestAddCommandSingleFile(t *testing.T) {
 
 	// Create source file
 	os.MkdirAll(homeDir, 0755)
-	os.WriteFile(sourceFile, []byte("# Test zshrc\nexport PATH=/bin"), 0644)
+	if err := os.WriteFile(sourceFile, []byte("# Test zshrc\nexport PATH=/bin"), 0644); err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
 
 	// Act - Simulate add behavior
 	os.MkdirAll(filepath.Dir(repoFile), 0755)

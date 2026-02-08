@@ -53,16 +53,21 @@ func TestAddFile(t *testing.T) {
 
 	// Create source file
 	os.MkdirAll(filepath.Dir(sourceFile), 0755)
-	os.WriteFile(sourceFile, []byte("# Test zshrc\nexport PATH=/bin"), 0644)
+	if err := os.WriteFile(sourceFile, []byte("# Test zshrc\nexport PATH=/bin"), 0644); err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
 
 	// Act - Simulate addFile behavior
-	os.MkdirAll(filepath.Dir(repoFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
 	err := os.Rename(sourceFile, repoFile)
 	require.NoError(t, err, "moving file should succeed")
 
 	// Create symlink
-	err = os.Symlink(repoFile, sourceFile)
-	require.NoError(t, err, "symlink creation should succeed")
+	if err := os.Symlink(repoFile, sourceFile); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
 
 	// Update managed files
 	managedFiles = append(managedFiles, config.ManagedFile{
@@ -92,8 +97,12 @@ func TestApplySymlinks(t *testing.T) {
 	sourceFile := filepath.Join(homeDir, ".zshrc")
 	repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
-	// Create home directory
-	os.MkdirAll(homeDir, 0755)
+	managedFiles := []config.ManagedFile{}
+
+	// Create source file
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
 
 	// Create repo file
 	os.MkdirAll(filepath.Dir(repoFile), 0755)

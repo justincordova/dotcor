@@ -35,9 +35,13 @@ func TestRemoveCommandSingleFile(t *testing.T) {
 
 	// Create repo file and symlink
 	os.MkdirAll(filepath.Dir(repoFile), 0755)
-	os.WriteFile(repoFile, []byte("# Test zshrc"), 0644)
+	if err := os.WriteFile(repoFile, []byte("# Test zshrc"), 0644); err != nil {
+		t.Fatalf("failed to create repo file: %v", err)
+	}
 	os.MkdirAll(homeDir, 0755)
-	os.Symlink(repoFile, sourceFile)
+	if err := os.Symlink(repoFile, sourceFile); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
 
 	// Act - Simulate remove behavior
 	err := os.Remove(sourceFile)
