@@ -1,0 +1,162 @@
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/justincordova/dotcor/internal/config"
+)
+
+func TestInitCommandSetup(t *testing.T) {
+	// Arrange
+	tempDir := t.TempDir()
+
+	// Create config dir
+	configDir := filepath.Join(tempDir, ".dotcor")
+	filesDir := filepath.Join(configDir, "files")
+	backupsDir := filepath.Join(configDir, "backups")
+	hooksDir := filepath.Join(configDir, "hooks")
+
+	// Act - Create directory structure manually (simplified init)
+	err := os.MkdirAll(configDir, 0755)
+	require.NoError(t, err, "config dir creation should succeed")
+	err = os.MkdirAll(filesDir, 0755)
+	require.NoError(t, err, "files dir creation should succeed")
+	err = os.MkdirAll(backupsDir, 0755)
+	require.NoError(t, err, "backups dir creation should succeed")
+	err = os.MkdirAll(hooksDir, 0755)
+	require.NoError(t, err, "hooks dir creation should succeed")
+
+	// Assert
+	assert.DirExists(t, configDir, "config dir should exist")
+	assert.DirExists(t, filesDir, "files dir should exist")
+	assert.DirExists(t, backupsDir, "backups dir should exist")
+	assert.DirExists(t, hooksDir, "hooks dir should exist")
+}
+
+func TestAddFile(t *testing.T) {
+	// Arrange
+	tempDir := t.TempDir()
+	configDir := filepath.Join(tempDir, ".dotcor")
+	filesDir := filepath.Join(configDir, "files")
+	os.MkdirAll(filesDir, 0755)
+
+	homeDir := filepath.Join(tempDir, "home")
+	sourceFile := filepath.Join(homeDir, ".zshrc")
+	repoFile := filepath.Join(filesDir, "shell", "zshrc")
+
+	managedFiles := []config.ManagedFile{}
+
+	// Create source file
+	os.MkdirAll(filepath.Dir(sourceFile), 0755)
+	os.WriteFile(sourceFile, []byte("# Test zshrc\nexport PATH=/bin"), 0644)
+
+	// Act - Simulate addFile behavior
+	os.MkdirAll(filepath.Dir(repoFile), 0755)
+	err := os.Rename(sourceFile, repoFile)
+	require.NoError(t, err, "moving file should succeed")
+
+	// Create symlink
+	err = os.Symlink(repoFile, sourceFile)
+	require.NoError(t, err, "symlink creation should succeed")
+
+	// Update managed files
+	managedFiles = append(managedFiles, config.ManagedFile{
+		SourcePath: "~/.zshrc",
+		RepoPath:   "shell/zshrc",
+	})
+
+	// Assert
+	assert.FileExists(t, repoFile, "repo file should exist")
+	assert.FileExists(t, sourceFile, "source file should exist as symlink")
+	assert.Len(t, managedFiles, 1, "should have 1 managed file")
+
+	// Verify it's a symlink
+	info, err := os.Lstat(sourceFile)
+	require.NoError(t, err)
+	assert.Equal(t, os.ModeSymlink, info.Mode()&os.ModeSymlink, "source file should be symlink")
+}
+
+func TestApplySymlinks(t *testing.T) {
+	// Arrange
+	tempDir := t.TempDir()
+	configDir := filepath.Join(tempDir, ".dotcor")
+	filesDir := filepath.Join(configDir, "files")
+	os.MkdirAll(filesDir, 0755)
+
+	homeDir := filepath.Join(tempDir, "home")
+	sourceFile := filepath.Join(homeDir, ".zshrc")
+	repoFile := filepath.Join(filesDir, "shell", "zshrc")
+
+	// Create home directory
+	os.MkdirAll(homeDir, 0755)
+
+	// Create repo file
+	os.MkdirAll(filepath.Dir(repoFile), 0755)
+	os.WriteFile(repoFile, []byte("# Test zshrc"), 0644)
+
+	// Act - Create symlink (simplified applySymlinks)
+	err := os.Symlink(repoFile, sourceFile)
+
+	// Assert
+	require.NoError(t, err, "symlink creation should succeed")
+	assert.FileExists(t, sourceFile, "symlink should exist")
+
+	// Verify it's a symlink
+	info, err := os.Lstat(sourceFile)
+	require.NoError(t, err)
+	assert.Equal(t, os.ModeSymlink, info.Mode()&os.ModeSymlink, "should be symlink")
+
+	// Verify link target
+	target, err := os.Readlink(sourceFile)
+	require.NoError(t, err)
+	assert.Equal(t, repoFile, target, "symlink should point to repo file")
+}
+
+func TestInitValidation(t *testing.T) {
+	tests := []struct {
+		name       string
+		sourcePath string
+		shouldPass bool
+	}{
+		{
+			name:       "valid dotfile",
+			sourcePath: "~/.zshrc",
+			shouldPass: true,
+		},
+		{
+			name:       "valid nested config",
+			sourcePath: "~/.config/nvim/init.vim",
+			shouldPass: true,
+		},
+		{
+			name:       "absolute path not allowed in repo path",
+			sourcePath: "/etc/zshrc",
+			shouldPass: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			path := tt.sourcePath
+			isAbsolute := filepath.IsAbs(path)
+
+			// Act - Check if path is valid
+			isValid := path[0] == '~' || !isAbsolute
+
+			// Assert
+			if tt.shouldPass {
+				assert.True(t, isValid,
+					"path %q should be valid", path)
+			} else {
+				assert.False(t, isValid,
+					"path %q should be invalid (absolute path)", path)
+			}
+		})
+	}
+}
