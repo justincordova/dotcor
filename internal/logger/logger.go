@@ -64,7 +64,7 @@ func levelFromFlags(debug, quiet bool) slog.Level {
 	case debug:
 		return slog.LevelDebug
 	case quiet:
-		return slog.LevelError
+		return slog.LevelWarn
 	default:
 		return slog.LevelInfo
 	}
