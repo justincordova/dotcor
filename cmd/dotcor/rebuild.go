@@ -60,6 +60,7 @@ func runRebuild(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("creating config: %w", err)
 		}
 	}
+	configureLogger(cmd, cfg)
 
 	// Get repo path
 	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)

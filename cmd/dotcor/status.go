@@ -47,6 +47,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("loading config: %w\nRun 'dotcor init' first", err)
 	}
+	configureLogger(cmd, cfg)
 
 	// Collect status
 	status := collectStatus(cfg)

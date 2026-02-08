@@ -48,6 +48,7 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("loading config: %w\nRun 'dotcor init' first", err)
 	}
+	configureLogger(cmd, cfg)
 
 	// Acquire lock (skip for dry-run)
 	if !dryRun {

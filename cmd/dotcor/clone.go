@@ -70,6 +70,7 @@ func runClone(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("creating config: %w", err)
 		}
 	}
+	configureLogger(cmd, cfg)
 
 	// Check symlink support first
 	supported, err := fs.SupportsSymlinks()

@@ -50,10 +50,11 @@ func runRestore(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("loading config: %w\nRun 'dotcor init' first", err)
 	}
+	configureLogger(cmd, cfg)
 
 	// Handle --list-backups
 	if listBackups {
-		return listAllBackups()
+		return listAllBackups(cmd)
 	}
 
 	// Require file argument
@@ -220,11 +221,12 @@ func restoreFromBackup(sourcePath, repoPath string, preview, force bool, cfg *co
 }
 
 // listAllBackups shows all available backups
-func listAllBackups() error {
+func listAllBackups(cmd *cobra.Command) error {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
+	configureLogger(cmd, cfg)
 	backups, err := core.ListBackups(cfg)
 	if err != nil {
 		return fmt.Errorf("listing backups: %w", err)

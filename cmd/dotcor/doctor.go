@@ -46,55 +46,55 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 
 	// Check 1: Configuration
 	fmt.Println("Checking configuration...")
-	configIssues, configFixed := checkConfiguration(fix)
+	configIssues, configFixed := checkConfiguration(fix, cmd)
 	issues += configIssues
 	fixed += configFixed
 
 	// Check 2: Lock file
 	fmt.Println("Checking lock file...")
-	lockIssues, lockFixed := checkLockFile(fix)
+	lockIssues, lockFixed := checkLockFile(fix, cmd)
 	issues += lockIssues
 	fixed += lockFixed
 
 	// Check 3: Repository
 	fmt.Println("Checking repository...")
-	repoIssues, repoFixed := checkRepository(fix)
+	repoIssues, repoFixed := checkRepository(fix, cmd)
 	issues += repoIssues
 	fixed += repoFixed
 
 	// Check 4: Symlinks
 	fmt.Println("Checking symlinks...")
-	symlinkIssues, symlinkFixed := checkSymlinks(fix)
+	symlinkIssues, symlinkFixed := checkSymlinks(fix, cmd)
 	issues += symlinkIssues
 	fixed += symlinkFixed
 
 	// Check 5: Orphaned files
 	fmt.Println("Checking for orphaned files...")
-	orphanIssues, orphanFixed := checkOrphanedFiles(fix)
+	orphanIssues, orphanFixed := checkOrphanedFiles(fix, cmd)
 	issues += orphanIssues
 	fixed += orphanFixed
 
 	// Check 6: Permissions
 	fmt.Println("Checking permissions...")
-	permIssues, permFixed := checkPermissions(fix)
+	permIssues, permFixed := checkPermissions(fix, cmd)
 	issues += permIssues
 	fixed += permFixed
 
 	// Check 7: Git config
 	fmt.Println("Checking git configuration...")
-	gitConfigIssues, gitConfigFixed := checkGitConfig(fix)
+	gitConfigIssues, gitConfigFixed := checkGitConfig(fix, cmd)
 	issues += gitConfigIssues
 	fixed += gitConfigFixed
 
 	// Check 8: Git remote
 	fmt.Println("Checking git remote...")
-	gitRemoteIssues, gitRemoteFixed := checkGitRemote(fix)
+	gitRemoteIssues, gitRemoteFixed := checkGitRemote(fix, cmd)
 	issues += gitRemoteIssues
 	fixed += gitRemoteFixed
 
 	// Check 9: Hook permissions
 	fmt.Println("Checking hook permissions...")
-	hookPermIssues, hookPermFixed := checkHookPermissions(fix)
+	hookPermIssues, hookPermFixed := checkHookPermissions(fix, cmd)
 	issues += hookPermIssues
 	fixed += hookPermFixed
 
@@ -121,7 +121,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 }
 
 // checkConfiguration validates the config file
-func checkConfiguration(fix bool) (issues, fixed int) {
+func checkConfiguration(fix bool, cmd *cobra.Command) (issues, fixed int) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		fmt.Printf("  [X] Config error: %v\n", err)
@@ -139,6 +139,7 @@ func checkConfiguration(fix bool) (issues, fixed int) {
 		}
 		return
 	}
+	configureLogger(cmd, cfg)
 
 	// Check repo path
 	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
@@ -155,6 +156,7 @@ func checkConfiguration(fix bool) (issues, fixed int) {
 		if fix {
 			cfg, err := config.LoadConfig()
 			if err == nil {
+				configureLogger(cmd, cfg)
 				if err := fs.EnsureDir(repoPath, cfg); err == nil {
 					fmt.Printf("  [OK] Created repository directory: %s\n", repoPath)
 					fixed++
@@ -168,13 +170,14 @@ func checkConfiguration(fix bool) (issues, fixed int) {
 }
 
 // checkLockFile checks for stale locks
-func checkLockFile(fix bool) (issues, fixed int) {
+func checkLockFile(fix bool, cmd *cobra.Command) (issues, fixed int) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		fmt.Printf("  [X] Config error: %v\n", err)
 		issues++
 		return
 	}
+	configureLogger(cmd, cfg)
 
 	info, err := core.GetLockInfo()
 	if err != nil {
@@ -221,11 +224,12 @@ func checkLockFile(fix bool) (issues, fixed int) {
 }
 
 // checkRepository checks the Git repository
-func checkRepository(fix bool) (issues, fixed int) {
+func checkRepository(fix bool, cmd *cobra.Command) (issues, fixed int) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return
 	}
+	configureLogger(cmd, cfg)
 
 	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
 	if err != nil {
@@ -267,11 +271,12 @@ func checkRepository(fix bool) (issues, fixed int) {
 }
 
 // checkSymlinks validates all managed symlinks
-func checkSymlinks(fix bool) (issues, fixed int) {
+func checkSymlinks(fix bool, cmd *cobra.Command) (issues, fixed int) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return
 	}
+	configureLogger(cmd, cfg)
 
 	files := cfg.GetManagedFilesForPlatform()
 	if len(files) == 0 {
@@ -337,11 +342,12 @@ func checkSymlinks(fix bool) (issues, fixed int) {
 }
 
 // checkOrphanedFiles finds files in repo not tracked in config
-func checkOrphanedFiles(fix bool) (issues, fixed int) {
+func checkOrphanedFiles(fix bool, cmd *cobra.Command) (issues, fixed int) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return
 	}
+	configureLogger(cmd, cfg)
 
 	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
 	if err != nil {
@@ -449,11 +455,12 @@ func findOrphanedFilesRecursive(basePath, relDir string, tracked map[string]bool
 }
 
 // checkPermissions verifies file and directory permissions
-func checkPermissions(fix bool) (int, int) {
+func checkPermissions(fix bool, cmd *cobra.Command) (int, int) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return 0, 0
 	}
+	configureLogger(cmd, cfg)
 
 	issues := 0
 	fixed := 0
@@ -525,11 +532,12 @@ func checkPermissions(fix bool) (int, int) {
 }
 
 // checkGitConfig verifies git user configuration
-func checkGitConfig(fix bool) (int, int) {
+func checkGitConfig(fix bool, cmd *cobra.Command) (int, int) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return 0, 0
 	}
+	configureLogger(cmd, cfg)
 
 	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
 	if err != nil {
@@ -584,11 +592,12 @@ func checkGitConfig(fix bool) (int, int) {
 }
 
 // checkGitRemote checks if git remote is configured
-func checkGitRemote(fix bool) (int, int) {
+func checkGitRemote(fix bool, cmd *cobra.Command) (int, int) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return 0, 0
 	}
+	configureLogger(cmd, cfg)
 
 	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
 	if err != nil {
@@ -623,11 +632,12 @@ func checkGitRemote(fix bool) (int, int) {
 }
 
 // checkHookPermissions verifies hooks are executable
-func checkHookPermissions(fix bool) (int, int) {
+func checkHookPermissions(fix bool, cmd *cobra.Command) (int, int) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return 0, 0
 	}
+	configureLogger(cmd, cfg)
 
 	hooksDir, err := core.GetHooksDir(cfg)
 	if err != nil {
