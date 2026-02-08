@@ -4,9 +4,13 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestShouldIgnore(t *testing.T) {
+	// Arrange
 	patterns := []string{
 		"*.key",
 		".env",
@@ -65,10 +69,11 @@ func TestShouldIgnore(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Act
 			got, _ := ShouldIgnore(tt.path, patterns)
-			if got != tt.wantIgnored {
-				t.Errorf("ShouldIgnore() = %v, want %v", got, tt.wantIgnored)
-			}
+
+			// Assert
+			assert.Equal(t, tt.wantIgnored, got)
 		})
 	}
 }
@@ -108,10 +113,14 @@ func TestMatchesPattern(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			// (test data defined above)
+
+			// Act
 			got := MatchesPattern(tt.path, tt.pattern)
-			if got != tt.want {
-				t.Errorf("MatchesPattern() = %v, want %v", got, tt.want)
-			}
+
+			// Assert
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -135,10 +144,14 @@ func TestIsSecretFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.filename, func(t *testing.T) {
+			// Arrange
+			// (test data defined above)
+
+			// Act
 			got := IsSecretFile(tt.filename)
-			if got != tt.want {
-				t.Errorf("IsSecretFile(%s) = %v, want %v", tt.filename, got, tt.want)
-			}
+
+			// Assert
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -160,10 +173,14 @@ func TestIsHistoryFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.filename, func(t *testing.T) {
+			// Arrange
+			// (test data defined above)
+
+			// Act
 			got := IsHistoryFile(tt.filename)
-			if got != tt.want {
-				t.Errorf("IsHistoryFile(%s) = %v, want %v", tt.filename, got, tt.want)
-			}
+
+			// Assert
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -185,10 +202,14 @@ func TestIsTemporaryFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.filename, func(t *testing.T) {
+			// Arrange
+			// (test data defined above)
+
+			// Act
 			got := IsTemporaryFile(tt.filename)
-			if got != tt.want {
-				t.Errorf("IsTemporaryFile(%s) = %v, want %v", tt.filename, got, tt.want)
-			}
+
+			// Assert
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -207,10 +228,14 @@ func TestIsSystemFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.filename, func(t *testing.T) {
+			// Arrange
+			// (test data defined above)
+
+			// Act
 			got := IsSystemFile(tt.filename)
-			if got != tt.want {
-				t.Errorf("IsSystemFile(%s) = %v, want %v", tt.filename, got, tt.want)
-			}
+
+			// Assert
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -231,15 +256,20 @@ func TestGetFileCategory(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.filename, func(t *testing.T) {
+			// Arrange
+			// (test data defined above)
+
+			// Act
 			got := GetFileCategory(tt.filename)
-			if got != tt.want {
-				t.Errorf("GetFileCategory(%s) = %v, want %v", tt.filename, got, tt.want)
-			}
+
+			// Assert
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestFilterByPatterns(t *testing.T) {
+	// Arrange
 	paths := []string{
 		"/home/user/.zshrc",
 		"/home/user/.env",
@@ -249,56 +279,45 @@ func TestFilterByPatterns(t *testing.T) {
 	}
 
 	patterns := []string{".env", "*.key", ".DS_Store"}
-
-	got := FilterByPatterns(paths, patterns)
-
-	// Should filter out .env, secret.key, and .DS_Store
 	expected := []string{
 		"/home/user/.zshrc",
 		"/home/user/.gitconfig",
 	}
 
-	if len(got) != len(expected) {
-		t.Errorf("FilterByPatterns() returned %d paths, want %d", len(got), len(expected))
-	}
+	// Act
+	got := FilterByPatterns(paths, patterns)
 
+	// Assert
+	assert.Equal(t, len(expected), len(got))
 	for i, path := range expected {
-		if got[i] != path {
-			t.Errorf("FilterByPatterns()[%d] = %v, want %v", i, got[i], path)
-		}
+		assert.Equal(t, path, got[i])
 	}
 }
 
 func TestMergePatterns(t *testing.T) {
+	// Arrange
 	list1 := []string{"*.key", ".env", "*.swp"}
-	list2 := []string{".env", ".DS_Store", "*.key"} // Has duplicates
+	list2 := []string{".env", ".DS_Store", "*.key"}
 
+	// Act
 	got := MergePatterns(list1, list2)
 
-	// Should have 4 unique patterns
-	if len(got) != 4 {
-		t.Errorf("MergePatterns() returned %d patterns, want 4", len(got))
-	}
+	// Assert
+	assert.Len(t, got, 4)
 
-	// Verify no duplicates
 	seen := make(map[string]bool)
 	for _, p := range got {
-		if seen[p] {
-			t.Errorf("MergePatterns() has duplicate: %s", p)
-		}
+		assert.False(t, seen[p], "MergePatterns() has duplicate: %s", p)
 		seen[p] = true
 	}
 }
 
 func TestLoadGitignorePatterns(t *testing.T) {
-	// Create temp dir
+	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	// Create a test gitignore file
 	gitignoreContent := `# Comment line
 *.swp
 .env
@@ -308,25 +327,18 @@ func TestLoadGitignorePatterns(t *testing.T) {
 id_rsa
 `
 	gitignorePath := filepath.Join(tempDir, ".gitignore")
-	if err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0644); err != nil {
-		t.Fatalf("failed to create gitignore file: %v", err)
-	}
+	err = os.WriteFile(gitignorePath, []byte(gitignoreContent), 0644)
+	require.NoError(t, err)
 
-	patterns, err := LoadGitignorePatterns(gitignorePath)
-	if err != nil {
-		t.Fatalf("LoadGitignorePatterns() error = %v", err)
-	}
-
-	// Should have 4 patterns (comments and blank lines excluded)
 	expected := []string{"*.swp", ".env", "*.key", "id_rsa"}
 
-	if len(patterns) != len(expected) {
-		t.Errorf("LoadGitignorePatterns() returned %d patterns, want %d", len(patterns), len(expected))
-	}
+	// Act
+	patterns, err := LoadGitignorePatterns(gitignorePath)
 
+	// Assert
+	require.NoError(t, err)
+	assert.Equal(t, len(expected), len(patterns))
 	for i, pattern := range expected {
-		if patterns[i] != pattern {
-			t.Errorf("LoadGitignorePatterns()[%d] = %v, want %v", i, patterns[i], pattern)
-		}
+		assert.Equal(t, pattern, patterns[i])
 	}
 }

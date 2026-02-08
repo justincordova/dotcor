@@ -3,34 +3,26 @@ package core
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetTemplateContext(t *testing.T) {
+	// Act
 	ctx, err := GetTemplateContext()
-	if err != nil {
-		t.Fatalf("GetTemplateContext() error = %v", err)
-	}
 
-	if ctx.Hostname == "" {
-		t.Error("GetTemplateContext() Hostname is empty")
-	}
-
-	if ctx.OS == "" {
-		t.Error("GetTemplateContext() OS is empty")
-	}
-
-	if ctx.User == "" {
-		t.Error("GetTemplateContext() User is empty")
-	}
-
-	if ctx.Home == "" {
-		t.Error("GetTemplateContext() Home is empty")
-	}
+	// Assert
+	require.NoError(t, err, "GetTemplateContext() should not return an error")
+	assert.NotEmpty(t, ctx.Hostname, "GetTemplateContext() Hostname should not be empty")
+	assert.NotEmpty(t, ctx.OS, "GetTemplateContext() OS should not be empty")
+	assert.NotEmpty(t, ctx.User, "GetTemplateContext() User should not be empty")
+	assert.NotEmpty(t, ctx.Home, "GetTemplateContext() Home should not be empty")
 }
 
 func TestSubstituteTemplate(t *testing.T) {
+	// Arrange
 	ctx := &TemplateContext{
 		Hostname: "testhost",
 		OS:       "linux",
@@ -82,15 +74,17 @@ func TestSubstituteTemplate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Act
 			result := SubstituteTemplate(tt.input, ctx)
-			if result != tt.expected {
-				t.Errorf("SubstituteTemplate() = %v, want %v", result, tt.expected)
-			}
+
+			// Assert
+			assert.Equal(t, tt.expected, result, "SubstituteTemplate() should return expected result")
 		})
 	}
 }
 
 func TestIsTemplateFile(t *testing.T) {
+	// Arrange
 	tests := []struct {
 		filename string
 		want     bool
@@ -104,15 +98,17 @@ func TestIsTemplateFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.filename, func(t *testing.T) {
+			// Act
 			got := IsTemplateFile(tt.filename)
-			if got != tt.want {
-				t.Errorf("IsTemplateFile(%s) = %v, want %v", tt.filename, got, tt.want)
-			}
+
+			// Assert
+			assert.Equal(t, tt.want, got, "IsTemplateFile(%s) should return expected result", tt.filename)
 		})
 	}
 }
 
 func TestStripTemplateExtension(t *testing.T) {
+	// Arrange
 	tests := []struct {
 		input    string
 		expected string
@@ -126,33 +122,30 @@ func TestStripTemplateExtension(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
+			// Act
 			result := StripTemplateExtension(tt.input)
-			if result != tt.expected {
-				t.Errorf("StripTemplateExtension(%s) = %v, want %v", tt.input, result, tt.expected)
-			}
+
+			// Assert
+			assert.Equal(t, tt.expected, result, "StripTemplateExtension(%s) should return expected result", tt.input)
 		})
 	}
 }
 
 func TestTemplateIntegration(t *testing.T) {
+	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-template-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "should create temp dir")
 	defer os.RemoveAll(tempDir)
 
-	// Create template file
 	templatePath := filepath.Join(tempDir, "config.template")
 	templateContent := `# Config file for {{ .Hostname }}
 User: {{ .User }}
 Home: {{ .Home }}
 OS: {{ .OS }}
 `
-	if err := os.WriteFile(templatePath, []byte(templateContent), 0644); err != nil {
-		t.Fatalf("failed to create template file: %v", err)
-	}
+	err = os.WriteFile(templatePath, []byte(templateContent), 0644)
+	require.NoError(t, err, "should create template file")
 
-	// Get context
 	ctx := &TemplateContext{
 		Hostname: "test-machine",
 		OS:       "darwin",
@@ -160,29 +153,18 @@ OS: {{ .OS }}
 		Home:     "/Users/alice",
 	}
 
-	// Read and substitute
+	// Act
 	content, err := os.ReadFile(templatePath)
-	if err != nil {
-		t.Fatalf("failed to read template: %v", err)
-	}
+	require.NoError(t, err, "should read template file")
 
 	result := SubstituteTemplate(string(content), ctx)
 
-	// Verify substitutions
-	if !strings.Contains(result, "test-machine") {
-		t.Error("SubstituteTemplate() did not substitute Hostname")
-	}
-	if !strings.Contains(result, "alice") {
-		t.Error("SubstituteTemplate() did not substitute User")
-	}
-	if !strings.Contains(result, "/Users/alice") {
-		t.Error("SubstituteTemplate() did not substitute Home")
-	}
-	if !strings.Contains(result, "darwin") {
-		t.Error("SubstituteTemplate() did not substitute OS")
-	}
+	// Assert
+	assert.Contains(t, result, "test-machine", "SubstituteTemplate() should substitute Hostname")
+	assert.Contains(t, result, "alice", "SubstituteTemplate() should substitute User")
+	assert.Contains(t, result, "/Users/alice", "SubstituteTemplate() should substitute Home")
+	assert.Contains(t, result, "darwin", "SubstituteTemplate() should substitute OS")
 
-	// Verify template syntax is preserved but replaced
 	expectedLines := []string{
 		"# Config file for test-machine",
 		"User: alice",
@@ -191,8 +173,6 @@ OS: {{ .OS }}
 	}
 
 	for _, line := range expectedLines {
-		if !strings.Contains(result, line) {
-			t.Errorf("Template result missing expected line: %s\nGot:\n%s", line, result)
-		}
+		assert.Contains(t, result, line, "Template result should contain expected line: %s", line)
 	}
 }
