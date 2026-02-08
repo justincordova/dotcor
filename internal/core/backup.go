@@ -38,7 +38,7 @@ func GetBackupDir() (string, error) {
 func CreateBackup(sourcePath string, cfg *config.Config) (string, error) {
 	cfg.Logger.Debug("creating backup", "file", sourcePath)
 
-	expanded, err := config.ExpandPath(sourcePath)
+	expanded, err := config.ExpandPath(sourcePath, cfg)
 	if err != nil {
 		cfg.Logger.Error("failed to expand path", "file", sourcePath, "error", err)
 		return "", fmt.Errorf("expanding source path: %w", err)
@@ -107,13 +107,13 @@ func RestoreBackup(backupPath, targetPath string, cfg *config.Config) error {
 		"target", targetPath,
 	)
 
-	expandedBackup, err := config.ExpandPath(backupPath)
+	expandedBackup, err := config.ExpandPath(backupPath, cfg)
 	if err != nil {
 		cfg.Logger.Error("failed to expand backup path", "error", err)
 		return fmt.Errorf("expanding backup path: %w", err)
 	}
 
-	expandedTarget, err := config.ExpandPath(targetPath)
+	expandedTarget, err := config.ExpandPath(targetPath, cfg)
 	if err != nil {
 		cfg.Logger.Error("failed to expand target path", "error", err)
 		return fmt.Errorf("expanding target path: %w", err)

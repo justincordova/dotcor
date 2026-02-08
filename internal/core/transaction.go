@@ -370,7 +370,7 @@ func AddFileTransaction(cfg *config.Config, sourcePath string, repoPath string, 
 	}
 
 	// Expand source path
-	expandedSource, err := config.ExpandPath(sourcePath)
+	expandedSource, err := config.ExpandPath(sourcePath, cfg)
 	if err != nil {
 		return nil, err
 	}
