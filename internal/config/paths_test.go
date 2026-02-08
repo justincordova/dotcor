@@ -5,13 +5,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExpandPath(t *testing.T) {
+	// Arrange
 	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("failed to get home dir: %v", err)
-	}
+	require.NoError(t, err, "failed to get home dir")
 
 	tests := []struct {
 		name    string
@@ -48,26 +50,29 @@ func TestExpandPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Act
 			got, err := ExpandPath(tt.input, nil)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ExpandPath() error = %v, wantErr %v", err, tt.wantErr)
-				return
+
+			// Assert
+			if tt.wantErr {
+				assert.Error(t, err, "ExpandPath() should return error")
+			} else {
+				assert.NoError(t, err, "ExpandPath() should not return error")
 			}
-			if tt.want != "" && got != tt.want {
-				t.Errorf("ExpandPath() = %v, want %v", got, tt.want)
-			}
-			if tt.want == "" && !filepath.IsAbs(got) {
-				t.Errorf("ExpandPath() = %v, expected absolute path", got)
+
+			if tt.want != "" {
+				assert.Equal(t, tt.want, got, "ExpandPath() result")
+			} else {
+				assert.True(t, filepath.IsAbs(got), "ExpandPath() should return absolute path")
 			}
 		})
 	}
 }
 
 func TestNormalizePath(t *testing.T) {
+	// Arrange
 	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("failed to get home dir: %v", err)
-	}
+	require.NoError(t, err, "failed to get home dir")
 
 	tests := []struct {
 		name    string
@@ -99,22 +104,26 @@ func TestNormalizePath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Act
 			got, err := NormalizePath(tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("NormalizePath() error = %v, wantErr %v", err, tt.wantErr)
-				return
+
+			// Assert
+			if tt.wantErr {
+				assert.Error(t, err, "NormalizePath() should return error")
+			} else {
+				assert.NoError(t, err, "NormalizePath() should not return error")
 			}
+
 			// Normalize separators for comparison
 			got = strings.ReplaceAll(got, string(filepath.Separator), "/")
 			want := strings.ReplaceAll(tt.want, string(filepath.Separator), "/")
-			if got != want {
-				t.Errorf("NormalizePath() = %v, want %v", got, want)
-			}
+			assert.Equal(t, want, got, "NormalizePath() result")
 		})
 	}
 }
 
 func TestGenerateRepoPath(t *testing.T) {
+	// Arrange
 	tests := []struct {
 		name       string
 		sourcePath string
@@ -174,25 +183,27 @@ func TestGenerateRepoPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Act
 			got, err := GenerateRepoPath(tt.sourcePath, tt.customPath, nil)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GenerateRepoPath() error = %v, wantErr %v", err, tt.wantErr)
-				return
+
+			// Assert
+			if tt.wantErr {
+				assert.Error(t, err, "GenerateRepoPath() should return error")
+			} else {
+				assert.NoError(t, err, "GenerateRepoPath() should not return error")
 			}
+
 			// Normalize separators for comparison
 			got = strings.ReplaceAll(got, string(filepath.Separator), "/")
-			if got != tt.want {
-				t.Errorf("GenerateRepoPath() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, got, "GenerateRepoPath() result")
 		})
 	}
 }
 
 func TestComputeRelativeSymlink(t *testing.T) {
+	// Arrange
 	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("failed to get home dir: %v", err)
-	}
+	require.NoError(t, err, "failed to get home dir")
 
 	tests := []struct {
 		name       string
@@ -217,19 +228,23 @@ func TestComputeRelativeSymlink(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Act
 			got, err := ComputeRelativeSymlink(tt.linkPath, tt.targetPath)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ComputeRelativeSymlink() error = %v, wantErr %v", err, tt.wantErr)
-				return
+
+			// Assert
+			if tt.wantErr {
+				assert.Error(t, err, "ComputeRelativeSymlink() should return error")
+			} else {
+				assert.NoError(t, err, "ComputeRelativeSymlink() should not return error")
 			}
-			if !strings.HasPrefix(got, tt.wantPrefix) {
-				t.Errorf("ComputeRelativeSymlink() = %v, want prefix %v", got, tt.wantPrefix)
-			}
+
+			assert.True(t, strings.HasPrefix(got, tt.wantPrefix), "ComputeRelativeSymlink() result should have prefix")
 		})
 	}
 }
 
 func TestGetCategoryByPrefix(t *testing.T) {
+	// Arrange
 	tests := []struct {
 		filename string
 		want     string
@@ -249,10 +264,11 @@ func TestGetCategoryByPrefix(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.filename, func(t *testing.T) {
+			// Act
 			got := getCategoryByPrefix(tt.filename)
-			if got != tt.want {
-				t.Errorf("getCategoryByPrefix(%s) = %v, want %v", tt.filename, got, tt.want)
-			}
+
+			// Assert
+			assert.Equal(t, tt.want, got, "getCategoryByPrefix() result")
 		})
 	}
 }
