@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/justincordova/dotcor/internal/config"
+	"github.com/stretchr/testify/assert"
 )
 
 // createTestConfig creates a test config with logger
@@ -65,21 +66,25 @@ func TestValidateRepoPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateRepoPath(tt.path)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateRepoPath() error = %v, wantErr %v", err, tt.wantErr)
+			// Arrange
+			testPath := tt.path
+
+			// Act
+			err := ValidateRepoPath(testPath)
+
+			// Assert
+			if tt.wantErr {
+				assert.Error(t, err, "should return error for invalid path: %s", testPath)
+			} else {
+				assert.NoError(t, err, "should not return error for valid path: %s", testPath)
 			}
 		})
 	}
 }
 
 func TestDetectSecrets(t *testing.T) {
-	// Create temp dir
-	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	// Arrange
+	tempDir := t.TempDir()
 
 	tests := []struct {
 		name        string
@@ -125,26 +130,27 @@ func TestDetectSecrets(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create test file
-			testFile := filepath.Join(tempDir, "testfile")
+			// Arrange
+			testFile := filepath.Join(tempDir, tt.name+".txt")
 			if err := os.WriteFile(testFile, []byte(tt.content), 0644); err != nil {
 				t.Fatalf("failed to create test file: %v", err)
 			}
 
+			// Act
 			secrets, err := DetectSecrets(testFile)
-			if err != nil {
-				t.Fatalf("DetectSecrets() error = %v", err)
-			}
+			assert.NoError(t, err, "DetectSecrets should not error")
 
+			// Assert
 			gotSecrets := len(secrets) > 0
-			if gotSecrets != tt.wantSecrets {
-				t.Errorf("DetectSecrets() found secrets = %v, want %v (secrets: %v)", gotSecrets, tt.wantSecrets, secrets)
-			}
+			assert.Equal(t, tt.wantSecrets, gotSecrets,
+				"DetectSecrets(%q) found secrets = %v, want %v (secrets: %v)",
+				tt.name, gotSecrets, tt.wantSecrets, secrets)
 		})
 	}
 }
 
 func TestValidateNotAlreadyManaged(t *testing.T) {
+	// Arrange
 	cfg := &config.Config{
 		Version:  config.CurrentConfigVersion,
 		RepoPath: "~/.dotcor/files",
@@ -175,29 +181,36 @@ func TestValidateNotAlreadyManaged(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateNotAlreadyManaged(cfg, tt.sourcePath)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateNotAlreadyManaged() error = %v, wantErr %v", err, tt.wantErr)
+			// Arrange
+			sourcePath := tt.sourcePath
+
+			// Act
+			err := ValidateNotAlreadyManaged(cfg, sourcePath)
+
+			// Assert
+			if tt.wantErr {
+				assert.Error(t, err, "should return error for already managed file: %s", sourcePath)
+			} else {
+				assert.NoError(t, err, "should not return error for unmanaged file: %s", sourcePath)
 			}
 		})
 	}
 }
 
 func TestValidateFileSize(t *testing.T) {
+	// Arrange
 	tempDir := t.TempDir()
 	cfg := createTestConfig(t)
-
-	// Create a small file (should pass)
 	smallFile := filepath.Join(tempDir, "small")
 	if err := os.WriteFile(smallFile, []byte("small content"), 0644); err != nil {
 		t.Fatalf("failed to create small file: %v", err)
 	}
 
-	// Test small file
-	if err := ValidateFileSize(smallFile, cfg); err != nil {
-		t.Errorf("ValidateFileSize() error = %v for small file", err)
-	}
-	defer os.RemoveAll(tempDir)
+	// Act
+	err := ValidateFileSize(smallFile, cfg)
+
+	// Assert
+	assert.NoError(t, err, "ValidateFileSize should accept small file")
 
 	// Note: We don't test large files as creating 100MB+ files is slow
 	// The function logic is straightforward
@@ -226,10 +239,16 @@ func TestShouldWarnAboutSecrets(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ShouldWarnAboutSecrets(tt.path, tt.warnings)
-			if got != tt.want {
-				t.Errorf("ShouldWarnAboutSecrets() = %v, want %v", got, tt.want)
-			}
+			// Arrange
+			path := tt.path
+			warnings := tt.warnings
+
+			// Act
+			got := ShouldWarnAboutSecrets(path, warnings)
+
+			// Assert
+			assert.Equal(t, tt.want, got, "ShouldWarnAboutSecrets(%q, %v) = %v, want %v",
+				path, warnings, got, tt.want)
 		})
 	}
 }
