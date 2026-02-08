@@ -58,7 +58,7 @@ func ValidateSourceFile(path string, cfg *config.Config) error {
 	// Expand path
 	expanded, err := config.ExpandPath(path, cfg)
 	if err != nil {
-		cfg.Logger.Error("failed to expand path", "file", path, "error", err)
+		cfg.Logger.Debug("failed to expand path", "file", path, "error", err)
 		return fmt.Errorf("invalid path: %w", err)
 	}
 
@@ -66,10 +66,10 @@ func ValidateSourceFile(path string, cfg *config.Config) error {
 	info, err := os.Stat(expanded)
 	if err != nil {
 		if os.IsNotExist(err) {
-			cfg.Logger.Error("file does not exist", "file", path)
+			cfg.Logger.Debug("file does not exist", "file", path)
 			return fmt.Errorf("file does not exist: %s", path)
 		}
-		cfg.Logger.Error("failed to check file", "file", path, "error", err)
+		cfg.Logger.Debug("failed to check file", "file", path, "error", err)
 		return fmt.Errorf("checking file: %w", err)
 	}
 
@@ -81,26 +81,26 @@ func ValidateSourceFile(path string, cfg *config.Config) error {
 
 	// Check if file is readable
 	if !fs.IsReadable(expanded) {
-		cfg.Logger.Error("file is not readable", "file", path)
+		cfg.Logger.Debug("file is not readable", "file", path)
 		return fmt.Errorf("file is not readable: %s", path)
 	}
 
 	// Check if file is inside dotcor directory
 	if err := ValidateNotInDotcorDir(path, cfg); err != nil {
-		cfg.Logger.Error("file is in dotcor directory", "file", path, "error", err)
+		cfg.Logger.Debug("file is in dotcor directory", "file", path, "error", err)
 		return err
 	}
 
 	// Check if already a symlink pointing to our repo
 	isLink, err := fs.IsSymlink(expanded)
 	if err != nil {
-		cfg.Logger.Error("failed to check symlink", "file", path, "error", err)
+		cfg.Logger.Debug("failed to check symlink", "file", path, "error", err)
 		return fmt.Errorf("checking symlink: %w", err)
 	}
 	if isLink {
 		pointsToRepo, err := fs.SymlinkPointsToRepo(expanded, cfg.RepoPath)
 		if err != nil {
-			cfg.Logger.Error("failed to check symlink target", "file", path, "error", err)
+			cfg.Logger.Debug("failed to check symlink target", "file", path, "error", err)
 			return fmt.Errorf("checking symlink target: %w", err)
 		}
 		if pointsToRepo {
@@ -174,13 +174,13 @@ func ValidateFileSize(path string, cfg *config.Config) error {
 
 	expanded, err := config.ExpandPath(path, cfg)
 	if err != nil {
-		cfg.Logger.Error("failed to expand path for validation", "file", path, "error", err)
+		cfg.Logger.Debug("failed to expand path for validation", "file", path, "error", err)
 		return fmt.Errorf("expanding path: %w", err)
 	}
 
 	info, err := os.Stat(expanded)
 	if err != nil {
-		cfg.Logger.Error("failed to get file info", "file", path, "error", err)
+		cfg.Logger.Debug("failed to get file info", "file", path, "error", err)
 		return fmt.Errorf("getting file info: %w", err)
 	}
 

@@ -42,7 +42,7 @@ func (t *Transaction) Execute(op Operation) error {
 	t.config.Logger.Debug("executing operation", "op", op.Describe())
 
 	if t.committed {
-		t.config.Logger.Error("transaction execute failed", "error", fmt.Errorf("already committed"))
+		t.config.Logger.Debug("transaction execute failed", "error", fmt.Errorf("already committed"))
 		return fmt.Errorf("transaction already committed")
 	}
 
