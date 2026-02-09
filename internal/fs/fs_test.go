@@ -378,3 +378,86 @@ func TestIsReadable(t *testing.T) {
 	assert.True(t, IsReadable(testFile), "IsReadable() should return true for readable file")
 	assert.False(t, IsReadable(filepath.Join(tempDir, "nonexistent")), "IsReadable() should return false for non-existent file")
 }
+
+func TestIsWritable(t *testing.T) {
+	// Arrange
+	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
+	require.NoError(t, err, "failed to create temp dir")
+	defer os.RemoveAll(tempDir)
+
+	// Test writable directory
+	// Act & Assert
+	assert.True(t, IsWritable(tempDir), "IsWritable() should return true for writable directory")
+
+	// Test writable file
+	testFile := filepath.Join(tempDir, "testfile")
+	err = os.WriteFile(testFile, []byte("test"), 0644)
+	require.NoError(t, err, "failed to create test file")
+
+	// Act & Assert
+	assert.True(t, IsWritable(testFile), "IsWritable() should return true for writable file")
+
+	// Test non-existent path (should check parent)
+	nonExistent := filepath.Join(tempDir, "nonexistent", "file")
+	writable := IsWritable(nonExistent)
+	// Act & Assert - parent directory should be writable
+	assert.True(t, writable, "IsWritable() should check parent directory for non-existent path")
+}
+
+func TestGetFileMode(t *testing.T) {
+	// Arrange
+	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
+	require.NoError(t, err, "failed to create temp dir")
+	defer os.RemoveAll(tempDir)
+
+	testFile := filepath.Join(tempDir, "testfile")
+	err = os.WriteFile(testFile, []byte("test"), 0644)
+	require.NoError(t, err, "failed to create test file")
+
+	// Act
+	mode, err := GetFileMode(testFile)
+
+	// Assert
+	require.NoError(t, err, "GetFileMode() should not error")
+	assert.Equal(t, os.FileMode(0644), mode.Perm(), "GetFileMode() should return correct permissions")
+
+	testDir := filepath.Join(tempDir, "testdir")
+	err = os.Mkdir(testDir, 0755)
+	require.NoError(t, err, "failed to create test directory")
+
+	// Act
+	mode, err = GetFileMode(testDir)
+
+	// Assert
+	require.NoError(t, err, "GetFileMode() should not error")
+	assert.True(t, mode.IsDir(), "GetFileMode() should return directory mode")
+}
+
+func TestRemoveAll(t *testing.T) {
+	// Arrange
+	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
+	require.NoError(t, err, "failed to create temp dir")
+
+	testDir := filepath.Join(tempDir, "testdir")
+	err = os.MkdirAll(filepath.Join(testDir, "nested", "dir"), 0755)
+	require.NoError(t, err, "failed to create nested directory")
+
+	file1 := filepath.Join(testDir, "file1.txt")
+	err = os.WriteFile(file1, []byte("test"), 0644)
+	require.NoError(t, err, "failed to create file1")
+
+	file2 := filepath.Join(testDir, "nested", "file2.txt")
+	err = os.WriteFile(file2, []byte("test"), 0644)
+	require.NoError(t, err, "failed to create file2")
+
+	cfg := testConfig()
+
+	// Act
+	err = RemoveAll(testDir, cfg)
+
+	// Assert
+	require.NoError(t, err, "RemoveAll() should not error")
+	assert.NoFileExists(t, file1, "RemoveAll() should delete file1")
+	assert.NoFileExists(t, file2, "RemoveAll() should delete file2")
+	assert.NoDirExists(t, testDir, "RemoveAll() should delete entire directory tree")
+}

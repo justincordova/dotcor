@@ -359,3 +359,82 @@ func TestRemoveSymlinkErrorsOnRegularFile(t *testing.T) {
 	assert.Error(t, err, "RemoveSymlink() should error on regular file")
 	assert.True(t, PathExists(regularFile), "RemoveSymlink() should not remove regular file")
 }
+
+func TestSymlinkPointsToRepo_ChecksRepositoryMembership(t *testing.T) {
+	// Arrange
+	supported, _ := SupportsSymlinks()
+	if !supported {
+		t.Skip("symlinks not supported on this platform")
+	}
+
+	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	repoDir := filepath.Join(tempDir, "repo")
+	err = os.MkdirAll(repoDir, 0755)
+	require.NoError(t, err, "failed to create repo dir")
+
+	targetFile := filepath.Join(repoDir, "file.txt")
+	err = os.WriteFile(targetFile, []byte("test"), 0644)
+	require.NoError(t, err, "failed to create target file")
+
+	symlinkFile := filepath.Join(tempDir, "symlink")
+	relPath, _ := filepath.Rel(filepath.Dir(symlinkFile), targetFile)
+	err = os.Symlink(relPath, symlinkFile)
+	require.NoError(t, err, "failed to create symlink")
+
+	// Act
+	pointsToRepo, err := SymlinkPointsToRepo(symlinkFile, repoDir)
+
+	// Assert
+	require.NoError(t, err, "SymlinkPointsToRepo() should not error")
+	assert.True(t, pointsToRepo, "SymlinkPointsToRepo() should return true when symlink points to repo")
+
+	nonRepoDir := filepath.Join(tempDir, "other")
+	pointsToRepo, err = SymlinkPointsToRepo(symlinkFile, nonRepoDir)
+	require.NoError(t, err, "SymlinkPointsToRepo() should not error")
+	assert.False(t, pointsToRepo, "SymlinkPointsToRepo() should return false when symlink doesn't point to repo")
+}
+
+func TestCreateSymlink_RelativePath_ComputedCorrectly(t *testing.T) {
+	// Arrange
+	supported, _ := SupportsSymlinks()
+	if !supported {
+		t.Skip("symlinks not supported on this platform")
+	}
+
+	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	repoDir := filepath.Join(tempDir, "repo")
+	err = os.MkdirAll(repoDir, 0755)
+	require.NoError(t, err, "failed to create repo dir")
+
+	targetFile := filepath.Join(repoDir, "file.txt")
+	err = os.WriteFile(targetFile, []byte("test"), 0644)
+	require.NoError(t, err, "failed to create target file")
+
+	homeDir := filepath.Join(tempDir, "home")
+	err = os.MkdirAll(homeDir, 0755)
+	require.NoError(t, err, "failed to create home dir")
+
+	linkFile := filepath.Join(homeDir, "link.txt")
+
+	cfg := &config.Config{Logger: slog.Default()}
+
+	// Act
+	err = CreateSymlink(targetFile, linkFile, cfg)
+
+	// Assert
+	require.NoError(t, err, "CreateSymlink() should not error")
+
+	isLink, err := IsSymlink(linkFile)
+	require.NoError(t, err, "IsSymlink() should not error")
+	assert.True(t, isLink, "CreateSymlink() should create a symlink")
+
+	target, err := ReadSymlink(linkFile)
+	require.NoError(t, err, "ReadSymlink() should not error")
+	assert.False(t, filepath.IsAbs(target), "CreateSymlink() should create relative symlink")
+}
