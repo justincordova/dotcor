@@ -107,7 +107,7 @@ func showQuickStatus(cfg *config.Config) {
 	// Count problems
 	problemCount := 0
 	for _, f := range files {
-		fs := checkFileStatus(cfg, f)
+		fs := CheckFileStatus(cfg, f)
 		if fs.Status != "ok" {
 			problemCount++
 		}

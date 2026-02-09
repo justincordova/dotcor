@@ -16,16 +16,15 @@ import (
 
 func TestStatus_NotInitialized_ReturnsError(t *testing.T) {
 	t.Run("no config returns error", func(t *testing.T) {
-		// Arrange
-		// Create temp directory without config
+		// Arrange - Create temp directory without config
 		tempDir := t.TempDir()
 		originalHome := os.Getenv("HOME")
 		os.Setenv("HOME", tempDir)
 		defer os.Setenv("HOME", originalHome)
 
-		// Build dotcor binary for testing (use system temp dir to avoid cleanup issues)
+		// Build dotcor binary for testing
 		systemTempDir := os.TempDir()
-		buildPath := filepath.Join(systemTempDir, "dotcor-test-notinit")
+		buildPath := filepath.Join(systemTempDir, "dotcor-test-status-notinit")
 		buildCmd := exec.Command("go", "build", "-o", buildPath, "github.com/justincordova/dotcor/cmd/dotcor")
 		output, err := buildCmd.CombinedOutput()
 		if err != nil {
@@ -48,16 +47,11 @@ func TestStatus_NotInitialized_ReturnsError(t *testing.T) {
 		t.Logf("stderr: %s", stderrStr)
 		t.Logf("stdout: %s", stdoutStr)
 
-		if err == nil {
-			t.Logf("Command succeeded unexpectedly - checking if it still shows init message")
-		}
-
 		require.Error(t, err, "status should fail when not initialized")
-		assert.Contains(t, stderrStr, "loading config", "should mention config error")
+		assert.Contains(t, stderrStr, "config file not found", "should mention config file missing")
 		assert.Contains(t, stderrStr, "dotcor init", "should suggest init command")
 	})
 }
-
 
 func TestStatus_ValidSymlink_ShowsOK(t *testing.T) {
 	t.Run("valid symlink shows ok status", func(t *testing.T) {
@@ -369,14 +363,4 @@ managed_files:
 		// Should show ahead status
 		assert.Contains(t, outputStr, "ahead of remote", "should show ahead status")
 	})
-}
-
-func runGit(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %v failed in %s: %v\noutput: %s", args, dir, err, string(output))
-	}
 }

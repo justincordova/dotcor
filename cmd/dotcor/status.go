@@ -42,10 +42,19 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	problemsOnly, _ := cmd.Flags().GetBool("problems")
 	jsonFormat, _ := cmd.Flags().GetBool("json")
 
+	// Check if initialized
+	configPath, err := config.GetConfigPath()
+	if err != nil {
+		return fmt.Errorf("getting config path: %w", err)
+	}
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		return fmt.Errorf("config file not found\nRun 'dotcor init' first")
+	}
+
 	// Load config
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		return fmt.Errorf("loading config: %w\nRun 'dotcor init' first", err)
+		return fmt.Errorf("loading config: %w", err)
 	}
 	configureLogger(cmd, cfg)
 
@@ -123,7 +132,7 @@ func collectStatus(cfg *config.Config) StatusReport {
 
 	// Check each file
 	for _, f := range files {
-		fs := checkFileStatus(cfg, f)
+		fs := CheckFileStatus(cfg, f)
 		report.Files = append(report.Files, fs)
 
 		if fs.Status == "ok" {
@@ -150,8 +159,8 @@ func collectStatus(cfg *config.Config) StatusReport {
 	return report
 }
 
-// checkFileStatus checks the status of a single managed file
-func checkFileStatus(cfg *config.Config, mf config.ManagedFile) FileStatus {
+// CheckFileStatus checks the status of a single managed file
+func CheckFileStatus(cfg *config.Config, mf config.ManagedFile) FileStatus {
 	status := FileStatus{
 		SourcePath: mf.SourcePath,
 		RepoPath:   mf.RepoPath,

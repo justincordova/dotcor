@@ -86,7 +86,7 @@ func LoadConfig() (*Config, error) {
 
 	// Check if config file exists
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		// Return default config
+		// Return default config (not initialized)
 		return NewDefaultConfig()
 	}
 
