@@ -247,3 +247,49 @@ func TestTransactionExecuteAll(t *testing.T) {
 	assert.NoError(t, err, "ExecuteAll should succeed")
 	assert.FileExists(t, dst, "ExecuteAll should have created dest file")
 }
+
+func TestTransactionRollback_UndoAll(t *testing.T) {
+	// Arrange
+	cfg := &config.Config{Logger: slog.Default()}
+	tx := NewTransaction(cfg)
+
+	op1 := &mockOperation{}
+	op2 := &mockOperation{}
+	op3 := &mockOperation{}
+
+	tx.Execute(op1)
+	tx.Execute(op2)
+	tx.Execute(op3)
+
+	// Act
+	err := tx.Rollback()
+
+	// Assert
+	assert.NoError(t, err, "Rollback should succeed")
+	assert.Equal(t, 1, op1.undoCalls, "op1.Undo() should be called once")
+	assert.Equal(t, 1, op2.undoCalls, "op2.Undo() should be called once")
+	assert.Equal(t, 1, op3.undoCalls, "op3.Undo() should be called once")
+}
+
+func TestTransactionRollback_PartialFailure(t *testing.T) {
+	// Arrange
+	cfg := &config.Config{Logger: slog.Default()}
+	tx := NewTransaction(cfg)
+
+	op1 := &mockOperation{undoErr: nil}
+	op2 := &mockOperation{undoErr: errors.New("undo failed")}
+	op3 := &mockOperation{undoErr: nil}
+
+	tx.Execute(op1)
+	tx.Execute(op2)
+	tx.Execute(op3)
+
+	// Act
+	err := tx.Rollback()
+
+	// Assert
+	assert.Error(t, err, "Rollback should return error when undo fails")
+	assert.Equal(t, 0, op1.undoCalls, "op1.Undo() should not be called (stops at op2 failure)")
+	assert.Equal(t, 1, op2.undoCalls, "op2.Undo() should be called and fail")
+	assert.Equal(t, 1, op3.undoCalls, "op3.Undo() should be called first")
+}

@@ -248,3 +248,35 @@ func TestRunHook_EmptyRepoPath(t *testing.T) {
 		assert.NoError(t, err, "RunHook() with empty repo path should return nil")
 	})
 }
+
+func TestRunHook_EnvironmentVariables_PassedToHook(t *testing.T) {
+	// Arrange
+	tempDir, err := os.MkdirTemp("", "dotcor-hooks-test-*")
+	require.NoError(t, err, "failed to create temp dir")
+	defer os.RemoveAll(tempDir)
+
+	dotcorDir := filepath.Join(tempDir, ".dotcor")
+	hooksDir := filepath.Join(dotcorDir, "hooks")
+	require.NoError(t, os.MkdirAll(hooksDir, 0755), "failed to create hooks directory")
+
+	hookPath := filepath.Join(hooksDir, "test-hook")
+	hookContent := "#!/bin/bash\n[ \"$DOTCOR_HOOK\" = \"test-hook\" ] && [ \"$DOTCOR_FILE\" = \"/test/file\" ] && [ \"$DOTCOR_REPO_PATH\" = \"/repo/path\" ]\n"
+	require.NoError(t, os.WriteFile(hookPath, []byte(hookContent), 0755), "failed to create hook")
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", oldHome)
+
+	ctx := HookContext{
+		HookType: "test-hook",
+		FilePath: "/test/file",
+		RepoPath: "/repo/path",
+	}
+	cfg := testConfig()
+
+	// Act
+	err = RunHook(ctx, cfg)
+
+	// Assert
+	assert.NoError(t, err, "RunHook() should pass environment variables to hook")
+}

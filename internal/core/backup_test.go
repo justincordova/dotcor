@@ -218,3 +218,75 @@ func TestCleanupCandidate(t *testing.T) {
 	assert.Equal(t, "/some/path", candidate.Path, "CleanupCandidate.Path not set correctly")
 	assert.Equal(t, int64(1024), candidate.Size, "CleanupCandidate.Size not set correctly")
 }
+
+func TestCreateBackup_LargeFile(t *testing.T) {
+	// Arrange
+	tempDir := t.TempDir()
+
+	var buf bytes.Buffer
+	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	})
+	logger := slog.New(handler)
+
+	cfg := &config.Config{
+		Logger:   logger,
+		RepoPath: t.TempDir(),
+	}
+
+	sourceContent := make([]byte, 1024*1024)
+	for i := range sourceContent {
+		sourceContent[i] = byte(i % 256)
+	}
+	sourceFile := filepath.Join(tempDir, "large_source.txt")
+	err := os.WriteFile(sourceFile, sourceContent, 0644)
+	require.NoError(t, err, "failed to create source file")
+
+	// Act
+	backupPath, err := CreateBackup(sourceFile, cfg)
+
+	// Assert
+	require.NoError(t, err, "CreateBackup() should not error for large file")
+
+	backupContent, err := os.ReadFile(backupPath)
+	require.NoError(t, err, "failed to read backup file")
+
+	assert.Equal(t, len(sourceContent), len(backupContent), "CreateBackup() large file content length mismatch")
+	assert.Equal(t, sourceContent, backupContent, "CreateBackup() large file content mismatch")
+}
+
+func TestRestoreBackup_OverwritesExisting(t *testing.T) {
+	// Arrange
+	tempDir := t.TempDir()
+
+	var buf bytes.Buffer
+	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	})
+	logger := slog.New(handler)
+
+	cfg := &config.Config{
+		Logger:   logger,
+		RepoPath: t.TempDir(),
+	}
+
+	backupContent := []byte("backup content")
+	backupFile := filepath.Join(tempDir, "backup.txt")
+	err := os.WriteFile(backupFile, backupContent, 0644)
+	require.NoError(t, err, "failed to create backup file")
+
+	targetFile := filepath.Join(tempDir, "target.txt")
+	err = os.WriteFile(targetFile, []byte("original content"), 0644)
+	require.NoError(t, err, "failed to create target file")
+
+	// Act
+	err = RestoreBackup(backupFile, targetFile, cfg)
+
+	// Assert
+	require.NoError(t, err, "RestoreBackup() should not error")
+
+	targetContent, err := os.ReadFile(targetFile)
+	require.NoError(t, err, "failed to read target file")
+
+	assert.Equal(t, string(backupContent), string(targetContent), "RestoreBackup() should overwrite existing file")
+}
