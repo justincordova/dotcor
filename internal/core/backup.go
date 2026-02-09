@@ -226,16 +226,6 @@ func ListBackups(cfg *config.Config) ([]BackupInfo, error) {
 	return backups, nil
 }
 
-// findPathSeparator finds the first path separator in a string
-func findPathSeparator(s string) int {
-	for i, c := range s {
-		if c == '/' || c == filepath.Separator {
-			return i
-		}
-	}
-	return -1
-}
-
 // CleanupCandidate represents a backup directory that can be cleaned up
 type CleanupCandidate struct {
 	Path      string
