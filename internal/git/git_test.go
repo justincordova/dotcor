@@ -169,6 +169,57 @@ func TestSetRemote(t *testing.T) {
 	assert.Equal(t, newURL, url, "GetRemoteURL() should return updated remote URL")
 }
 
+func TestSetRemote_CreatesNew(t *testing.T) {
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
+
+	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
+	require.NoError(t, err, "failed to create temp dir")
+	defer os.RemoveAll(tempDir)
+
+	err = InitRepo(tempDir)
+	require.NoError(t, err, "InitRepo() should not error")
+
+	testURL := "https://github.com/test/repo.git"
+
+	// Act
+	err = SetRemote(tempDir, "origin", testURL)
+
+	// Assert
+	require.NoError(t, err, "SetRemote() should not error when creating new remote")
+
+	url, err := GetRemoteURL(tempDir)
+	require.NoError(t, err, "GetRemoteURL() should not error")
+	assert.Equal(t, testURL, url, "SetRemote() should create new remote with correct URL")
+}
+
+func TestSetRemote_UpdatesExisting(t *testing.T) {
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
+
+	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
+	require.NoError(t, err, "failed to create temp dir")
+	defer os.RemoveAll(tempDir)
+
+	err = InitRepo(tempDir)
+	require.NoError(t, err, "InitRepo() should not error")
+
+	originalURL := "https://github.com/test/original.git"
+	err = SetRemote(tempDir, "origin", originalURL)
+	require.NoError(t, err, "SetRemote() should not error")
+
+	updatedURL := "https://github.com/test/updated.git"
+
+	// Act
+	err = SetRemote(tempDir, "origin", updatedURL)
+
+	// Assert
+	require.NoError(t, err, "SetRemote() should not error when updating existing remote")
+
+	url, err := GetRemoteURL(tempDir)
+	require.NoError(t, err, "GetRemoteURL() should not error")
+	assert.Equal(t, updatedURL, url, "SetRemote() should update remote URL")
+	assert.NotEqual(t, originalURL, url, "SetRemote() should have changed the URL")
+}
+
 func TestGetFileHistory(t *testing.T) {
 	require.True(t, IsGitInstalled(), "git must be installed for this test")
 
@@ -354,4 +405,162 @@ func configureGitUser(t *testing.T, repoPath string) {
 	cmd.Dir = repoPath
 	err = cmd.Run()
 	require.NoError(t, err, "failed to configure git user.name")
+}
+
+func TestGetConfig_ReturnsValue(t *testing.T) {
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
+
+	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
+	require.NoError(t, err, "failed to create temp dir")
+	defer os.RemoveAll(tempDir)
+
+	err = InitRepo(tempDir)
+	require.NoError(t, err, "InitRepo() should not error")
+
+	configureGitUser(t, tempDir)
+
+	// Act
+	value, err := GetConfig(tempDir, "user.name")
+
+	// Assert
+	require.NoError(t, err, "GetConfig() should not error")
+	assert.Equal(t, "Test User", value, "GetConfig() should return configured value")
+}
+
+func TestSetConfig_SetsValue(t *testing.T) {
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
+
+	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
+	require.NoError(t, err, "failed to create temp dir")
+	defer os.RemoveAll(tempDir)
+
+	err = InitRepo(tempDir)
+	require.NoError(t, err, "InitRepo() should not error")
+
+	// Act
+	err = SetConfig(tempDir, "user.name", "Custom User")
+
+	// Assert
+	require.NoError(t, err, "SetConfig() should not error")
+
+	value, err := GetConfig(tempDir, "user.name")
+	require.NoError(t, err, "GetConfig() should not error")
+	assert.Equal(t, "Custom User", value, "SetConfig() should set the value")
+}
+
+func TestStageFile_StageCorrectFile(t *testing.T) {
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
+
+	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
+	require.NoError(t, err, "failed to create temp dir")
+	defer os.RemoveAll(tempDir)
+
+	err = InitRepo(tempDir)
+	require.NoError(t, err, "InitRepo() should not error")
+
+	testFile := filepath.Join(tempDir, "test.txt")
+	err = os.WriteFile(testFile, []byte("content"), 0644)
+	require.NoError(t, err, "failed to create test file")
+
+	// Act
+	err = StageFile(tempDir, "test.txt")
+
+	// Assert
+	require.NoError(t, err, "StageFile() should not error")
+
+	changed, err := HasChanges(tempDir)
+	require.NoError(t, err, "HasChanges() should not error")
+	assert.True(t, changed, "StageFile() should stage file (changes still pending commit)")
+}
+
+func TestUnstageFile_UnstagesFile(t *testing.T) {
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
+
+	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
+	require.NoError(t, err, "failed to create temp dir")
+	defer os.RemoveAll(tempDir)
+
+	err = InitRepo(tempDir)
+	require.NoError(t, err, "InitRepo() should not error")
+
+	configureGitUser(t, tempDir)
+
+	initialFile := filepath.Join(tempDir, "initial.txt")
+	err = os.WriteFile(initialFile, []byte("initial"), 0644)
+	require.NoError(t, err, "failed to create initial file")
+
+	err = AutoCommit(tempDir, "initial commit")
+	require.NoError(t, err, "AutoCommit() should not error")
+
+	modifiedFile := filepath.Join(tempDir, "modified.txt")
+	err = os.WriteFile(modifiedFile, []byte("modified"), 0644)
+	require.NoError(t, err, "failed to create modified file")
+
+	err = StageFile(tempDir, "modified.txt")
+	require.NoError(t, err, "StageFile() should not error")
+
+	// Act
+	err = UnstageFile(tempDir, "modified.txt")
+
+	// Assert
+	require.NoError(t, err, "UnstageFile() should not error")
+
+	changed, err := HasChanges(tempDir)
+	require.NoError(t, err, "HasChanges() should not error")
+	assert.True(t, changed, "UnstageFile() should unstage the file (changes should be uncommitted)")
+}
+
+func TestPull_FetchesAndMerges(t *testing.T) {
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
+
+	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
+	require.NoError(t, err, "failed to create temp dir")
+	defer os.RemoveAll(tempDir)
+
+	err = InitRepo(tempDir)
+	require.NoError(t, err, "InitRepo() should not error")
+
+	configureGitUser(t, tempDir)
+
+	testFile := filepath.Join(tempDir, "test.txt")
+	err = os.WriteFile(testFile, []byte("content"), 0644)
+	require.NoError(t, err, "failed to create test file")
+
+	err = AutoCommit(tempDir, "initial commit")
+	require.NoError(t, err, "AutoCommit() should not error")
+
+	// Act
+	err = Pull(tempDir)
+
+	// Assert
+	assert.Error(t, err, "Pull() should error when no remote is configured")
+	assert.Contains(t, err.Error(), "no tracking information", "Pull() error should indicate no tracking information")
+}
+
+func TestGetCurrentCommit_ReturnsHash(t *testing.T) {
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
+
+	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
+	require.NoError(t, err, "failed to create temp dir")
+	defer os.RemoveAll(tempDir)
+
+	err = InitRepo(tempDir)
+	require.NoError(t, err, "InitRepo() should not error")
+
+	configureGitUser(t, tempDir)
+
+	testFile := filepath.Join(tempDir, "test.txt")
+	err = os.WriteFile(testFile, []byte("content"), 0644)
+	require.NoError(t, err, "failed to create test file")
+
+	err = AutoCommit(tempDir, "test commit")
+	require.NoError(t, err, "AutoCommit() should not error")
+
+	// Act
+	commit, err := GetCurrentCommit(tempDir)
+
+	// Assert
+	require.NoError(t, err, "GetCurrentCommit() should not error")
+	assert.NotEmpty(t, commit, "GetCurrentCommit() should return non-empty hash")
+	assert.Len(t, commit, 40, "GetCurrentCommit() should return 40-character hash")
 }
