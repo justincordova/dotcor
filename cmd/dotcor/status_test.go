@@ -1,46 +1,77 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/justincordova/dotcor/internal/config"
+	"github.com/justincordova/dotcor/internal/git"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStatus_NotInitialized_ReturnsError(t *testing.T) {
 	t.Run("no config returns error", func(t *testing.T) {
 		// Arrange
 		// Create temp directory without config
-		cfg := CreateTestConfig(t)
-		cfg.ManagedFiles = []config.ManagedFile{}
+		tempDir := t.TempDir()
+		originalHome := os.Getenv("HOME")
+		os.Setenv("HOME", tempDir)
+		defer os.Setenv("HOME", originalHome)
 
-		// Act
-		// Call status command
-		status := collectStatus(cfg)
+		// Build dotcor binary for testing (use system temp dir to avoid cleanup issues)
+		systemTempDir := os.TempDir()
+		buildPath := filepath.Join(systemTempDir, "dotcor-test-notinit")
+		buildCmd := exec.Command("go", "build", "-o", buildPath, "github.com/justincordova/dotcor/cmd/dotcor")
+		output, err := buildCmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("building test binary failed: %v\noutput: %s", err, string(output))
+		}
+		defer os.Remove(buildPath)
+
+		// Act - Run status command without init
+		var stdout, stderr bytes.Buffer
+		cmd := exec.Command(buildPath, "status")
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		cmd.Env = append(os.Environ(), fmt.Sprintf("HOME=%s", tempDir))
+		err = cmd.Run()
 
 		// Assert
-		// Verify no files are managed
-		if status.Statistics.TotalFiles != 0 {
-			t.Errorf("expected 0 total files, got %d", status.Statistics.TotalFiles)
+		stderrStr := stderr.String()
+		stdoutStr := stdout.String()
+		t.Logf("Command exit code: %v", err)
+		t.Logf("stderr: %s", stderrStr)
+		t.Logf("stdout: %s", stdoutStr)
+
+		if err == nil {
+			t.Logf("Command succeeded unexpectedly - checking if it still shows init message")
 		}
+
+		require.Error(t, err, "status should fail when not initialized")
+		assert.Contains(t, stderrStr, "loading config", "should mention config error")
+		assert.Contains(t, stderrStr, "dotcor init", "should suggest init command")
 	})
 }
+
 
 func TestStatus_ValidSymlink_ShowsOK(t *testing.T) {
 	t.Run("valid symlink shows ok status", func(t *testing.T) {
 		// Arrange
 		tempDir := t.TempDir()
+		configDir := filepath.Join(tempDir, ".dotcor")
+		filesDir := filepath.Join(configDir, "files")
 		homeDir := filepath.Join(tempDir, "home")
-		repoDir := filepath.Join(tempDir, "repo")
 		sourcePath := filepath.Join(homeDir, ".zshrc")
-		repoFile := filepath.Join(repoDir, "shell", "zshrc")
+		repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
 		// Create directories
+		os.MkdirAll(filesDir, 0755)
 		os.MkdirAll(homeDir, 0755)
-		os.MkdirAll(filepath.Dir(repoFile), 0755)
 
 		// Create repo file
 		CreateTestFile(t, repoFile, "test content")
@@ -49,29 +80,46 @@ func TestStatus_ValidSymlink_ShowsOK(t *testing.T) {
 		relPath, _ := filepath.Rel(filepath.Dir(sourcePath), repoFile)
 		os.Symlink(relPath, sourcePath)
 
-		cfg := &config.Config{
-			RepoPath:   repoDir,
-			GitEnabled: false,
-			Logger:     CreateTestConfig(t).Logger,
+		// Create config file
+		configPath := filepath.Join(configDir, "config.yaml")
+		configContent := fmt.Sprintf(`version: "1.0"
+repo_path: %s
+git_enabled: false
+managed_files:
+  - source_path: %s
+    repo_path: shell/zshrc
+    added_at: "%s"
+`, filesDir, sourcePath, time.Now().Format(time.RFC3339))
+		err := os.WriteFile(configPath, []byte(configContent), 0644)
+		require.NoError(t, err)
+
+		// Build dotcor binary
+		buildPath := filepath.Join(tempDir, "dotcor-test")
+		buildCmd := exec.Command("go", "build", "-o", buildPath, "github.com/justincordova/dotcor/cmd/dotcor")
+		output, err := buildCmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("building test binary failed: %v\noutput: %s", err, string(output))
 		}
 
-		now := time.Now()
-		cfg.ManagedFiles = []config.ManagedFile{
-			{
-				SourcePath: sourcePath,
-				RepoPath:   "shell/zshrc",
-				AddedAt:    now,
-			},
-		}
-
-		// Act
-		status := collectStatus(cfg)
+		// Act - Run status command
+		var stdout, stderr bytes.Buffer
+		cmd := exec.Command(buildPath, "status")
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		cmd.Env = append(os.Environ(), fmt.Sprintf("HOME=%s", tempDir))
+		err = cmd.Run()
 
 		// Assert
-		assert.Equal(t, 1, status.Statistics.TotalFiles)
-		assert.Equal(t, 1, status.Statistics.HealthyFiles)
-		assert.Equal(t, 0, status.Statistics.ProblematicFiles)
-		assert.Equal(t, "ok", status.Files[0].Status)
+		stderrStr := stderr.String()
+		stdoutStr := stdout.String()
+		if err != nil {
+			t.Logf("Command failed with exit code: %v", err)
+			t.Logf("stderr: %s", stderrStr)
+			t.Logf("stdout: %s", stdoutStr)
+		}
+		require.NoError(t, err, "status command should succeed")
+		assert.Contains(t, stdoutStr, "Summary: 1 files managed", "should show 1 file managed")
+		assert.Contains(t, stdoutStr, ".zshrc", "should show managed file")
 	})
 }
 
@@ -79,100 +127,256 @@ func TestStatus_BrokenSymlink_ShowsError(t *testing.T) {
 	t.Run("missing repo file shows error status", func(t *testing.T) {
 		// Arrange
 		tempDir := t.TempDir()
+		configDir := filepath.Join(tempDir, ".dotcor")
+		filesDir := filepath.Join(configDir, "files")
 		homeDir := filepath.Join(tempDir, "home")
-		repoDir := filepath.Join(tempDir, "repo")
 		sourcePath := filepath.Join(homeDir, ".zshrc")
-		repoFile := filepath.Join(repoDir, "shell", "zshrc")
+		repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
 		// Create directories
+		os.MkdirAll(filesDir, 0755)
 		os.MkdirAll(homeDir, 0755)
-		os.MkdirAll(filepath.Dir(repoFile), 0755)
 
-		// Create valid symlink
+		// Create symlink pointing to non-existent repo file
 		relPath, _ := filepath.Rel(filepath.Dir(sourcePath), repoFile)
 		os.Symlink(relPath, sourcePath)
 		// Don't create repo file - this simulates missing repo
 
-		cfg := &config.Config{
-			RepoPath:   repoDir,
-			GitEnabled: false,
-			Logger:     CreateTestConfig(t).Logger,
+		// Create config file
+		configPath := filepath.Join(configDir, "config.yaml")
+		configContent := fmt.Sprintf(`version: "1.0"
+repo_path: %s
+git_enabled: false
+managed_files:
+  - source_path: %s
+    repo_path: shell/zshrc
+    added_at: "%s"
+`, filesDir, sourcePath, time.Now().Format(time.RFC3339))
+		err := os.WriteFile(configPath, []byte(configContent), 0644)
+		require.NoError(t, err)
+
+		// Build dotcor binary
+		buildPath := filepath.Join(tempDir, "dotcor-test")
+		buildCmd := exec.Command("go", "build", "-o", buildPath, "github.com/justincordova/dotcor/cmd/dotcor")
+		output, err := buildCmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("building test binary failed: %v\noutput: %s", err, string(output))
 		}
 
-		now := time.Now()
-		cfg.ManagedFiles = []config.ManagedFile{
-			{
-				SourcePath: sourcePath,
-				RepoPath:   "shell/zshrc",
-				AddedAt:    now,
-			},
-		}
-
-		// Act
-		status := collectStatus(cfg)
+		// Act - Run status command
+		var stdout, stderr bytes.Buffer
+		cmd := exec.Command(buildPath, "status")
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		cmd.Env = append(os.Environ(), fmt.Sprintf("HOME=%s", tempDir))
+		err = cmd.Run()
 
 		// Assert
-		assert.Equal(t, 1, status.Statistics.TotalFiles)
-		assert.Equal(t, 0, status.Statistics.HealthyFiles)
-		assert.Equal(t, 1, status.Statistics.ProblematicFiles)
-		assert.Equal(t, "missing-repo", status.Files[0].Status)
-		assert.NotEmpty(t, status.Files[0].Problem)
+		stderrStr := stderr.String()
+		stdoutStr := stdout.String()
+		if err != nil {
+			t.Logf("Command failed with exit code: %v", err)
+			t.Logf("stderr: %s", stderrStr)
+			t.Logf("stdout: %s", stdoutStr)
+		}
+		require.NoError(t, err, "status command should succeed")
+		assert.Contains(t, stdoutStr, "Summary: 1 files managed, 1 with issues", "should show 1 file with issues")
+		assert.Contains(t, stdoutStr, ".zshrc", "should show problematic file")
+		assert.Contains(t, stdoutStr, "missing from repository", "should show missing-repo problem")
 	})
 }
 
 func TestStatus_UncommittedChanges_ShowsWarning(t *testing.T) {
 	t.Run("uncommitted files show in output", func(t *testing.T) {
 		// Arrange
-		cfg := CreateTestConfig(t)
-		now := time.Now()
+		tempDir := t.TempDir()
+		configDir := filepath.Join(tempDir, ".dotcor")
+		filesDir := filepath.Join(configDir, "files")
+		homeDir := filepath.Join(tempDir, "home")
+		sourcePath := filepath.Join(homeDir, ".zshrc")
+		repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
-		// Create managed files with uncommitted changes
-		cfg.ManagedFiles = []config.ManagedFile{
-			{
-				SourcePath:     "~/.zshrc",
-				RepoPath:       "shell/zshrc",
-				AddedAt:        now,
-				HasUncommitted: true,
-			},
-			{
-				SourcePath:     "~/.vimrc",
-				RepoPath:       "editor/vimrc",
-				AddedAt:        now,
-				HasUncommitted: true,
-			},
+		// Create directories
+		os.MkdirAll(filesDir, 0755)
+		os.MkdirAll(homeDir, 0755)
+
+		// Create repo file
+		CreateTestFile(t, repoFile, "test content")
+
+		// Create valid symlink
+		relPath, _ := filepath.Rel(filepath.Dir(sourcePath), repoFile)
+		os.Symlink(relPath, sourcePath)
+
+		// Create config file with uncommitted files
+		configPath := filepath.Join(configDir, "config.yaml")
+		configContent := fmt.Sprintf(`version: "1.0"
+repo_path: %s
+git_enabled: false
+managed_files:
+  - source_path: %s
+    repo_path: shell/zshrc
+    added_at: "%s"
+    has_uncommitted: true
+`, filesDir, sourcePath, time.Now().Format(time.RFC3339))
+		err := os.WriteFile(configPath, []byte(configContent), 0644)
+		require.NoError(t, err)
+
+		// Build dotcor binary
+		buildPath := filepath.Join(tempDir, "dotcor-test")
+		buildCmd := exec.Command("go", "build", "-o", buildPath, "github.com/justincordova/dotcor/cmd/dotcor")
+		output, err := buildCmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("building test binary failed: %v\noutput: %s", err, string(output))
 		}
 
-		// Act
-		uncommittedFiles := cfg.GetUncommittedFiles()
+		// Act - Run status command
+		var stdout, stderr bytes.Buffer
+		cmd := exec.Command(buildPath, "status")
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		cmd.Env = append(os.Environ(), fmt.Sprintf("HOME=%s", tempDir))
+		err = cmd.Run()
 
 		// Assert
-		assert.Equal(t, 2, len(uncommittedFiles))
-		assert.Contains(t, uncommittedFiles[0].SourcePath, ".zshrc")
-		assert.Contains(t, uncommittedFiles[1].SourcePath, ".vimrc")
+		stderrStr := stderr.String()
+		stdoutStr := stdout.String()
+		if err != nil {
+			t.Logf("Command failed with exit code: %v", err)
+			t.Logf("stderr: %s", stderrStr)
+			t.Logf("stdout: %s", stdoutStr)
+		}
+		require.NoError(t, err, "status command should succeed")
+		assert.Contains(t, stdoutStr, "Uncommitted Files:", "should show uncommitted files section")
+		assert.Contains(t, stdoutStr, ".zshrc", "should list uncommitted file")
+		assert.Contains(t, stdoutStr, "dotcor sync", "should suggest sync command")
 	})
 }
 
 func TestStatus_GitAheadBehind_ShowsCounts(t *testing.T) {
 	t.Run("git status shows ahead/behind counts", func(t *testing.T) {
-		// Arrange
-		cfg := CreateTestConfig(t)
-		now := time.Now()
-		cfg.ManagedFiles = []config.ManagedFile{
-			{
-				SourcePath: "~/.zshrc",
-				RepoPath:   "shell/zshrc",
-				AddedAt:    now,
-			},
+		if !git.IsGitInstalled() {
+			t.Skip("git not installed, skipping test")
 		}
 
-		// Act
-		status := collectStatus(cfg)
+		// Arrange - Create two git repos to simulate ahead/behind
+		tempDir := t.TempDir()
+		remoteDir := filepath.Join(tempDir, "remote")
+		localDir := filepath.Join(tempDir, "local")
+		configDir := filepath.Join(localDir, ".dotcor")
+		filesDir := filepath.Join(configDir, "files")
+		homeDir := filepath.Join(localDir, "home")
+		sourcePath := filepath.Join(homeDir, ".zshrc")
+		repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
-		// Assert
-		// Without actual git repo, should show empty git status
-		assert.False(t, status.GitStatus.IsRepo)
-		assert.Equal(t, "", status.GitStatus.Branch)
-		assert.Equal(t, 0, status.GitStatus.AheadBy)
-		assert.Equal(t, 0, status.GitStatus.BehindBy)
+		// Create remote repo
+		os.MkdirAll(remoteDir, 0755)
+		runGit(t, remoteDir, "init")
+		runGit(t, remoteDir, "config", "user.email", "test@example.com")
+		runGit(t, remoteDir, "config", "user.name", "Test User")
+		runGit(t, remoteDir, "checkout", "-b", "main")
+
+		// Create local repo and add remote
+		os.MkdirAll(localDir, 0755)
+		os.MkdirAll(filesDir, 0755)
+		os.MkdirAll(homeDir, 0755)
+		runGit(t, filesDir, "init")
+		runGit(t, filesDir, "config", "user.email", "test@example.com")
+		runGit(t, filesDir, "config", "user.name", "Test User")
+		runGit(t, filesDir, "checkout", "-b", "main")
+		runGit(t, filesDir, "remote", "add", "origin", remoteDir)
+
+		// Create a file and commit in remote
+		remoteFile := filepath.Join(remoteDir, "test.txt")
+		CreateTestFile(t, remoteFile, "remote content")
+		runGit(t, remoteDir, "add", "test.txt")
+		runGit(t, remoteDir, "commit", "-m", "Initial commit")
+
+		// Create an initial commit in local repo so we can set up tracking
+		localFile := filepath.Join(filesDir, "local.txt")
+		CreateTestFile(t, localFile, "local content")
+		runGit(t, filesDir, "add", "local.txt")
+		runGit(t, filesDir, "commit", "-m", "Local initial commit")
+		// Fetch in local repo and set up tracking
+		runGit(t, filesDir, "fetch", "origin")
+		runGit(t, filesDir, "branch", "--set-upstream-to=origin/main", "main")
+		// Create managed file in local repo
+		CreateTestFile(t, repoFile, "test content")
+		relPath, _ := filepath.Rel(filepath.Dir(sourcePath), repoFile)
+		os.Symlink(relPath, sourcePath)
+
+		// Fetch from remote so we can be behind
+		runGit(t, filesDir, "fetch", "origin")
+
+		// Create config
+		configPath := filepath.Join(configDir, "config.yaml")
+		configContent := fmt.Sprintf(`version: "1.0"
+repo_path: %s
+git_enabled: true
+managed_files:
+  - source_path: %s
+    repo_path: shell/zshrc
+    added_at: "%s"
+`, filesDir, sourcePath, time.Now().Format(time.RFC3339))
+		err := os.WriteFile(configPath, []byte(configContent), 0644)
+		require.NoError(t, err)
+
+		// Build dotcor binary
+		buildPath := filepath.Join(tempDir, "dotcor-test")
+		buildCmd := exec.Command("go", "build", "-o", buildPath, "github.com/justincordova/dotcor/cmd/dotcor")
+		output, err := buildCmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("building test binary failed: %v\noutput: %s", err, string(output))
+		}
+
+		// Test 1: Behind by 1 commit (local needs to pull)
+		var stdout, stderr bytes.Buffer
+		cmd := exec.Command(buildPath, "status")
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		cmd.Env = append(os.Environ(), fmt.Sprintf("HOME=%s", localDir))
+		err = cmd.Run()
+		if err != nil {
+			t.Logf("Test 1 failed with exit code: %v", err)
+			t.Logf("Test 1 stderr: %s", stderr.String())
+			t.Logf("Test 1 stdout: %s", stdout.String())
+		}
+		require.NoError(t, err)
+		outputStr := stdout.String()
+
+		// Should show behind status
+		assert.Contains(t, outputStr, "behind remote", "should show behind status")
+
+		// Test 2: Ahead by 1 commit (local needs to push)
+		// Commit in local repo
+		runGit(t, filesDir, "add", ".")
+		runGit(t, filesDir, "commit", "-m", "Local commit")
+
+		// Run status again
+		stdout.Reset()
+		cmd = exec.Command(buildPath, "status")
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		cmd.Env = append(os.Environ(), fmt.Sprintf("HOME=%s", localDir))
+		err = cmd.Run()
+		if err != nil {
+			t.Logf("Test 2 failed with exit code: %v", err)
+			t.Logf("Test 2 stderr: %s", stderr.String())
+			t.Logf("Test 2 stdout: %s", stdout.String())
+		}
+		require.NoError(t, err)
+		outputStr = stdout.String()
+
+		// Should show ahead status
+		assert.Contains(t, outputStr, "ahead of remote", "should show ahead status")
 	})
+}
+
+func runGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v failed in %s: %v\noutput: %s", args, dir, err, string(output))
+	}
 }
