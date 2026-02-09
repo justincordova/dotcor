@@ -3,6 +3,7 @@ package main
 import (
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -22,6 +23,46 @@ func CreateTestConfig(t *testing.T) *config.Config {
 		GitEnabled:     false, // Disable git for most command tests
 		IgnorePatterns: []string{},
 		ManagedFiles:   []config.ManagedFile{},
+	}
+}
+
+// CreateTestConfigWithGit creates a test config with temp directory and initialized git repo
+func CreateTestConfigWithGit(t *testing.T, dir string) *config.Config {
+	t.Helper()
+
+	filesDir := filepath.Join(dir, ".dotcor", "files")
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+	// Create directory and initialize git
+	os.MkdirAll(filesDir, 0755)
+	runGit(t, filesDir, "init")
+	runGit(t, filesDir, "config", "user.email", "test@example.com")
+	runGit(t, filesDir, "config", "user.name", "Test User")
+	runGit(t, filesDir, "checkout", "-b", "main")
+
+	// Create initial commit
+	testFile := filepath.Join(filesDir, "test.txt")
+	os.WriteFile(testFile, []byte("initial content"), 0644)
+	runGit(t, filesDir, "add", "test.txt")
+	runGit(t, filesDir, "commit", "-m", "Initial commit")
+
+	return &config.Config{
+		Logger:         logger,
+		RepoPath:       filesDir,
+		GitEnabled:     true,
+		IgnorePatterns: []string{},
+		ManagedFiles:   []config.ManagedFile{},
+	}
+}
+
+// runGit executes git commands in a directory
+func runGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v failed in %s: %v\noutput: %s", args, dir, err, string(output))
 	}
 }
 
