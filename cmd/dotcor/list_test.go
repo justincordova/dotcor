@@ -67,7 +67,7 @@ func TestList_SingleFile_DisplaysCorrectly(t *testing.T) {
 		}
 
 		// Act - call the actual outputSimple function
-		files := cfg.GetManagedFilesForPlatform()
+		files := cfg.ManagedFiles
 		oldStdout := os.Stdout
 		r, w, _ := os.Pipe()
 		os.Stdout = w
@@ -105,7 +105,7 @@ func TestList_MultipleFiles_DisplaysInTable(t *testing.T) {
 		}
 
 		// Act - call the actual outputLong function
-		files := cfg.GetManagedFilesForPlatform()
+		files := cfg.ManagedFiles
 		oldStdout := os.Stdout
 		r, w, _ := os.Pipe()
 		os.Stdout = w
@@ -163,7 +163,7 @@ func TestList_UncommittedFile_ShowsWarning(t *testing.T) {
 		}
 
 		// Act - call the actual outputLong function with showStatus=true
-		files := cfg.GetManagedFilesForPlatform()
+		files := cfg.ManagedFiles
 		oldStdout := os.Stdout
 		r, w, _ := os.Pipe()
 		os.Stdout = w
