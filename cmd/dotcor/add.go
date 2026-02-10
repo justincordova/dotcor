@@ -62,7 +62,11 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		if err := core.AcquireLock(cfg); err != nil {
 			return fmt.Errorf("acquiring lock: %w", err)
 		}
-		defer core.ReleaseLock(cfg)
+		defer func() {
+			if err := core.ReleaseLock(cfg); err != nil {
+				cfg.Logger.Error("failed to release lock", "error", err)
+			}
+		}()
 	}
 
 	// Expand glob patterns in args
@@ -130,16 +134,12 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	// Process each file
 	added := 0
 	skipped := 0
-	var gitFiles []string
 
 	for _, file := range files {
-		result, repoPath, err := processAddFile(cfg, file, category, force, isTemplate, dryRun)
+		result, _, err := processAddFile(cfg, file, category, force, isTemplate, dryRun)
 		switch result {
 		case addResultSuccess:
 			added++
-			if repoPath != "" {
-				gitFiles = append(gitFiles, repoPath)
-			}
 		case addResultSkipped:
 			skipped++
 		case addResultError:
@@ -379,13 +379,4 @@ func isWarning(err error) bool {
 	return strings.Contains(msg, "warning") ||
 		strings.Contains(msg, "large file") ||
 		strings.Contains(msg, "unusual permissions")
-}
-
-// formatCommitMessage creates a commit message for added files
-func formatCommitMessage(files []string) string {
-	if len(files) == 1 {
-		basename := filepath.Base(files[0])
-		return fmt.Sprintf("Add %s", basename)
-	}
-	return fmt.Sprintf("Add %d dotfiles", len(files))
 }

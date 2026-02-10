@@ -111,7 +111,11 @@ func runClone(cmd *cobra.Command, args []string) error {
 	// Acquire lock - may fail if directory is new, which is expected
 	lockErr := core.AcquireLock(cfg)
 	if lockErr == nil {
-		defer core.ReleaseLock(cfg)
+		defer func() {
+			if err := core.ReleaseLock(cfg); err != nil {
+				cfg.Logger.Error("failed to release lock", "error", err)
+			}
+		}()
 	}
 	// Note: Lock acquisition failure is expected when cloning to a new directory
 

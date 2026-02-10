@@ -60,7 +60,11 @@ func runRemove(cmd *cobra.Command, args []string) error {
 		if err := core.AcquireLock(cfg); err != nil {
 			return fmt.Errorf("acquiring lock: %w", err)
 		}
-		defer core.ReleaseLock(cfg)
+		defer func() {
+			if err := core.ReleaseLock(cfg); err != nil {
+				cfg.Logger.Error("failed to release lock", "error", err)
+			}
+		}()
 	}
 
 	// Determine which files to remove

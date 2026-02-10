@@ -131,7 +131,11 @@ func restoreFromGit(repoRoot, repoPath, fullRepoPath, ref string, preview, force
 	if err := core.AcquireLock(cfg); err != nil {
 		return fmt.Errorf("acquiring lock: %w", err)
 	}
-	defer core.ReleaseLock(cfg)
+	defer func() {
+		if err := core.ReleaseLock(cfg); err != nil {
+			cfg.Logger.Error("failed to release lock", "error", err)
+		}
+	}()
 
 	// Create backup of current version
 	backupPath, err := core.CreateBackup(fullRepoPath, cfg)
@@ -205,7 +209,11 @@ func restoreFromBackup(sourcePath, repoPath string, preview, force bool, cfg *co
 	if err := core.AcquireLock(cfg); err != nil {
 		return fmt.Errorf("acquiring lock: %w", err)
 	}
-	defer core.ReleaseLock(cfg)
+	defer func() {
+		if err := core.ReleaseLock(cfg); err != nil {
+			cfg.Logger.Error("failed to release lock", "error", err)
+		}
+	}()
 
 	// Restore from backup
 	if err := core.RestoreBackup(backup.BackupPath, repoPath, cfg); err != nil {

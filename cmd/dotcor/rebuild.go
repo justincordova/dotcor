@@ -196,7 +196,11 @@ func scanAndRebuild(cfg *config.Config, repoPath string, force bool) error {
 	if err := core.AcquireLock(cfg); err != nil {
 		return fmt.Errorf("acquiring lock: %w", err)
 	}
-	defer core.ReleaseLock(cfg)
+	defer func() {
+		if err := core.ReleaseLock(cfg); err != nil {
+			cfg.Logger.Error("failed to release lock", "error", err)
+		}
+	}()
 
 	// Add files to config
 	added := 0

@@ -80,7 +80,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if err := core.AcquireLock(defaultCfg); err != nil {
 		return fmt.Errorf("acquiring lock: %w", err)
 	}
-	defer core.ReleaseLock(defaultCfg)
+	defer func() {
+		if err := core.ReleaseLock(defaultCfg); err != nil {
+			defaultCfg.Logger.Error("failed to release lock", "error", err)
+		}
+	}()
 
 	// Create directory structure
 	filesDir := filepath.Join(configDir, "files")
@@ -344,7 +348,7 @@ func addFile(cfg *config.Config, sourcePath string, customRepoPath string, force
 
 	// Create backup
 	if _, err := core.CreateBackup(expanded, cfg); err != nil {
-		// Non-fatal, continue
+		cfg.Logger.Debug("failed to create backup (continuing anyway)", "error", err)
 	}
 
 	// Move file to repo
@@ -355,7 +359,9 @@ func addFile(cfg *config.Config, sourcePath string, customRepoPath string, force
 	// Create symlink
 	if err := fs.CreateSymlink(fullRepoPath, expanded, cfg); err != nil {
 		// Rollback: move file back
-		fs.MoveFile(fullRepoPath, expanded, cfg)
+		if moveErr := fs.MoveFile(fullRepoPath, expanded, cfg); moveErr != nil {
+			cfg.Logger.Error("failed to rollback file move", "error", moveErr)
+		}
 		return fmt.Errorf("creating symlink: %w", err)
 	}
 
