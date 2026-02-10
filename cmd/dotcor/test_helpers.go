@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/justincordova/dotcor/internal/config"
@@ -141,5 +144,114 @@ func AssertFileContent(t *testing.T, path, expectedContent string) {
 
 	if string(content) != expectedContent {
 		t.Errorf("file content mismatch\n  got: %q\n  want: %q", string(content), expectedContent)
+	}
+}
+
+// CreateTestSymlink creates a symlink pointing to target at link location
+func CreateTestSymlink(t *testing.T, target, link string) {
+	t.Helper()
+
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatalf("failed to create symlink from %s to %s: %v", link, target, err)
+	}
+}
+
+// AssertSymlinkPointsTo asserts that a symlink points to the expected target
+func AssertSymlinkPointsTo(t *testing.T, link, expectedTarget string) {
+	t.Helper()
+
+	target, err := os.Readlink(link)
+	if err != nil {
+		t.Fatalf("failed to read symlink %s: %v", link, err)
+	}
+
+	if target != expectedTarget {
+		t.Errorf("symlink %s points to %s, want %s", link, target, expectedTarget)
+	}
+}
+
+// RunCommand executes dotcor command with arguments and environment variables
+func RunCommand(t *testing.T, cmd, args string, env map[string]string) (stdout, stderr string, exitCode int) {
+	t.Helper()
+
+	binaryPath, err := os.Executable()
+	if err != nil {
+		t.Fatalf("failed to get executable path: %v", err)
+	}
+
+	command := exec.Command(binaryPath, args)
+
+	if env != nil {
+		for k, v := range env {
+			command.Env = append(command.Env, fmt.Sprintf("%s=%s", k, v))
+		}
+	}
+
+	var outBuf, errBuf bytes.Buffer
+	command.Stdout = &outBuf
+	command.Stderr = &errBuf
+
+	err = command.Run()
+	exitCode = 0
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		}
+	}
+
+	return outBuf.String(), errBuf.String(), exitCode
+}
+
+// CreateTestLogger creates a logger with a buffer for log capture in tests
+func CreateTestLogger(t *testing.T) (*slog.Logger, *bytes.Buffer) {
+	t.Helper()
+
+	var buf bytes.Buffer
+	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	})
+	logger := slog.New(handler)
+
+	return logger, &buf
+}
+
+// AssertLogContains asserts that log output contains expected message at specified level
+func AssertLogContains(t *testing.T, buf *bytes.Buffer, level, msg string) {
+	t.Helper()
+
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, level) {
+		t.Errorf("log output does not contain level %q\noutput: %s", level, logOutput)
+	}
+	if !strings.Contains(logOutput, msg) {
+		t.Errorf("log output does not contain message %q\noutput: %s", msg, logOutput)
+	}
+}
+
+// SetupGitRepo creates a test git repository at specified path
+func SetupGitRepo(t *testing.T, path string) {
+	t.Helper()
+
+	if err := os.MkdirAll(path, 0755); err != nil {
+		t.Fatalf("failed to create directory %s: %v", path, err)
+	}
+
+	runGit(t, path, "init")
+	runGit(t, path, "config", "user.email", "test@example.com")
+	runGit(t, path, "config", "user.name", "Test User")
+	runGit(t, path, "checkout", "-b", "main")
+}
+
+// CreateTestConfigFile creates a YAML config file with specified content
+func CreateTestConfigFile(t *testing.T, path, content string) {
+	t.Helper()
+
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to create config file: %v", err)
 	}
 }
