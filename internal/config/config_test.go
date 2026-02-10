@@ -41,56 +41,6 @@ func TestNewDefaultConfig(t *testing.T) {
 	assert.Empty(t, cfg.ManagedFiles, "ManagedFiles should be empty initially")
 }
 
-func TestShouldApplyOnPlatform(t *testing.T) {
-	tests := []struct {
-		name            string
-		platforms       []string
-		currentPlatform string
-		want            bool
-	}{
-		{
-			name:            "empty platforms means all",
-			platforms:       []string{},
-			currentPlatform: "darwin",
-			want:            true,
-		},
-		{
-			name:            "nil platforms means all",
-			platforms:       nil,
-			currentPlatform: "linux",
-			want:            true,
-		},
-		{
-			name:            "matching platform",
-			platforms:       []string{"darwin", "linux"},
-			currentPlatform: "darwin",
-			want:            true,
-		},
-		{
-			name:            "non-matching platform",
-			platforms:       []string{"darwin"},
-			currentPlatform: "linux",
-			want:            false,
-		},
-		{
-			name:            "wsl platform",
-			platforms:       []string{"wsl", "linux"},
-			currentPlatform: "wsl",
-			want:            true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Act
-			got := ShouldApplyOnPlatform(tt.platforms, tt.currentPlatform)
-
-			// Assert
-			assert.Equal(t, tt.want, got, "ShouldApplyOnPlatform()")
-		})
-	}
-}
-
 func TestConfigManagedFiles(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
@@ -112,7 +62,6 @@ func TestConfigManagedFiles(t *testing.T) {
 		SourcePath: "~/.zshrc",
 		RepoPath:   "shell/zshrc",
 		AddedAt:    time.Now(),
-		Platforms:  []string{},
 	}
 	cfg.ManagedFiles = append(cfg.ManagedFiles, mf)
 
@@ -124,45 +73,6 @@ func TestConfigManagedFiles(t *testing.T) {
 
 	_, err = cfg.GetManagedFile("~/.nonexistent")
 	assert.Error(t, err, "GetManagedFile() should return error for non-existent file")
-}
-
-func TestGetManagedFilesForPlatform(t *testing.T) {
-	// Arrange
-	cfg := &Config{
-		Version:    CurrentConfigVersion,
-		RepoPath:   "~/.dotcor/files",
-		GitEnabled: false,
-		ManagedFiles: []ManagedFile{
-			{
-				SourcePath: "~/.zshrc",
-				RepoPath:   "shell/zshrc",
-				Platforms:  []string{}, // All platforms
-			},
-			{
-				SourcePath: "~/.bashrc",
-				RepoPath:   "shell/bashrc",
-				Platforms:  []string{"linux", "darwin"},
-			},
-			{
-				SourcePath: "~/.wslconfig",
-				RepoPath:   "wsl/wslconfig",
-				Platforms:  []string{"wsl"},
-			},
-		},
-	}
-
-	// Act
-	files := cfg.GetManagedFilesForPlatform()
-
-	// Assert
-	found := false
-	for _, f := range files {
-		if f.SourcePath == "~/.zshrc" {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "GetManagedFilesForPlatform() should include universal files")
 }
 
 func TestGetUncommittedFiles(t *testing.T) {
@@ -201,73 +111,6 @@ func TestGetUncommittedFiles(t *testing.T) {
 	}
 }
 
-func TestContains(t *testing.T) {
-	tests := []struct {
-		s      string
-		substr string
-		want   bool
-	}{
-		{"hello world", "world", true},
-		{"hello world", "hello", true},
-		{"hello world", "foo", false},
-		{"Microsoft", "Microsoft", true},
-		{"Linux version WSL", "WSL", true},
-		{"", "foo", false},
-		{"foo", "", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.s+"_"+tt.substr, func(t *testing.T) {
-			// Act
-			got := contains(tt.s, tt.substr)
-
-			// Assert
-			assert.Equal(t, tt.want, got, "contains(%q, %q)", tt.s, tt.substr)
-		})
-	}
-}
-
-func TestGetManagedFilesForPlatform_PlatformMatch_ReturnsCorrect(t *testing.T) {
-	// Arrange
-	cfg := &Config{
-		Version:    CurrentConfigVersion,
-		RepoPath:   "~/.dotcor/files",
-		GitEnabled: false,
-		ManagedFiles: []ManagedFile{
-			{
-				SourcePath: "~/.zshrc",
-				RepoPath:   "shell/zshrc",
-				Platforms:  []string{}, // All platforms
-			},
-			{
-				SourcePath: "~/.bashrc",
-				RepoPath:   "shell/bashrc",
-				Platforms:  []string{"darwin", "linux"},
-			},
-			{
-				SourcePath: "~/.wslconfig",
-				RepoPath:   "wsl/wslconfig",
-				Platforms:  []string{"wsl"},
-			},
-			{
-				SourcePath: "~/.darwin_only",
-				RepoPath:   "darwin/only",
-				Platforms:  []string{"darwin"},
-			},
-		},
-	}
-
-	// Act
-	files := cfg.GetManagedFilesForPlatform()
-
-	// Assert
-	assert.Greater(t, len(files), 0, "GetManagedFilesForPlatform() should return at least one file")
-
-	currentPlatform := GetCurrentPlatform()
-	for _, f := range files {
-		assert.True(t, ShouldApplyOnPlatform(f.Platforms, currentPlatform), "File %s should apply on current platform %s", f.SourcePath, currentPlatform)
-	}
-}
 
 func TestMarkAsUncommitted_UpdatesFileFlag(t *testing.T) {
 	// Arrange

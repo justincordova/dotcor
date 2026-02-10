@@ -64,7 +64,7 @@ func runRebuildLinks(cmd *cobra.Command, args []string) error {
 	}
 
 	// Find all managed files
-	managedFiles := cfg.GetManagedFilesForPlatform()
+	managedFiles := cfg.ManagedFiles
 	if len(managedFiles) == 0 {
 		fmt.Println("No managed files found.")
 		return nil

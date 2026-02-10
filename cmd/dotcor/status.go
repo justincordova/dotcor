@@ -127,7 +127,7 @@ func collectStatus(cfg *config.Config) StatusReport {
 	report := StatusReport{}
 
 	// Get managed files
-	files := cfg.GetManagedFilesForPlatform()
+	files := cfg.ManagedFiles
 	report.Statistics.TotalFiles = len(files)
 
 	// Check each file

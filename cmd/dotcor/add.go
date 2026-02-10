@@ -290,7 +290,6 @@ func processAddFile(cfg *config.Config, sourcePath string, category string, forc
 		SourcePath: normalized,
 		RepoPath:   repoPath,
 		AddedAt:    time.Now(),
-		Platforms:  []string{}, // All platforms by default
 	}
 
 	// Use transaction for atomic operation

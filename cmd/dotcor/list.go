@@ -52,7 +52,7 @@ func runList(cmd *cobra.Command, args []string) error {
 	}
 	configureLogger(cmd, cfg)
 
-	files := cfg.GetManagedFilesForPlatform()
+	files := cfg.ManagedFiles
 
 	if len(files) == 0 {
 		fmt.Println("No files managed by DotCor.")

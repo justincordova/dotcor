@@ -254,7 +254,6 @@ func processAdoptSymlink(cfg *config.Config, symlinkPath string, dryRun bool) (a
 		SourcePath: normalized,
 		RepoPath:   actualRepoPath,
 		AddedAt:    time.Now(),
-		Platforms:  []string{},
 	}
 
 	if err := cfg.AddManagedFile(mf); err != nil {

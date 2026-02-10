@@ -177,9 +177,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 // applySymlinks creates symlinks for all managed files in config
 func applySymlinks(cfg *config.Config) error {
-	files := cfg.GetManagedFilesForPlatform()
+	files := cfg.ManagedFiles
 	if len(files) == 0 {
-		fmt.Println("No files configured for this platform.")
+		fmt.Println("No files configured.")
 		return nil
 	}
 
@@ -380,7 +380,6 @@ func addFile(cfg *config.Config, sourcePath string, customRepoPath string, force
 		SourcePath: normalized,
 		RepoPath:   repoPath,
 		AddedAt:    time.Now(),
-		Platforms:  []string{},
 	}
 
 	cfg.ManagedFiles = append(cfg.ManagedFiles, mf)

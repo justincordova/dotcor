@@ -486,14 +486,14 @@ func TestIntegration_ConfigPlatformFiltering(t *testing.T) {
 	cfg := &config.Config{
 		Version: config.CurrentConfigVersion,
 		ManagedFiles: []config.ManagedFile{
-			{SourcePath: "~/.zshrc", RepoPath: "shell/zshrc", Platforms: nil},
-			{SourcePath: "~/.bashrc", RepoPath: "shell/bashrc", Platforms: []string{"linux"}},
-			{SourcePath: "~/.config/karabiner", RepoPath: "apps/karabiner", Platforms: []string{"darwin"}},
+			{SourcePath: "~/.zshrc", RepoPath: "shell/zshrc"},
+			{SourcePath: "~/.bashrc", RepoPath: "shell/bashrc"},
+			{SourcePath: "~/.config/karabiner", RepoPath: "apps/karabiner"},
 		},
 	}
 
 	// Filter for current platform
-	filtered := cfg.GetManagedFilesForPlatform()
+	filtered := cfg.ManagedFiles
 
 	// Should include universal files
 	hasZshrc := false
