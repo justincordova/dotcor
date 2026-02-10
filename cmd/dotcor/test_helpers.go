@@ -181,10 +181,8 @@ func RunCommand(t *testing.T, cmd, args string, env map[string]string) (stdout, 
 
 	command := exec.Command(binaryPath, args)
 
-	if env != nil {
-		for k, v := range env {
-			command.Env = append(command.Env, fmt.Sprintf("%s=%s", k, v))
-		}
+	for k, v := range env {
+		command.Env = append(command.Env, fmt.Sprintf("%s=%s", k, v))
 	}
 
 	var outBuf, errBuf bytes.Buffer

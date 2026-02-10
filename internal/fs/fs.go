@@ -85,6 +85,7 @@ func CopyWithPermissions(src, dst string, cfg *config.Config) error {
 	}
 
 	if err := os.Chtimes(dst, srcInfo.ModTime(), srcInfo.ModTime()); err != nil {
+		cfg.Logger.Debug("failed to set file times (non-fatal)", "error", err)
 	}
 
 	return nil

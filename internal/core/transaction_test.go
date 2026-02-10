@@ -85,8 +85,12 @@ func TestTransactionRollback(t *testing.T) {
 	tx := NewTransaction(cfg)
 	op1 := &mockOperation{}
 	op2 := &mockOperation{}
-	tx.Execute(op1)
-	tx.Execute(op2)
+	if err := tx.Execute(op1); err != nil {
+		t.Fatalf("failed to execute op1: %v", err)
+	}
+	if err := tx.Execute(op2); err != nil {
+		t.Fatalf("failed to execute op2: %v", err)
+	}
 
 	// Act
 	err := tx.Rollback()
@@ -102,7 +106,9 @@ func TestTransactionCommit(t *testing.T) {
 	cfg := &config.Config{Logger: slog.Default()}
 	tx := NewTransaction(cfg)
 	op := &mockOperation{}
-	tx.Execute(op)
+	if err := tx.Execute(op); err != nil {
+		t.Fatalf("failed to execute op: %v", err)
+	}
 
 	// Act
 	tx.Commit()
@@ -257,9 +263,15 @@ func TestTransactionRollback_UndoAll(t *testing.T) {
 	op2 := &mockOperation{}
 	op3 := &mockOperation{}
 
-	tx.Execute(op1)
-	tx.Execute(op2)
-	tx.Execute(op3)
+	if err := tx.Execute(op1); err != nil {
+		t.Fatalf("failed to execute op1: %v", err)
+	}
+	if err := tx.Execute(op2); err != nil {
+		t.Fatalf("failed to execute op2: %v", err)
+	}
+	if err := tx.Execute(op3); err != nil {
+		t.Fatalf("failed to execute op3: %v", err)
+	}
 
 	// Act
 	err := tx.Rollback()
@@ -280,9 +292,15 @@ func TestTransactionRollback_PartialFailure(t *testing.T) {
 	op2 := &mockOperation{undoErr: errors.New("undo failed")}
 	op3 := &mockOperation{undoErr: nil}
 
-	tx.Execute(op1)
-	tx.Execute(op2)
-	tx.Execute(op3)
+	if err := tx.Execute(op1); err != nil {
+		t.Fatalf("failed to execute op1: %v", err)
+	}
+	if err := tx.Execute(op2); err != nil {
+		t.Fatalf("failed to execute op2: %v", err)
+	}
+	if err := tx.Execute(op3); err != nil {
+		t.Fatalf("failed to execute op3: %v", err)
+	}
 
 	// Act
 	err := tx.Rollback()
