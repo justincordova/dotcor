@@ -23,8 +23,12 @@ func TestAdd_SingleFile_Success(t *testing.T) {
 	configDir := filepath.Join(tempDir, ".dotcor")
 	filesDir := filepath.Join(configDir, "files")
 	backupsDir := filepath.Join(configDir, "backups")
-	os.MkdirAll(filesDir, 0755)
-	os.MkdirAll(backupsDir, 0755)
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
+	if err := os.MkdirAll(backupsDir, 0755); err != nil {
+		t.Fatalf("failed to create backups dir: %v", err)
+	}
 
 	homeDir := filepath.Join(tempDir, "home")
 	sourceFile := filepath.Join(homeDir, ".zshrc")
@@ -37,17 +41,23 @@ func TestAdd_SingleFile_Success(t *testing.T) {
 	}
 
 	// Create source file
-	os.MkdirAll(homeDir, 0755)
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
 	if err := os.WriteFile(sourceFile, []byte("# Test zshrc\nexport PATH=/bin"), 0644); err != nil {
 		t.Fatalf("failed to create source file: %v", err)
 	}
 
 	// Act - Simulate add behavior
-	os.MkdirAll(filepath.Dir(repoFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
 
 	// Create backup
 	backupPath := filepath.Join(backupsDir, ".zshrc")
-	os.WriteFile(backupPath, []byte("# Test zshrc\nexport PATH=/bin"), 0644)
+	if err := os.WriteFile(backupPath, []byte("# Test zshrc\nexport PATH=/bin"), 0644); err != nil {
+		t.Fatalf("failed to create backup: %v", err)
+	}
 
 	err := os.Rename(sourceFile, repoFile)
 	require.NoError(t, err, "moving file should succeed")
@@ -83,8 +93,12 @@ func TestAdd_MultipleFiles_Success(t *testing.T) {
 	configDir := filepath.Join(tempDir, ".dotcor")
 	filesDir := filepath.Join(configDir, "files")
 	backupsDir := filepath.Join(configDir, "backups")
-	os.MkdirAll(filesDir, 0755)
-	os.MkdirAll(backupsDir, 0755)
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
+	if err := os.MkdirAll(backupsDir, 0755); err != nil {
+		t.Fatalf("failed to create backups dir: %v", err)
+	}
 
 	homeDir := filepath.Join(tempDir, "home")
 	cfg := &config.Config{
@@ -95,11 +109,15 @@ func TestAdd_MultipleFiles_Success(t *testing.T) {
 	}
 
 	// Create source files
-	os.MkdirAll(homeDir, 0755)
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
 	filesToAdd := []string{".zshrc", ".bashrc", ".vimrc"}
 	for _, filename := range filesToAdd {
 		sourceFile := filepath.Join(homeDir, filename)
-		os.WriteFile(sourceFile, []byte("# "+filename), 0644)
+		if err := os.WriteFile(sourceFile, []byte("# "+filename), 0644); err != nil {
+			t.Fatalf("failed to create source file %s: %v", filename, err)
+		}
 	}
 
 	// Act - Simulate adding multiple files
@@ -109,11 +127,19 @@ func TestAdd_MultipleFiles_Success(t *testing.T) {
 		backupPath := filepath.Join(backupsDir, filename)
 
 		// Create backup
-		os.WriteFile(backupPath, []byte("# "+filename), 0644)
+		if err := os.WriteFile(backupPath, []byte("# "+filename), 0644); err != nil {
+			t.Fatalf("failed to create backup %s: %v", filename, err)
+		}
 
-		os.MkdirAll(filepath.Dir(repoFile), 0755)
-		os.Rename(sourceFile, repoFile)
-		os.Symlink(repoFile, sourceFile)
+		if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+			t.Fatalf("failed to create repo dir for %s: %v", filename, err)
+		}
+		if err := os.Rename(sourceFile, repoFile); err != nil {
+			t.Fatalf("failed to move %s: %v", filename, err)
+		}
+		if err := os.Symlink(repoFile, sourceFile); err != nil {
+			t.Fatalf("failed to create symlink for %s: %v", filename, err)
+		}
 
 		// Add to config (no platforms field)
 		cfg.ManagedFiles = append(cfg.ManagedFiles, config.ManagedFile{
@@ -142,8 +168,12 @@ func TestAdd_WithCategory_Success(t *testing.T) {
 	configDir := filepath.Join(tempDir, ".dotcor")
 	filesDir := filepath.Join(configDir, "files")
 	backupsDir := filepath.Join(configDir, "backups")
-	os.MkdirAll(filesDir, 0755)
-	os.MkdirAll(backupsDir, 0755)
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
+	if err := os.MkdirAll(backupsDir, 0755); err != nil {
+		t.Fatalf("failed to create backups dir: %v", err)
+	}
 
 	homeDir := filepath.Join(tempDir, "home")
 	sourceFile := filepath.Join(homeDir, ".config", "nvim", "init.vim")
@@ -156,14 +186,22 @@ func TestAdd_WithCategory_Success(t *testing.T) {
 	}
 
 	// Create source file
-	os.MkdirAll(filepath.Dir(sourceFile), 0755)
-	os.WriteFile(sourceFile, []byte("set number\n"), 0644)
+	if err := os.MkdirAll(filepath.Dir(sourceFile), 0755); err != nil {
+		t.Fatalf("failed to create source dir: %v", err)
+	}
+	if err := os.WriteFile(sourceFile, []byte("set number\n"), 0644); err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
 
 	// Act - Simulate add with category
 	backupPath := filepath.Join(backupsDir, "init.vim")
-	os.WriteFile(backupPath, []byte("set number\n"), 0644)
+	if err := os.WriteFile(backupPath, []byte("set number\n"), 0644); err != nil {
+		t.Fatalf("failed to create backup: %v", err)
+	}
 
-	os.MkdirAll(filepath.Dir(repoFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
 	err := os.Rename(sourceFile, repoFile)
 	require.NoError(t, err)
 	err = os.Symlink(repoFile, sourceFile)
@@ -190,8 +228,12 @@ func TestAdd_TemplateFile_Success(t *testing.T) {
 	configDir := filepath.Join(tempDir, ".dotcor")
 	filesDir := filepath.Join(configDir, "files")
 	backupsDir := filepath.Join(configDir, "backups")
-	os.MkdirAll(filesDir, 0755)
-	os.MkdirAll(backupsDir, 0755)
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
+	if err := os.MkdirAll(backupsDir, 0755); err != nil {
+		t.Fatalf("failed to create backups dir: %v", err)
+	}
 
 	homeDir := filepath.Join(tempDir, "home")
 	sourceFile := filepath.Join(homeDir, ".zshrc.template")
@@ -204,15 +246,23 @@ func TestAdd_TemplateFile_Success(t *testing.T) {
 	}
 
 	// Create source file
-	os.MkdirAll(homeDir, 0755)
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
 	templateContent := "# Config for {{ .Hostname }}\nexport HOME={{ .Home }}\n"
-	os.WriteFile(sourceFile, []byte(templateContent), 0644)
+	if err := os.WriteFile(sourceFile, []byte(templateContent), 0644); err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
 
 	// Act - Simulate add with template flag
 	backupPath := filepath.Join(backupsDir, ".zshrc.template")
-	os.WriteFile(backupPath, []byte(templateContent), 0644)
+	if err := os.WriteFile(backupPath, []byte(templateContent), 0644); err != nil {
+		t.Fatalf("failed to create backup: %v", err)
+	}
 
-	os.MkdirAll(filepath.Dir(repoFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
 	err := os.Rename(sourceFile, repoFile)
 	require.NoError(t, err)
 	err = os.Symlink(repoFile, sourceFile)
@@ -336,11 +386,17 @@ func TestAdd_PermissionDenied_ReturnsError(t *testing.T) {
 	sourceFile := filepath.Join(homeDir, ".zshrc")
 
 	// Create source file
-	os.MkdirAll(homeDir, 0755)
-	os.WriteFile(sourceFile, []byte("# Test"), 0644)
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
+	if err := os.WriteFile(sourceFile, []byte("# Test"), 0644); err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
 
 	// Make directory read-only
-	os.Chmod(homeDir, 0444)
+	if err := os.Chmod(homeDir, 0444); err != nil {
+		t.Fatalf("failed to make directory read-only: %v", err)
+	}
 
 	// Act
 	_, err := os.OpenFile(sourceFile, os.O_WRONLY, 0)
@@ -349,7 +405,9 @@ func TestAdd_PermissionDenied_ReturnsError(t *testing.T) {
 	assert.Error(t, err, "should return error when permission denied")
 
 	// Cleanup
-	os.Chmod(homeDir, 0755)
+	if err := os.Chmod(homeDir, 0755); err != nil {
+		t.Fatalf("failed to restore directory permissions: %v", err)
+	}
 }
 
 func TestAdd_AlreadyManaged_Skips(t *testing.T) {
@@ -389,11 +447,17 @@ func TestAdd_BackupFails_ReturnsError(t *testing.T) {
 	sourceFile := filepath.Join(homeDir, ".zshrc")
 
 	// Create source file
-	os.MkdirAll(homeDir, 0755)
-	os.WriteFile(sourceFile, []byte("# Test"), 0644)
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
+	if err := os.WriteFile(sourceFile, []byte("# Test"), 0644); err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
 
 	// Make backups directory non-writable
-	os.MkdirAll(backupsDir, 0444)
+	if err := os.MkdirAll(backupsDir, 0444); err != nil {
+		t.Fatalf("failed to create backups dir: %v", err)
+	}
 
 	// Act - Attempt to create backup would fail
 	_, err := os.OpenFile(filepath.Join(backupsDir, "test"), os.O_WRONLY|os.O_CREATE, 0644)
@@ -402,7 +466,9 @@ func TestAdd_BackupFails_ReturnsError(t *testing.T) {
 	assert.Error(t, err, "backup creation should fail when directory is not writable")
 
 	// Cleanup
-	os.Chmod(backupsDir, 0755)
+	if err := os.Chmod(backupsDir, 0755); err != nil {
+		t.Fatalf("failed to restore backups dir permissions: %v", err)
+	}
 }
 
 func TestAdd_TransactionFails_RestoresBackup(t *testing.T) {
@@ -416,23 +482,35 @@ func TestAdd_TransactionFails_RestoresBackup(t *testing.T) {
 	backupFile := filepath.Join(backupsDir, ".zshrc")
 
 	// Create source file
-	os.MkdirAll(homeDir, 0755)
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
 	originalContent := []byte("# Original content\nexport PATH=/bin")
-	os.WriteFile(sourceFile, originalContent, 0644)
+	if err := os.WriteFile(sourceFile, originalContent, 0644); err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
 
 	// Create backup
-	os.MkdirAll(backupsDir, 0755)
-	os.WriteFile(backupFile, originalContent, 0644)
+	if err := os.MkdirAll(backupsDir, 0755); err != nil {
+		t.Fatalf("failed to create backups dir: %v", err)
+	}
+	if err := os.WriteFile(backupFile, originalContent, 0644); err != nil {
+		t.Fatalf("failed to create backup: %v", err)
+	}
 
 	// Simulate transaction start - move file
 	repoFile := filepath.Join(filesDir, "shell", "zshrc")
-	os.MkdirAll(filepath.Dir(repoFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
 
 	// Act - Transaction fails, restore from backup
 	err := os.Rename(sourceFile, repoFile)
 	if err == nil {
 		// Simulate failure - restore from backup
-		os.Rename(backupFile, sourceFile)
+		if restoreErr := os.Rename(backupFile, sourceFile); restoreErr != nil {
+			t.Fatalf("failed to restore from backup: %v", restoreErr)
+		}
 	}
 
 	// Assert
@@ -462,8 +540,12 @@ func TestAdd_Flag_DryRun_NoChangesMade(t *testing.T) {
 	sourceFile := filepath.Join(homeDir, ".zshrc")
 
 	// Create source file
-	os.MkdirAll(homeDir, 0755)
-	os.WriteFile(sourceFile, []byte("# Test"), 0644)
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
+	if err := os.WriteFile(sourceFile, []byte("# Test"), 0644); err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
 
 	// Act - Dry run doesn't make changes
 
@@ -501,26 +583,38 @@ func TestAdd_Flag_Recursive_AddsDirectory(t *testing.T) {
 	configDir := filepath.Join(tempDir, ".dotcor")
 	filesDir := filepath.Join(configDir, "files")
 	backupsDir := filepath.Join(configDir, "backups")
-	os.MkdirAll(filesDir, 0755)
-	os.MkdirAll(backupsDir, 0755)
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
+	if err := os.MkdirAll(backupsDir, 0755); err != nil {
+		t.Fatalf("failed to create backups dir: %v", err)
+	}
 
 	homeDir := filepath.Join(tempDir, "home")
 	configPath := filepath.Join(homeDir, ".config", "nvim")
-	os.MkdirAll(configPath, 0755)
+	if err := os.MkdirAll(configPath, 0755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
 
 	// Create files in directory
-	os.WriteFile(filepath.Join(configPath, "init.vim"), []byte("vim config"), 0644)
-	os.WriteFile(filepath.Join(configPath, "custom.lua"), []byte("lua config"), 0644)
+	if err := os.WriteFile(filepath.Join(configPath, "init.vim"), []byte("vim config"), 0644); err != nil {
+		t.Fatalf("failed to create init.vim: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(configPath, "custom.lua"), []byte("lua config"), 0644); err != nil {
+		t.Fatalf("failed to create custom.lua: %v", err)
+	}
 
 	// Act - Simulate recursive add
 	var addedFiles []string
-	filepath.Walk(configPath, func(path string, info os.FileInfo, err error) error {
+	if err := filepath.Walk(configPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return err
 		}
 		addedFiles = append(addedFiles, path)
 		return nil
-	})
+	}); err != nil {
+		t.Fatalf("failed to walk config path: %v", err)
+	}
 
 	// Assert
 	assert.Len(t, addedFiles, 2, "should find 2 files in directory recursively")
@@ -533,12 +627,20 @@ func TestAdd_GlobPattern_Expands(t *testing.T) {
 	tempDir := t.TempDir()
 	homeDir := filepath.Join(tempDir, "home")
 	shellDir := filepath.Join(homeDir, "shell")
-	os.MkdirAll(shellDir, 0755)
+	if err := os.MkdirAll(shellDir, 0755); err != nil {
+		t.Fatalf("failed to create shell dir: %v", err)
+	}
 
 	// Create shell files
-	os.WriteFile(filepath.Join(shellDir, "zshrc"), []byte("zsh config"), 0644)
-	os.WriteFile(filepath.Join(shellDir, "bashrc"), []byte("bash config"), 0644)
-	os.WriteFile(filepath.Join(shellDir, "profile"), []byte("profile config"), 0644)
+	if err := os.WriteFile(filepath.Join(shellDir, "zshrc"), []byte("zsh config"), 0644); err != nil {
+		t.Fatalf("failed to create zshrc: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(shellDir, "bashrc"), []byte("bash config"), 0644); err != nil {
+		t.Fatalf("failed to create bashrc: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(shellDir, "profile"), []byte("profile config"), 0644); err != nil {
+		t.Fatalf("failed to create profile: %v", err)
+	}
 
 	// Act - Expand glob pattern
 	pattern := filepath.Join(shellDir, "*")
@@ -553,7 +655,9 @@ func TestAdd_GlobPattern_NoMatches_ReturnsError(t *testing.T) {
 	// Arrange
 	tempDir := t.TempDir()
 	homeDir := filepath.Join(tempDir, "home")
-	os.MkdirAll(homeDir, 0755)
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
 
 	// Act - Try to expand glob pattern with no matches
 	pattern := filepath.Join(homeDir, "*.nonexistent")
@@ -572,8 +676,12 @@ func TestAdd_HookFails_LogsWarning(t *testing.T) {
 	preAddHook := filepath.Join(hooksDir, "pre-add")
 
 	// Create a failing hook script
-	os.MkdirAll(hooksDir, 0755)
-	os.WriteFile(preAddHook, []byte("#!/bin/sh\nexit 1"), 0755)
+	if err := os.MkdirAll(hooksDir, 0755); err != nil {
+		t.Fatalf("failed to create hooks dir: %v", err)
+	}
+	if err := os.WriteFile(preAddHook, []byte("#!/bin/sh\nexit 1"), 0755); err != nil {
+		t.Fatalf("failed to create hook script: %v", err)
+	}
 
 	// Act - Simulate hook execution
 	_, err := os.Stat(preAddHook)
@@ -591,8 +699,12 @@ func TestAdd_HookSuccess_OperationContinues(t *testing.T) {
 	preAddHook := filepath.Join(hooksDir, "pre-add")
 
 	// Create a successful hook script
-	os.MkdirAll(hooksDir, 0755)
-	os.WriteFile(preAddHook, []byte("#!/bin/sh\nexit 0"), 0755)
+	if err := os.MkdirAll(hooksDir, 0755); err != nil {
+		t.Fatalf("failed to create hooks dir: %v", err)
+	}
+	if err := os.WriteFile(preAddHook, []byte("#!/bin/sh\nexit 0"), 0755); err != nil {
+		t.Fatalf("failed to create hook script: %v", err)
+	}
 
 	// Act - Simulate hook execution
 	_, err := os.Stat(preAddHook)
@@ -609,7 +721,9 @@ func TestAdd_GitEnabled_CommitsChanges(t *testing.T) {
 	tempDir := t.TempDir()
 	configDir := filepath.Join(tempDir, ".dotcor")
 	filesDir := filepath.Join(configDir, "files")
-	os.MkdirAll(filesDir, 0755)
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
 
 	homeDir := filepath.Join(tempDir, "home")
 	sourceFile := filepath.Join(homeDir, ".zshrc")
@@ -623,10 +737,18 @@ func TestAdd_GitEnabled_CommitsChanges(t *testing.T) {
 	}
 
 	// Create files
-	os.MkdirAll(homeDir, 0755)
-	os.WriteFile(sourceFile, []byte("# Test"), 0644)
-	os.MkdirAll(filepath.Dir(repoFile), 0755)
-	os.WriteFile(repoFile, []byte("# Test"), 0644)
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
+	if err := os.WriteFile(sourceFile, []byte("# Test"), 0644); err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
+	if err := os.WriteFile(repoFile, []byte("# Test"), 0644); err != nil {
+		t.Fatalf("failed to create repo file: %v", err)
+	}
 
 	// Act - Git would be enabled, commit would be attempted
 	gitEnabled := cfg.GitEnabled
@@ -738,7 +860,9 @@ func TestAdd_EmitsCorrectLogs(t *testing.T) {
 
 	// Act - Simulate add operation
 	sourcePath := filepath.Join(tempDir, ".zshrc")
-	os.WriteFile(sourcePath, []byte("# Test"), 0644)
+	if err := os.WriteFile(sourcePath, []byte("# Test"), 0644); err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
 
 	cfg.Logger.Debug("validating source file", "path", sourcePath)
 	cfg.Logger.Info("backup created", "file", sourcePath)
@@ -825,8 +949,12 @@ func TestAdd_EmptyFile_Success(t *testing.T) {
 	configDir := filepath.Join(tempDir, ".dotcor")
 	filesDir := filepath.Join(configDir, "files")
 	backupsDir := filepath.Join(configDir, "backups")
-	os.MkdirAll(filesDir, 0755)
-	os.MkdirAll(backupsDir, 0755)
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
+	if err := os.MkdirAll(backupsDir, 0755); err != nil {
+		t.Fatalf("failed to create backups dir: %v", err)
+	}
 
 	homeDir := filepath.Join(tempDir, "home")
 	sourceFile := filepath.Join(homeDir, ".empty")
@@ -838,16 +966,28 @@ func TestAdd_EmptyFile_Success(t *testing.T) {
 	}
 
 	// Create empty file
-	os.MkdirAll(homeDir, 0755)
-	os.WriteFile(sourceFile, []byte{}, 0644)
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
+	if err := os.WriteFile(sourceFile, []byte{}, 0644); err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
 
 	// Act - Add empty file
 	backupPath := filepath.Join(backupsDir, "empty")
-	os.WriteFile(backupPath, []byte{}, 0644)
+	if err := os.WriteFile(backupPath, []byte{}, 0644); err != nil {
+		t.Fatalf("failed to create backup: %v", err)
+	}
 
-	os.MkdirAll(filepath.Dir(repoFile), 0755)
-	os.Rename(sourceFile, repoFile)
-	os.Symlink(repoFile, sourceFile)
+	if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
+	if err := os.Rename(sourceFile, repoFile); err != nil {
+		t.Fatalf("failed to move file: %v", err)
+	}
+	if err := os.Symlink(repoFile, sourceFile); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
 
 	cfg.ManagedFiles = append(cfg.ManagedFiles, config.ManagedFile{
 		SourcePath: "~/.empty",
@@ -869,8 +1009,12 @@ func TestAdd_LargeFile_Success(t *testing.T) {
 	configDir := filepath.Join(tempDir, ".dotcor")
 	filesDir := filepath.Join(configDir, "files")
 	backupsDir := filepath.Join(configDir, "backups")
-	os.MkdirAll(filesDir, 0755)
-	os.MkdirAll(backupsDir, 0755)
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
+	if err := os.MkdirAll(backupsDir, 0755); err != nil {
+		t.Fatalf("failed to create backups dir: %v", err)
+	}
 
 	homeDir := filepath.Join(tempDir, "home")
 	sourceFile := filepath.Join(homeDir, ".large")
@@ -882,17 +1026,29 @@ func TestAdd_LargeFile_Success(t *testing.T) {
 	}
 
 	// Create large file (1MB)
-	os.MkdirAll(homeDir, 0755)
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
 	largeContent := make([]byte, 1024*1024)
-	os.WriteFile(sourceFile, largeContent, 0644)
+	if err := os.WriteFile(sourceFile, largeContent, 0644); err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
 
 	// Act - Add large file
 	backupPath := filepath.Join(backupsDir, "large")
-	os.WriteFile(backupPath, largeContent, 0644)
+	if err := os.WriteFile(backupPath, largeContent, 0644); err != nil {
+		t.Fatalf("failed to create backup: %v", err)
+	}
 
-	os.MkdirAll(filepath.Dir(repoFile), 0755)
-	os.Rename(sourceFile, repoFile)
-	os.Symlink(repoFile, sourceFile)
+	if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
+	if err := os.Rename(sourceFile, repoFile); err != nil {
+		t.Fatalf("failed to move file: %v", err)
+	}
+	if err := os.Symlink(repoFile, sourceFile); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
 
 	cfg.ManagedFiles = append(cfg.ManagedFiles, config.ManagedFile{
 		SourcePath: "~/.large",
@@ -914,8 +1070,12 @@ func TestAdd_FileWithSpecialCharacters_Success(t *testing.T) {
 	configDir := filepath.Join(tempDir, ".dotcor")
 	filesDir := filepath.Join(configDir, "files")
 	backupsDir := filepath.Join(configDir, "backups")
-	os.MkdirAll(filesDir, 0755)
-	os.MkdirAll(backupsDir, 0755)
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
+	if err := os.MkdirAll(backupsDir, 0755); err != nil {
+		t.Fatalf("failed to create backups dir: %v", err)
+	}
 
 	homeDir := filepath.Join(tempDir, "home")
 	sourceFile := filepath.Join(homeDir, ".config-file")
@@ -927,16 +1087,28 @@ func TestAdd_FileWithSpecialCharacters_Success(t *testing.T) {
 	}
 
 	// Create file with hyphen
-	os.MkdirAll(homeDir, 0755)
-	os.WriteFile(sourceFile, []byte("# config file with hyphen"), 0644)
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
+	if err := os.WriteFile(sourceFile, []byte("# config file with hyphen"), 0644); err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
 
 	// Act - Add file
 	backupPath := filepath.Join(backupsDir, "config-file")
-	os.WriteFile(backupPath, []byte("# config file with hyphen"), 0644)
+	if err := os.WriteFile(backupPath, []byte("# config file with hyphen"), 0644); err != nil {
+		t.Fatalf("failed to create backup: %v", err)
+	}
 
-	os.MkdirAll(filepath.Dir(repoFile), 0755)
-	os.Rename(sourceFile, repoFile)
-	os.Symlink(repoFile, sourceFile)
+	if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
+	if err := os.Rename(sourceFile, repoFile); err != nil {
+		t.Fatalf("failed to move file: %v", err)
+	}
+	if err := os.Symlink(repoFile, sourceFile); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
 
 	cfg.ManagedFiles = append(cfg.ManagedFiles, config.ManagedFile{
 		SourcePath: "~/.config-file",
@@ -976,7 +1148,9 @@ func TestAdd_HelperFunctions_Work(t *testing.T) {
 		testDir := t.TempDir()
 		target := filepath.Join(testDir, "target.txt")
 		link := filepath.Join(testDir, "link.txt")
-		os.WriteFile(target, []byte("target"), 0644)
+		if err := os.WriteFile(target, []byte("target"), 0644); err != nil {
+			t.Fatalf("failed to create target file: %v", err)
+		}
 		CreateTestSymlink(t, target, link)
 		AssertSymlinkPointsTo(t, link, target)
 	})

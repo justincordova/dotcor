@@ -69,8 +69,12 @@ func TestCleanup_KeepLastFlag_PreservesRecent(t *testing.T) {
 		filesDir := filepath.Join(configDir, "files")
 
 		// Create directories
-		os.MkdirAll(backupsDir, 0755)
-		os.MkdirAll(filesDir, 0755)
+		if err := os.MkdirAll(backupsDir, 0755); err != nil {
+			t.Fatalf("failed to create backups dir: %v", err)
+		}
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
 
 		// Create config
 		configPath := filepath.Join(configDir, "config.yaml")
@@ -115,9 +119,13 @@ func TestCleanup_NoBackups_ReturnsEmpty(t *testing.T) {
 		backupsDir := filepath.Join(configDir, "backups")
 		filesDir := filepath.Join(configDir, "files")
 
-		// Create directories but no backup files
-		os.MkdirAll(backupsDir, 0755)
-		os.MkdirAll(filesDir, 0755)
+		// Create directories
+		if err := os.MkdirAll(backupsDir, 0755); err != nil {
+			t.Fatalf("failed to create backups dir: %v", err)
+		}
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
 
 		// Create config
 		configPath := filepath.Join(configDir, "config.yaml")
@@ -164,14 +172,22 @@ func TestCleanup_ForceFlag_SkipsPrompt(t *testing.T) {
 		filesDir := filepath.Join(configDir, "files")
 
 		// Create directories
-		os.MkdirAll(backupsDir, 0755)
-		os.MkdirAll(filesDir, 0755)
+		if err := os.MkdirAll(backupsDir, 0755); err != nil {
+			t.Fatalf("failed to create backups dir: %v", err)
+		}
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
 
 		// Create an old backup
 		backupFile := filepath.Join(backupsDir, "old.zshrc.bak")
 		oldTime := time.Now().Add(-45 * 24 * time.Hour)
-		os.WriteFile(backupFile, []byte("old content"), 0644)
-		os.Chtimes(backupFile, oldTime, oldTime)
+		if err := os.WriteFile(backupFile, []byte("old content"), 0644); err != nil {
+			t.Fatalf("failed to create backup file: %v", err)
+		}
+		if err := os.Chtimes(backupFile, oldTime, oldTime); err != nil {
+			t.Fatalf("failed to set file times: %v", err)
+		}
 
 		// Create config
 		configPath := filepath.Join(configDir, "config.yaml")
@@ -219,8 +235,12 @@ func TestCleanup_Preview_ShowsWhatWouldBeDeleted(t *testing.T) {
 		filesDir := filepath.Join(configDir, "files")
 
 		// Create directories
-		os.MkdirAll(backupsDir, 0755)
-		os.MkdirAll(filesDir, 0755)
+		if err := os.MkdirAll(backupsDir, 0755); err != nil {
+			t.Fatalf("failed to create backups dir: %v", err)
+		}
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
 
 		// Create config
 		configPath := filepath.Join(configDir, "config.yaml")

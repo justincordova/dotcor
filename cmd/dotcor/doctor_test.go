@@ -32,7 +32,9 @@ func TestDoctor_HealthySystem_AllChecksPass(t *testing.T) {
 
 		// Create valid symlink
 		relPath, _ := filepath.Rel(filepath.Dir(sourcePath), repoFile)
-		os.Symlink(relPath, sourcePath)
+		if err := os.Symlink(relPath, sourcePath); err != nil {
+			t.Fatalf("failed to create symlink: %v", err)
+		}
 
 		// Create config file
 		configPath := filepath.Join(configDir, "config.yaml")
@@ -86,12 +88,18 @@ func TestDoctor_BrokenSymlink_ShowsError(t *testing.T) {
 		repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
 		// Create directories
-		os.MkdirAll(filesDir, 0755)
-		os.MkdirAll(homeDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
 
 		// Create symlink pointing to non-existent repo file (broken symlink)
 		relPath, _ := filepath.Rel(filepath.Dir(sourcePath), repoFile)
-		os.Symlink(relPath, sourcePath)
+		if err := os.Symlink(relPath, sourcePath); err != nil {
+			t.Fatalf("failed to create symlink: %v", err)
+		}
 		// Don't create repo file - this simulates a broken symlink
 
 		// Create config file
@@ -292,19 +300,27 @@ func TestDoctor_PermissionError_DetectsIssue(t *testing.T) {
 		repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
 		// Create directories
-		os.MkdirAll(filesDir, 0755)
-		os.MkdirAll(homeDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
 
 		// Create repo file
 		CreateTestFile(t, repoFile, "test content")
 
 		// Create source file with world-writable permissions
 		CreateTestFile(t, sourcePath, "test content")
-		os.Chmod(sourcePath, 0666)
+		if err := os.Chmod(sourcePath, 0666); err != nil {
+			t.Fatalf("failed to set file permissions: %v", err)
+		}
 
 		// Create valid symlink to make the permission check run
 		relPath, _ := filepath.Rel(filepath.Dir(sourcePath), repoFile)
-		os.Symlink(relPath, sourcePath)
+		if err := os.Symlink(relPath, sourcePath); err != nil {
+			t.Fatalf("failed to create symlink: %v", err)
+		}
 
 		// Create config file
 		configPath := filepath.Join(configDir, "config.yaml")

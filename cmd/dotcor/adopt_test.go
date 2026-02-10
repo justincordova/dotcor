@@ -24,9 +24,15 @@ func TestAdopt_ValidSymlink_AdoptsFile(t *testing.T) {
 		repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
 		// Create directories
-		os.MkdirAll(filesDir, 0755)
-		os.MkdirAll(homeDir, 0755)
-		os.MkdirAll(filepath.Dir(repoFile), 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
+		if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+			t.Fatalf("failed to create repo dir: %v", err)
+		}
 
 		// Create repo file
 		CreateTestFile(t, repoFile, "repo content")
@@ -87,8 +93,12 @@ func TestAdopt_Nonsymlink_ReturnsError(t *testing.T) {
 		sourcePath := filepath.Join(homeDir, ".zshrc")
 
 		// Create directories
-		os.MkdirAll(filesDir, 0755)
-		os.MkdirAll(homeDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
 
 		// Create regular file (not a symlink)
 		CreateTestFile(t, sourcePath, "regular file content")
@@ -140,9 +150,15 @@ func TestAdopt_AlreadyManaged_ReturnsError(t *testing.T) {
 		repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
 		// Create directories
-		os.MkdirAll(filesDir, 0755)
-		os.MkdirAll(homeDir, 0755)
-		os.MkdirAll(filepath.Dir(repoFile), 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
+		if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+			t.Fatalf("failed to create repo dir: %v", err)
+		}
 
 		// Create repo file
 		CreateTestFile(t, repoFile, "repo content")
@@ -200,9 +216,15 @@ func TestAdopt_PointingToRepo_ReturnsError(t *testing.T) {
 		repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
 		// Create directories
-		os.MkdirAll(filesDir, 0755)
-		os.MkdirAll(homeDir, 0755)
-		os.MkdirAll(filepath.Dir(repoFile), 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
+		if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+			t.Fatalf("failed to create repo dir: %v", err)
+		}
 
 		// Create repo file
 		CreateTestFile(t, repoFile, "repo content")
