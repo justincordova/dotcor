@@ -115,7 +115,9 @@ func TestRemove_MultipleFiles_Success(t *testing.T) {
 		}
 
 		// Create backup
-		os.WriteFile(backupPath, []byte("# "+filepath.Base(mf.SourcePath)), 0644)
+		if err := os.WriteFile(backupPath, []byte("# "+filepath.Base(mf.SourcePath)), 0644); err != nil {
+			t.Fatalf("failed to create backup: %v", err)
+		}
 	}
 
 	// Act - Remove all symlinks
@@ -183,9 +185,13 @@ func TestRemove_RestoresFromBackup(t *testing.T) {
 	backupFile := filepath.Join(backupsDir, ".zshrc.backup")
 
 	// Create backup
-	os.MkdirAll(homeDir, 0755)
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
 	backupContent := "# Backup content"
-	os.WriteFile(backupFile, []byte(backupContent), 0644)
+	if err := os.WriteFile(backupFile, []byte(backupContent), 0644); err != nil {
+		t.Fatalf("failed to create backup: %v", err)
+	}
 
 	// Act - Restore from backup
 	content, err := os.ReadFile(backupFile)
@@ -596,8 +602,12 @@ func TestRemove_PreHookWarnsContinues(t *testing.T) {
 	preRemoveHook := filepath.Join(hooksDir, "pre-remove")
 
 	// Create a failing hook script
-	os.MkdirAll(hooksDir, 0755)
-	os.WriteFile(preRemoveHook, []byte("#!/bin/sh\nexit 1"), 0755)
+	if err := os.MkdirAll(hooksDir, 0755); err != nil {
+		t.Fatalf("failed to create hooks dir: %v", err)
+	}
+	if err := os.WriteFile(preRemoveHook, []byte("#!/bin/sh\nexit 1"), 0755); err != nil {
+		t.Fatalf("failed to create hook script: %v", err)
+	}
 
 	// Act - Simulate hook execution
 	_, err := os.Stat(preRemoveHook)
@@ -690,9 +700,15 @@ func TestRemove_SymlinkTarget_Validation(t *testing.T) {
 	sourceFile := filepath.Join(tempDir, ".zshrc")
 
 	// Create symlink
-	os.MkdirAll(filepath.Dir(repoFile), 0755)
-	os.WriteFile(repoFile, []byte("# Test"), 0644)
-	os.Symlink(repoFile, sourceFile)
+	if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
+	if err := os.WriteFile(repoFile, []byte("# Test"), 0644); err != nil {
+		t.Fatalf("failed to create repo file: %v", err)
+	}
+	if err := os.Symlink(repoFile, sourceFile); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
 
 	// Act - Verify symlink points to correct target
 	target, err := os.Readlink(sourceFile)
@@ -718,14 +734,20 @@ func TestRemove_CleansUpEmptyDirectories(t *testing.T) {
 	configDir := filepath.Join(tempDir, ".dotcor")
 	filesDir := filepath.Join(configDir, "files")
 	shellDir := filepath.Join(filesDir, "shell")
-	os.MkdirAll(shellDir, 0755)
+	if err := os.MkdirAll(shellDir, 0755); err != nil {
+		t.Fatalf("failed to create shell dir: %v", err)
+	}
 
 	repoFile := filepath.Join(shellDir, "zshrc")
 	sourceFile := filepath.Join(tempDir, ".zshrc")
 
 	// Create repo file and symlink
-	os.WriteFile(repoFile, []byte("# Test"), 0644)
-	os.Symlink(repoFile, sourceFile)
+	if err := os.WriteFile(repoFile, []byte("# Test"), 0644); err != nil {
+		t.Fatalf("failed to create repo file: %v", err)
+	}
+	if err := os.Symlink(repoFile, sourceFile); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
 
 	// Act - Remove repo file
 	os.Remove(repoFile)
