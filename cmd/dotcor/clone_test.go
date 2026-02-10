@@ -100,7 +100,9 @@ func TestClone_DirectoryExists_ReturnsError(t *testing.T) {
 
 		// Create existing .dotcor directory
 		configDir := filepath.Join(homeDir, ".dotcor")
-		os.MkdirAll(configDir, 0755)
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			t.Fatalf("failed to create config dir: %v", err)
+		}
 		existingFile := filepath.Join(configDir, "existing.txt")
 		CreateTestFile(t, existingFile, "existing content")
 
