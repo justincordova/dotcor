@@ -67,7 +67,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 	var filesToRemove []config.ManagedFile
 
 	if removeAll {
-		filesToRemove = cfg.GetManagedFilesForPlatform()
+		filesToRemove = cfg.ManagedFiles
 		if len(filesToRemove) == 0 {
 			fmt.Println("No files to remove.")
 			return nil

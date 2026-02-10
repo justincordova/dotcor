@@ -3,14 +3,12 @@ package core
 import (
 	"os"
 	"os/user"
-	"runtime"
 	"strings"
 )
 
 // TemplateContext holds variables for template substitution
 type TemplateContext struct {
 	Hostname string
-	OS       string
 	User     string
 	Home     string
 }
@@ -34,18 +32,16 @@ func GetTemplateContext() (*TemplateContext, error) {
 
 	return &TemplateContext{
 		Hostname: hostname,
-		OS:       runtime.GOOS,
 		User:     currentUser.Username,
 		Home:     home,
 	}, nil
 }
 
 // SubstituteTemplates performs simple {{ variable }} substitution
-// Supports: {{ .Hostname }}, {{ .OS }}, {{ .User }}, {{ .Home }}
+// Supports: {{ .Hostname }}, {{ .User }}, {{ .Home }}
 func SubstituteTemplate(content string, ctx *TemplateContext) string {
 	result := content
 	result = strings.ReplaceAll(result, "{{ .Hostname }}", ctx.Hostname)
-	result = strings.ReplaceAll(result, "{{ .OS }}", ctx.OS)
 	result = strings.ReplaceAll(result, "{{ .User }}", ctx.User)
 	result = strings.ReplaceAll(result, "{{ .Home }}", ctx.Home)
 	return result

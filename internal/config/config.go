@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"runtime"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -30,7 +29,6 @@ type ManagedFile struct {
 	SourcePath     string    `yaml:"source_path"`     // ~/.zshrc (normalized, with ~)
 	RepoPath       string    `yaml:"repo_path"`       // shell/zshrc (relative to files/)
 	AddedAt        time.Time `yaml:"added_at"`        // When the file was added
-	Platforms      []string  `yaml:"platforms"`       // ["darwin", "linux"] or empty for all
 	HasUncommitted bool      `yaml:"has_uncommitted"` // Track if Git commit failed
 }
 
@@ -221,20 +219,6 @@ func (c *Config) IsManaged(sourcePath string) bool {
 	return err == nil
 }
 
-// GetManagedFilesForPlatform returns files that should be linked on current platform
-func (c *Config) GetManagedFilesForPlatform() []ManagedFile {
-	platform := GetCurrentPlatform()
-	result := []ManagedFile{}
-
-	for _, mf := range c.ManagedFiles {
-		if ShouldApplyOnPlatform(mf.Platforms, platform) {
-			result = append(result, mf)
-		}
-	}
-
-	return result
-}
-
 // MarkAsUncommitted marks a file as having uncommitted changes
 func (c *Config) MarkAsUncommitted(sourcePath string) error {
 	mf, err := c.GetManagedFile(sourcePath)
@@ -268,51 +252,4 @@ func (c *Config) GetUncommittedFiles() []ManagedFile {
 	}
 
 	return result
-}
-
-// GetCurrentPlatform returns current OS identifier
-// Returns: "darwin", "linux", "windows", "wsl"
-// Detects WSL by checking /proc/version for "Microsoft"
-func GetCurrentPlatform() string {
-	if runtime.GOOS == "linux" {
-		// Check for WSL
-		data, err := os.ReadFile("/proc/version")
-		if err == nil {
-			content := string(data)
-			if contains(content, "Microsoft") || contains(content, "WSL") {
-				return "wsl"
-			}
-		}
-	}
-	return runtime.GOOS
-}
-
-// ShouldApplyOnPlatform checks if file should be linked on the given platform
-func ShouldApplyOnPlatform(platforms []string, currentPlatform string) bool {
-	// Empty platforms means all platforms
-	if len(platforms) == 0 {
-		return true
-	}
-
-	for _, p := range platforms {
-		if p == currentPlatform {
-			return true
-		}
-	}
-
-	return false
-}
-
-// contains checks if a string contains a substring (case-insensitive)
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsAt(s, substr, 0))
-}
-
-func containsAt(s, substr string, start int) bool {
-	for i := start; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

@@ -8,7 +8,7 @@ DotCor is a symlink-based dotfile manager built in Go. It combines the simplicit
 - Edit dotfiles directly; changes instantly appear in the repository via symlinks
 - Git automation handles versioning without manual intervention
 - Safety-first with backups, transactions, and locking
-- Cross-platform support (macOS, Linux, Windows with Developer Mode)
+- macOS native - Built for macOS with full symlink support
 
 ## Architecture
 
@@ -58,10 +58,10 @@ dotcor/
 │   │   ├── hooks.go          # Hook system (pre/post operations)
 │   │   └── templates.go      # Simple template substitution
 │   │
-│   ├── fs/                   # File system operations
-│   │   ├── fs.go             # File operations (move, copy)
-│   │   └── symlink.go        # Cross-platform symlink handling
-│   │
+ │   ├── fs/                   # File system operations
+ │   │   ├── fs.go             # File operations (move, copy)
+ │   │   └── symlink.go        # macOS symlink handling
+ │   │
 │   ├── git/                  # Git integration
 │   │   └── git.go            # Git command wrapper
 │   │
@@ -84,14 +84,13 @@ dotcor/
 ### Key Design Decisions
 
 1. **Relative Symlinks:** Use `filepath.Rel()` for portability across machines
-2. **No Windows Copy Fallback:** Require symlink support; fail gracefully with clear instructions
-3. **Transaction/Rollback:** Wrap multi-step operations to prevent partial failures
-4. **File-Based Locking:** Prevent concurrent operations with stale lock detection
-5. **Secret Detection:** Scan for API keys, passwords, tokens before adding files
-6. **Versioned Config:** Include version field for future schema migrations
-7. **Structured Logging:** Use `log/slog` with dependency injection, separate from user-facing output
-8. **Hook System:** Pre/post operation hooks in `~/.dotcor/hooks/` for extensibility
-9. **Simple Templates:** Basic `{{ .Hostname }}` substitution via `rebuild-links` command
+2. **Transaction/Rollback:** Wrap multi-step operations to prevent partial failures
+3. **File-Based Locking:** Prevent concurrent operations with stale lock detection
+4. **Secret Detection:** Scan for API keys, passwords, tokens before adding files
+5. **Versioned Config:** Include version field for future schema migrations
+6. **Structured Logging:** Use `log/slog` with dependency injection, separate from user-facing output
+7. **Hook System:** Pre/post operation hooks in `~/.dotcor/hooks/` for extensibility
+8. **Simple Templates:** Basic `{{ .Hostname }}` substitution via `rebuild-links` command
 
 ### Data Flow
 
@@ -266,7 +265,7 @@ git push origin v0.2.0
 ```
 
 **GitHub Actions automatically:**
-1. Builds binaries for all platforms (macOS, Linux, Windows on amd64/arm64)
+1. Builds binaries for macOS (amd64/arm64)
 2. Creates GitHub Release with archives and checksums
 3. Updates Homebrew tap (justincordova/homebrew-dotcor)
 
@@ -312,11 +311,11 @@ See [docs/RELEASING.md](docs/RELEASING.md) for:
 | `docs/RELEASING.md` | Release process and GoReleaser workflow |
 | `internal/config/config.go` | Config struct and Load/Save operations |
 | `internal/core/transaction.go` | Transaction/rollback semantics |
-| `internal/core/hooks.go` | Hook system for pre/post operations |
-| `internal/core/templates.go` | Template variable substitution |
-| `internal/fs/symlink.go` | Cross-platform symlink handling |
-| `internal/git/git.go` | Git command wrapper |
-| `internal/logger/logger.go` | Structured logging configuration |
+ | `internal/core/hooks.go` | Hook system for pre/post operations |
+ | `internal/core/templates.go` | Template variable substitution |
+ | `internal/fs/symlink.go` | macOS symlink handling |
+ | `internal/git/git.go` | Git command wrapper |
+ | `internal/logger/logger.go` | Structured logging configuration |
 
 ## Common Patterns
 

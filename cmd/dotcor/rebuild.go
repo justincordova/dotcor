@@ -208,7 +208,6 @@ func scanAndRebuild(cfg *config.Config, repoPath string, force bool) error {
 			SourcePath: sourcePath,
 			RepoPath:   repoFile,
 			AddedAt:    time.Now(),
-			Platforms:  []string{},
 		}
 
 		cfg.ManagedFiles = append(cfg.ManagedFiles, mf)

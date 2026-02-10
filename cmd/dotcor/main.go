@@ -101,7 +101,7 @@ func runRoot(cmd *cobra.Command, args []string) {
 }
 
 func showQuickStatus(cfg *config.Config) {
-	files := cfg.GetManagedFilesForPlatform()
+	files := cfg.ManagedFiles
 	totalFiles := len(files)
 
 	// Count problems

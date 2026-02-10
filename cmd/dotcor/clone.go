@@ -72,19 +72,6 @@ func runClone(cmd *cobra.Command, args []string) error {
 	}
 	configureLogger(cmd, cfg)
 
-	// Check symlink support first
-	supported, err := fs.SupportsSymlinks()
-	if err != nil {
-		return fmt.Errorf("checking symlink support: %w", err)
-	}
-	if !supported {
-		fmt.Fprintln(os.Stderr, "Symlinks not supported on this platform.")
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "Windows users: Enable Developer Mode")
-		fmt.Fprintln(os.Stderr, "  Settings → Update & Security → For developers → Developer Mode")
-		return fmt.Errorf("symlinks not supported")
-	}
-
 	// Check if git is installed
 	if !git.IsGitInstalled() {
 		return fmt.Errorf("git is not installed")

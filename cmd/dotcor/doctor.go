@@ -278,7 +278,7 @@ func checkSymlinks(fix bool, cmd *cobra.Command) (issues, fixed int) {
 	}
 	configureLogger(cmd, cfg)
 
-	files := cfg.GetManagedFilesForPlatform()
+	files := cfg.ManagedFiles
 	if len(files) == 0 {
 		fmt.Println("  - No managed files")
 		return
@@ -465,7 +465,7 @@ func checkPermissions(fix bool, cmd *cobra.Command) (int, int) {
 	issues := 0
 	fixed := 0
 
-	files := cfg.GetManagedFilesForPlatform()
+	files := cfg.ManagedFiles
 	if len(files) == 0 {
 		fmt.Println("  - No managed files to check")
 		return 0, 0

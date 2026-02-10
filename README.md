@@ -12,7 +12,7 @@ DotCor combines the simplicity of GNU Stow with the convenience of automatic Git
 - **Symlink-based** - Edit files directly, changes instantly appear in your repository
 - **Zero-config** - Automatic path organization with sensible defaults
 - **Git automation** - Auto-commits after every operation, manual Git usage optional
-- **Cross-platform** - Works on macOS, Linux, and Windows
+- **macOS native** - Built for macOS with full symlink support out of box
 - **Simple CLI** - Easy-to-use commands for everyday dotfile management
 - **Git history** - Built-in restore and history commands leveraging Git
 
@@ -22,7 +22,7 @@ DotCor combines the simplicity of GNU Stow with the convenience of automatic Git
 
 ### Installation
 
-**Homebrew (macOS/Linux):**
+**Homebrew:**
 ```bash
 brew tap justincordova/dotcor
 brew install dotcor
@@ -379,27 +379,13 @@ managed_files:
   - source_path: ~/.zshrc
     repo_path: shell/zshrc
     added_at: 2025-01-04T10:30:00Z
-    platforms: []  # Empty = all platforms
     has_uncommitted: false
 
   - source_path: ~/Library/Preferences/foo.plist
     repo_path: foo.plist
     added_at: 2025-01-04T10:31:00Z
-    platforms: ["darwin"]  # macOS only
     has_uncommitted: false
-```
-
-### Platform-Specific Files
-
-You can specify which platforms a file should be managed on:
-
-- `[]` or empty - All platforms (default)
-- `["darwin"]` - macOS only
-- `["linux"]` - Linux only
-- `["windows"]` - Windows only
-- `["darwin", "linux"]` - macOS and Linux
-
-When you run `dotcor init --apply` on a new machine, only files for that platform will be symlinked.
+  ```
 
 ---
 
@@ -438,32 +424,14 @@ Now `dotcor sync` will automatically push to your remote.
 
 ---
 
-## Cross-Platform Support
+## macOS Support
 
-### macOS & Linux
+DotCor is built exclusively for macOS, taking advantage of native symlink support.
 
-Full symlink support out of the box. No configuration needed.
+### Requirements
 
-### Windows
-
-**Symlink support:** Requires Windows 10+ with Developer Mode enabled or Administrator privileges.
-
-DotCor requires symlink support and will exit with clear error messages if symlinks are unavailable.
-
-**To enable Developer Mode:**
-1. Settings → Update & Security → For developers
-2. Enable "Developer Mode"
-3. Restart terminal
-
-**Error if symlinks unavailable:**
-```
-✗ Symlinks not supported on this platform.
-
-  Windows users: Enable Developer Mode
-    Settings → Update & Security → For developers → Developer Mode
-
-  Then restart your terminal and try again.
-```
+- macOS 10.14 (Mojave) or later
+- Git (for version control)
 
 ---
 

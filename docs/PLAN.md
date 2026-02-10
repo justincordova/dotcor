@@ -18,7 +18,7 @@ DotCor is a CLI-first dotfile manager built in Go. It uses **symlinks** to keep 
 - **Conflicts:** Let Git handle merges (we provide helpful messages)
 - **Config:** YAML format with Viper, versioned for migrations
 - **Paths:** Normalize to `~` for portability
-- **Cross-platform:** macOS/Linux native, Windows requires Developer Mode (NO FALLBACK)
+- **Platform:** macOS native with full symlink support
 - **Security:** Secret detection and ignore patterns
 
 **Key Differentiator:** GNU Stow's simplicity + Git automation + production-grade safety guarantees
@@ -162,15 +162,13 @@ managed_files:
   - source_path: ~/.zshrc
     repo_path: shell/zshrc
     added_at: 2025-01-04T10:30:00Z
-    platforms: []                # Empty = all platforms, or ["darwin", "linux", "windows", "wsl"]
     has_uncommitted: false       # Track if add succeeded but commit failed
 
   - source_path: ~/.config/nvim/init.vim
     repo_path: nvim/init.vim
     added_at: 2025-01-04T10:31:00Z
-    platforms: []
     has_uncommitted: false
-```
+  ```
 
 ### Directory Layout
 
@@ -273,20 +271,6 @@ managed_files:
 - Show warnings in `dotcor status`
 - Retry uncommitted files on `dotcor sync`
 
-### 6. Windows: No Copy Fallback
-
-**Decision:** REQUIRE symlink support on Windows (Developer Mode or Admin)
-
-**Rationale:**
-- Copy mode breaks the fundamental contract (edits don't sync)
-- Silent data loss is worse than explicit failure
-- Developer Mode is easy to enable on Windows 10+
-
-**Implementation:**
-- Detect symlink support on startup
-- If not supported, show clear error with instructions
-- Exit gracefully rather than provide broken fallback
-
 ### 7. Versioned Config for Future Migrations
 
 **Decision:** Include version field in config for schema migrations
@@ -345,7 +329,6 @@ type ManagedFile struct {
     SourcePath      string    `yaml:"source_path"`       // ~/.zshrc (normalized, with ~)
     RepoPath        string    `yaml:"repo_path"`         // shell/zshrc (relative to files/)
     AddedAt         time.Time `yaml:"added_at"`
-    Platforms       []string  `yaml:"platforms"`         // ["darwin", "linux"] or empty for all
     HasUncommitted  bool      `yaml:"has_uncommitted"`   // Track if Git commit failed
 }
 ```
@@ -467,15 +450,7 @@ func GetRepoFilePath(config *Config, repoPath string) (string, error)
 // Example: ~/.config/nvim/init.vim -> nvim/init.vim
 // Example: ~/.zshrc -> shell/zshrc
 // customPath parameter allows manual override (e.g., "custom/myshell/zshrc")
-func GenerateRepoPath(sourcePath string, customPath string) (string, error)
-
-// GetCurrentPlatform returns current OS identifier
-// Returns: "darwin", "linux", "windows", "wsl"
-// Detects WSL by checking /proc/version for "Microsoft"
-func GetCurrentPlatform() string
-
-// ShouldApplyOnPlatform checks if file should be linked on current platform
-func ShouldApplyOnPlatform(platforms []string) bool
+func GenerateRepoPath(sourcePath string, customPath string) (string, error) {
 
 // ComputeRelativeSymlink computes relative path from symlink to target
 // Example: link=~/.zshrc, target=~/.dotcor/files/shell/zshrc
@@ -565,7 +540,6 @@ func GetCategoryForFile(filename string) string {
 - Use `os.UserHomeDir()` for home directory
 - Use `filepath.Clean()` to normalize separators
 - Support env variables: `os.ExpandEnv()` handles $VAR and %VAR%
-- **WSL detection:** Check `/proc/version` contains "Microsoft" or "WSL"
 - Use `filepath.Rel()` for computing relative symlink paths
 - Validate paths are on same filesystem before computing relative path
 
@@ -1916,19 +1890,7 @@ func TestRelativeSymlinks(t *testing.T) {
 
 ---
 
-#### 3.3 Cross-Platform Testing
 
-**Windows:**
-- Test Developer Mode detection
-- Verify clear error when symlinks unavailable
-- Test WSL detection
-
-**macOS/Linux:**
-- Verify relative symlinks work
-- Test recursive add
-- Test with various shells
-
----
 
 
 
@@ -2145,10 +2107,6 @@ The time spent on testing and reviewing saves exponentially more time debugging 
 **ADR-005: Automatic backups + transaction rollback**
 - **Rationale:** Multiple safety layers
 - **Trade-off:** Disk space usage, slightly slower operations
-
-**ADR-006: NO Windows copy mode fallback**
-- **Rationale:** Copy mode breaks the contract (edits don't sync)
-- **Trade-off:** Windows users must enable Developer Mode
 
 **ADR-007: Versioned config**
 - **Rationale:** Future-proof for schema changes
