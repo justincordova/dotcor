@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -217,14 +216,6 @@ func IsStale(lockPath string, cfg *config.Config) (bool, error) {
 
 // isProcessAlive checks if a process with given PID is still running
 func isProcessAlive(pid int) (bool, error) {
-	if runtime.GOOS == "windows" {
-		return isProcessAliveWindows(pid)
-	}
-	return isProcessAliveUnix(pid)
-}
-
-// isProcessAliveUnix checks if process is alive on Unix systems
-func isProcessAliveUnix(pid int) (bool, error) {
 	process, err := os.FindProcess(pid)
 	if err != nil {
 		return false, nil // Process doesn't exist
@@ -234,29 +225,6 @@ func isProcessAliveUnix(pid int) (bool, error) {
 	err = process.Signal(syscall.Signal(0))
 	if err != nil {
 		// Process doesn't exist or we don't have permission
-		return false, nil
-	}
-
-	return true, nil
-}
-
-// isProcessAliveWindows checks if process is alive on Windows
-// Note: On Windows, os.FindProcess always succeeds, so we check
-// if we can signal the process. This is imperfect but works for
-// most cases where the PID has been reused or the process is gone.
-func isProcessAliveWindows(pid int) (bool, error) {
-	// On Windows, we try to find and signal the process
-	// FindProcess on Windows doesn't actually verify the process exists
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		return false, nil
-	}
-
-	// On Windows, Signal(0) returns an error if process doesn't exist
-	// or we don't have permission. We treat both as "not alive" for
-	// lock staleness purposes since either way we can't communicate with it.
-	err = process.Signal(syscall.Signal(0))
-	if err != nil {
 		return false, nil
 	}
 
