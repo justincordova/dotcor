@@ -16,7 +16,6 @@ func TestGetTemplateContext(t *testing.T) {
 	// Assert
 	require.NoError(t, err, "GetTemplateContext() should not return an error")
 	assert.NotEmpty(t, ctx.Hostname, "GetTemplateContext() Hostname should not be empty")
-	assert.NotEmpty(t, ctx.OS, "GetTemplateContext() OS should not be empty")
 	assert.NotEmpty(t, ctx.User, "GetTemplateContext() User should not be empty")
 	assert.NotEmpty(t, ctx.Home, "GetTemplateContext() Home should not be empty")
 }
@@ -25,7 +24,6 @@ func TestSubstituteTemplate(t *testing.T) {
 	// Arrange
 	ctx := &TemplateContext{
 		Hostname: "testhost",
-		OS:       "linux",
 		User:     "testuser",
 		Home:     "/home/testuser",
 	}
@@ -39,11 +37,6 @@ func TestSubstituteTemplate(t *testing.T) {
 			name:     "substitute hostname",
 			input:    "hostname={{ .Hostname }}",
 			expected: "hostname=testhost",
-		},
-		{
-			name:     "substitute os",
-			input:    "os={{ .OS }}",
-			expected: "os=linux",
 		},
 		{
 			name:     "substitute user",
@@ -141,14 +134,12 @@ func TestTemplateIntegration(t *testing.T) {
 	templateContent := `# Config file for {{ .Hostname }}
 User: {{ .User }}
 Home: {{ .Home }}
-OS: {{ .OS }}
 `
 	err = os.WriteFile(templatePath, []byte(templateContent), 0644)
 	require.NoError(t, err, "should create template file")
 
 	ctx := &TemplateContext{
 		Hostname: "test-machine",
-		OS:       "darwin",
 		User:     "alice",
 		Home:     "/Users/alice",
 	}
@@ -163,13 +154,11 @@ OS: {{ .OS }}
 	assert.Contains(t, result, "test-machine", "SubstituteTemplate() should substitute Hostname")
 	assert.Contains(t, result, "alice", "SubstituteTemplate() should substitute User")
 	assert.Contains(t, result, "/Users/alice", "SubstituteTemplate() should substitute Home")
-	assert.Contains(t, result, "darwin", "SubstituteTemplate() should substitute OS")
 
 	expectedLines := []string{
 		"# Config file for test-machine",
 		"User: alice",
 		"Home: /Users/alice",
-		"OS: darwin",
 	}
 
 	for _, line := range expectedLines {
