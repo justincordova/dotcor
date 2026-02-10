@@ -481,33 +481,6 @@ func TestIntegration_GitWorkflow(t *testing.T) {
 	}
 }
 
-// TestIntegration_ConfigPlatformFiltering tests platform-specific file filtering
-func TestIntegration_ConfigPlatformFiltering(t *testing.T) {
-	cfg := &config.Config{
-		Version: config.CurrentConfigVersion,
-		ManagedFiles: []config.ManagedFile{
-			{SourcePath: "~/.zshrc", RepoPath: "shell/zshrc"},
-			{SourcePath: "~/.bashrc", RepoPath: "shell/bashrc"},
-			{SourcePath: "~/.config/karabiner", RepoPath: "apps/karabiner"},
-		},
-	}
-
-	// Filter for current platform
-	filtered := cfg.ManagedFiles
-
-	// Should include universal files
-	hasZshrc := false
-	for _, f := range filtered {
-		if f.SourcePath == "~/.zshrc" {
-			hasZshrc = true
-			break
-		}
-	}
-	if !hasZshrc {
-		t.Error("platform filter should include universal files")
-	}
-}
-
 // TestIntegration_PathNormalization tests path handling throughout workflow
 func TestIntegration_PathNormalization(t *testing.T) {
 	// Test normalization preserves home tilde
