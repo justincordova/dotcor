@@ -155,7 +155,7 @@ func TestRestore_BackupCreated_RestorePointAvailable(t *testing.T) {
 	// Walk backup directory to find a backup file
 	backupFound := false
 	var backupPath string
-	filepath.Walk(backupDir, func(path string, info os.FileInfo, err error) error {
+	if err := filepath.Walk(backupDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -165,7 +165,9 @@ func TestRestore_BackupCreated_RestorePointAvailable(t *testing.T) {
 			return filepath.SkipAll
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatalf("failed to walk backup directory: %v", err)
+	}
 
 	require.True(t, backupFound, "backup file should exist")
 

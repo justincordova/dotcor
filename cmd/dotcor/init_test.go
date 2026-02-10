@@ -119,8 +119,12 @@ func TestInit_AddFile_WithCategory_Success(t *testing.T) {
 	repoFile := filepath.Join(filesDir, "nvim", "init.vim")
 
 	// Create source file
-	os.MkdirAll(filepath.Dir(sourceFile), 0755)
-	os.WriteFile(sourceFile, []byte("set number\n"), 0644)
+	if err := os.MkdirAll(filepath.Dir(sourceFile), 0755); err != nil {
+		t.Fatalf("failed to create source dir: %v", err)
+	}
+	if err := os.WriteFile(sourceFile, []byte("set number\n"), 0644); err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
 
 	// Act - Move file and create symlink
 	os.MkdirAll(filepath.Dir(repoFile), 0755)
@@ -180,10 +184,18 @@ func TestInit_ApplySymlinks_CreatesAllLinks_Success(t *testing.T) {
 	homeDir := filepath.Join(tempDir, "home")
 
 	// Create repo files
-	os.MkdirAll(filepath.Join(filesDir, "shell"), 0755)
-	os.WriteFile(filepath.Join(filesDir, "shell", "zshrc"), []byte("# ZSH config"), 0644)
-	os.MkdirAll(filepath.Join(filesDir, "nvim"), 0755)
-	os.WriteFile(filepath.Join(filesDir, "nvim", "init.vim"), []byte("set number"), 0644)
+	if err := os.MkdirAll(filepath.Join(filesDir, "shell"), 0755); err != nil {
+		t.Fatalf("failed to create shell dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(filesDir, "shell", "zshrc"), []byte("# ZSH config"), 0644); err != nil {
+		t.Fatalf("failed to create zshrc: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(filesDir, "nvim"), 0755); err != nil {
+		t.Fatalf("failed to create nvim dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(filesDir, "nvim", "init.vim"), []byte("set number"), 0644); err != nil {
+		t.Fatalf("failed to create init.vim: %v", err)
+	}
 
 	// Create managed files list
 	managedFiles := []config.ManagedFile{
@@ -226,12 +238,18 @@ func TestInit_ApplySymlinks_SkipsExistingValidLinks(t *testing.T) {
 	// Create repo file
 	os.MkdirAll(filepath.Join(filesDir, "shell"), 0755)
 	repoFile := filepath.Join(filesDir, "shell", "zshrc")
-	os.WriteFile(repoFile, []byte("# ZSH config"), 0644)
+	if err := os.WriteFile(repoFile, []byte("# ZSH config"), 0644); err != nil {
+		t.Fatalf("failed to create repo file: %v", err)
+	}
 
 	// Create existing valid symlink
 	sourceFile := filepath.Join(homeDir, ".zshrc")
-	os.MkdirAll(homeDir, 0755)
-	os.Symlink(repoFile, sourceFile)
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
+	if err := os.Symlink(repoFile, sourceFile); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
 
 	// Act - Check if symlink is valid
 	info, err := os.Lstat(sourceFile)
@@ -355,8 +373,12 @@ func TestInit_CreateDirectoryFails_ReturnsError(t *testing.T) {
 	configDir := filepath.Join(tempDir, ".dotcor")
 
 	// Create a file where directory should exist
-	os.MkdirAll(tempDir, 0755)
-	os.WriteFile(configDir, []byte("not a directory"), 0644)
+	if err := os.MkdirAll(tempDir, 0755); err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	if err := os.WriteFile(configDir, []byte("not a directory"), 0644); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
 
 	// Act - Try to create directory structure
 	err := os.MkdirAll(filepath.Join(configDir, "files"), 0755)
@@ -396,7 +418,9 @@ func TestInit_MissingParentDirectory_ReturnsError(t *testing.T) {
 	sourceFile := filepath.Join(tempDir, "nested", "path", ".zshrc")
 	repoFile := filepath.Join(tempDir, "files", "zshrc")
 
-	os.WriteFile(repoFile, []byte("# Test"), 0644)
+	if err := os.WriteFile(repoFile, []byte("# Test"), 0644); err != nil {
+		t.Fatalf("failed to create repo file: %v", err)
+	}
 
 	// Don't create parent directory
 
@@ -417,9 +441,13 @@ func TestInit_ApplyFlag_CreatesSymlinks(t *testing.T) {
 	homeDir := filepath.Join(tempDir, "home")
 
 	// Create files directory and repo file
-	os.MkdirAll(filepath.Join(filesDir, "shell"), 0755)
+	if err := os.MkdirAll(filepath.Join(filesDir, "shell"), 0755); err != nil {
+		t.Fatalf("failed to create shell dir: %v", err)
+	}
 	repoFile := filepath.Join(filesDir, "shell", "zshrc")
-	os.WriteFile(repoFile, []byte("# Test zshrc"), 0644)
+	if err := os.WriteFile(repoFile, []byte("# Test zshrc"), 0644); err != nil {
+		t.Fatalf("failed to create repo file: %v", err)
+	}
 
 	// Create home directory
 	os.MkdirAll(homeDir, 0755)
@@ -447,12 +475,16 @@ func TestInit_InteractiveMode_ScansDotfiles(t *testing.T) {
 	tempDir := t.TempDir()
 	homeDir := filepath.Join(tempDir, "home")
 	configPath := filepath.Join(homeDir, ".config")
-	os.MkdirAll(configPath, 0755)
+	if err := os.MkdirAll(configPath, 0755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
 
 	// Create dotfiles
 	dotfiles := []string{".zshrc", ".bashrc", ".vimrc", ".gitconfig"}
 	for _, df := range dotfiles {
-		os.WriteFile(filepath.Join(homeDir, df), []byte("# "+df), 0644)
+		if err := os.WriteFile(filepath.Join(homeDir, df), []byte("# "+df), 0644); err != nil {
+			t.Fatalf("failed to create dotfile %s: %v", df, err)
+		}
 	}
 
 	// Act - Scan for dotfiles
@@ -586,11 +618,15 @@ func TestInit_ConfigAlreadyInitialized_ReturnsEarly(t *testing.T) {
 	// Arrange
 	tempDir := t.TempDir()
 	configDir := filepath.Join(tempDir, ".dotcor")
-	os.MkdirAll(configDir, 0755)
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
 
 	// Create config file
 	configPath := filepath.Join(configDir, "config.yaml")
-	os.WriteFile(configPath, []byte("repo_path: /test\n"), 0644)
+	if err := os.WriteFile(configPath, []byte("repo_path: /test\n"), 0644); err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
 
 	// Act - Check if already initialized
 	alreadyInitialized := fs.PathExists(configDir) && fs.PathExists(configPath)
@@ -649,15 +685,21 @@ func TestInit_BackupFile_Created(t *testing.T) {
 	backupsDir := filepath.Join(tempDir, ".dotcor", "backups")
 
 	// Create source file
-	os.WriteFile(sourceFile, []byte("# Original config"), 0644)
+	if err := os.WriteFile(sourceFile, []byte("# Original config"), 0644); err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
 
 	// Create backups directory
-	os.MkdirAll(backupsDir, 0755)
+	if err := os.MkdirAll(backupsDir, 0755); err != nil {
+		t.Fatalf("failed to create backups dir: %v", err)
+	}
 
 	// Act - Create backup
 	timestamp := time.Now().Format("20060102-150405")
 	backupPath := filepath.Join(backupsDir, filepath.Base(sourceFile)+"."+timestamp)
-	os.Rename(sourceFile, backupPath)
+	if err := os.Rename(sourceFile, backupPath); err != nil {
+		t.Fatalf("failed to rename file: %v", err)
+	}
 
 	// Assert
 	AssertFileExists(t, backupPath)
@@ -761,7 +803,9 @@ func TestInit_HelperFunctions_Work(t *testing.T) {
 		tempDir := t.TempDir()
 		target := filepath.Join(tempDir, "target.txt")
 		link := filepath.Join(tempDir, "link.txt")
-		os.WriteFile(target, []byte("target"), 0644)
+		if err := os.WriteFile(target, []byte("target"), 0644); err != nil {
+			t.Fatalf("failed to create target file: %v", err)
+		}
 		CreateTestSymlink(t, target, link)
 		AssertSymlinkPointsTo(t, link, target)
 	})
