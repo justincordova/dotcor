@@ -72,12 +72,16 @@ func TestList_SingleFile_DisplaysCorrectly(t *testing.T) {
 		r, w, _ := os.Pipe()
 		os.Stdout = w
 
-		outputSimple(files)
+		if err := outputSimple(files); err != nil {
+			t.Fatalf("failed to output simple: %v", err)
+		}
 
 		w.Close()
 		os.Stdout = oldStdout
 		var out bytes.Buffer
-		out.ReadFrom(r)
+		if _, err := out.ReadFrom(r); err != nil {
+			t.Fatalf("failed to read from pipe: %v", err)
+		}
 		output := out.String()
 
 		// Assert
@@ -110,12 +114,16 @@ func TestList_MultipleFiles_DisplaysInTable(t *testing.T) {
 		r, w, _ := os.Pipe()
 		os.Stdout = w
 
-		outputLong(cfg, files, false)
+		if err := outputLong(cfg, files, false); err != nil {
+			t.Fatalf("failed to output long: %v", err)
+		}
 
 		w.Close()
 		os.Stdout = oldStdout
 		var out bytes.Buffer
-		out.ReadFrom(r)
+		if _, err := out.ReadFrom(r); err != nil {
+			t.Fatalf("failed to read from pipe: %v", err)
+		}
 		output := out.String()
 
 		// Assert
@@ -138,14 +146,22 @@ func TestList_UncommittedFile_ShowsWarning(t *testing.T) {
 		repoFile := filepath.Join(repoDir, "shell", "zshrc")
 
 		// Create directories
-		os.MkdirAll(homeDir, 0755)
-		os.MkdirAll(filepath.Dir(repoFile), 0755)
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
+		if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+			t.Fatalf("failed to create repo dir: %v", err)
+		}
 
 		// Create repo file
-		os.WriteFile(repoFile, []byte("test content"), 0644)
+		if err := os.WriteFile(repoFile, []byte("test content"), 0644); err != nil {
+			t.Fatalf("failed to create repo file: %v", err)
+		}
 
 		// Create source file (not a symlink - this will trigger "not-symlink" status)
-		os.WriteFile(sourceFile, []byte("test content"), 0644)
+		if err := os.WriteFile(sourceFile, []byte("test content"), 0644); err != nil {
+			t.Fatalf("failed to create source file: %v", err)
+		}
 
 		cfg := &config.Config{
 			RepoPath:   repoDir,
@@ -168,12 +184,16 @@ func TestList_UncommittedFile_ShowsWarning(t *testing.T) {
 		r, w, _ := os.Pipe()
 		os.Stdout = w
 
-		outputLong(cfg, files, true)
+		if err := outputLong(cfg, files, true); err != nil {
+			t.Fatalf("failed to output long: %v", err)
+		}
 
 		w.Close()
 		os.Stdout = oldStdout
 		var out bytes.Buffer
-		out.ReadFrom(r)
+		if _, err := out.ReadFrom(r); err != nil {
+			t.Fatalf("failed to read from pipe: %v", err)
+		}
 		output := out.String()
 
 		// Assert
