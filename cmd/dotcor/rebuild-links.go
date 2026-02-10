@@ -15,7 +15,6 @@ import (
 func containsTemplateVariables(content string) bool {
 	variables := []string{
 		"{{ .Hostname }}",
-		"{{ .OS }}",
 		"{{ .User }}",
 		"{{ .Home }}",
 	}
@@ -34,7 +33,7 @@ var rebuildLinksCmd = &cobra.Command{
 
 This command:
 1. Finds all .template files in the repository
-2. Renders them with current context (hostname, OS, user, home)
+2. Renders them with current context (hostname, user, home)
 3. Creates or updates symlinks to the rendered files
 
 Examples:

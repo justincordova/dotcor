@@ -180,46 +180,6 @@ managed_files:
 	})
 }
 
-func TestRebuildLinks_OSVariable_Replaced(t *testing.T) {
-	t.Run("OS variable in template", func(t *testing.T) {
-		// Arrange
-		tempDir := t.TempDir()
-		configDir := filepath.Join(tempDir, ".dotcor")
-		filesDir := filepath.Join(configDir, "files")
-
-		// Create directories
-		os.MkdirAll(filesDir, 0755)
-
-		// Create a template file with OS variable
-		templateContent := `# Config for OS: {{ .OS }}
-`
-		templatePath := filepath.Join(filesDir, ".zshrc.template")
-		err := os.WriteFile(templatePath, []byte(templateContent), 0644)
-		require.NoError(t, err)
-
-		// Create config
-		configPath := filepath.Join(configDir, "config.yaml")
-		configContent := fmt.Sprintf(`version: "1.0"
-repo_path: %s
-git_enabled: false
-managed_files:
-  - source_path: ~/.zshrc
-    repo_path: .zshrc.template
-    platforms: []
-    added_at: "2024-01-01T00:00:00Z"
-`, filesDir)
-		err = os.WriteFile(configPath, []byte(configContent), 0644)
-		require.NoError(t, err)
-
-		// Act - Verify template file exists with variable
-		templateFileContent, err := os.ReadFile(templatePath)
-		require.NoError(t, err)
-
-		// Assert
-		assert.Contains(t, string(templateFileContent), "{{ .OS }}", "template should contain OS variable")
-	})
-}
-
 func TestRebuildLinks_UserVariable_Replaced(t *testing.T) {
 	t.Run("user variable in template", func(t *testing.T) {
 		// Arrange

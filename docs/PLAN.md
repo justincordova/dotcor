@@ -37,12 +37,12 @@ DotCor is a CLI-first dotfile manager built in Go. It uses **symlinks** to keep 
 - Progress indicator for large directories
 
 ### v0.4 - Simple Template System
-- Basic substitution: `{{ .Hostname }}`, `{{ .OS }}`, `{{ .User }}`
+- Basic substitution: `{{ .Hostname }}`, `{{ .User }}`, `{{ .Home }}`
 - `--template` flag for `add` command
 - Templates stored with `.template` extension in repo
 - New `dotcor rebuild-links` command to render templates
 - No Go template complexity (keep simple substitution)
-- Template variables: `.Hostname`, `.OS`, `.User`, `.Home`
+- Template variables: `.Hostname`, `.User`, `.Home`
 
 ### v0.5 - Improved Doctor
 - More diagnostic checks (permissions, git config, symlink health)
