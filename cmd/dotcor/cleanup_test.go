@@ -22,8 +22,12 @@ func TestCleanup_OldBackups_DeletesCorrectly(t *testing.T) {
 		filesDir := filepath.Join(configDir, "files")
 
 		// Create directories
-		os.MkdirAll(backupsDir, 0755)
-		os.MkdirAll(filesDir, 0755)
+		if err := os.MkdirAll(backupsDir, 0755); err != nil {
+			t.Fatalf("failed to create backups dir: %v", err)
+		}
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
 
 		// Create config
 		configPath := filepath.Join(configDir, "config.yaml")
