@@ -21,8 +21,12 @@ func TestRemove_SingleFile_Success(t *testing.T) {
 	configDir := filepath.Join(tempDir, ".dotcor")
 	filesDir := filepath.Join(configDir, "files")
 	backupsDir := filepath.Join(configDir, "backups")
-	os.MkdirAll(filesDir, 0755)
-	os.MkdirAll(backupsDir, 0755)
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
+	if err := os.MkdirAll(backupsDir, 0755); err != nil {
+		t.Fatalf("failed to create backups dir: %v", err)
+	}
 
 	homeDir := filepath.Join(tempDir, "home")
 	sourceFile := filepath.Join(homeDir, ".zshrc")
@@ -37,14 +41,24 @@ func TestRemove_SingleFile_Success(t *testing.T) {
 	}
 
 	// Create repo file and symlink
-	os.MkdirAll(filepath.Dir(repoFile), 0755)
-	os.WriteFile(repoFile, []byte("# Test zshrc"), 0644)
-	os.MkdirAll(homeDir, 0755)
-	os.Symlink(repoFile, sourceFile)
+	if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
+	if err := os.WriteFile(repoFile, []byte("# Test zshrc"), 0644); err != nil {
+		t.Fatalf("failed to create repo file: %v", err)
+	}
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
+	if err := os.Symlink(repoFile, sourceFile); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
 
 	// Create backup of repo file
 	backupPath := filepath.Join(backupsDir, "zshrc")
-	os.WriteFile(backupPath, []byte("# Test zshrc"), 0644)
+	if err := os.WriteFile(backupPath, []byte("# Test zshrc"), 0644); err != nil {
+		t.Fatalf("failed to create backup file: %v", err)
+	}
 
 	// Act - Remove symlink
 	err := os.Remove(sourceFile)
@@ -88,11 +102,17 @@ func TestRemove_MultipleFiles_Success(t *testing.T) {
 		backupPath := filepath.Join(backupsDir, filepath.Base(mf.RepoPath))
 
 		// Create repo file
-		os.MkdirAll(filepath.Dir(repoFile), 0755)
-		os.WriteFile(repoFile, []byte("# "+filepath.Base(mf.SourcePath)), 0644)
+		if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+			t.Fatalf("failed to create repo dir: %v", err)
+		}
+		if err := os.WriteFile(repoFile, []byte("# "+filepath.Base(mf.SourcePath)), 0644); err != nil {
+			t.Fatalf("failed to create repo file: %v", err)
+		}
 
 		// Create symlink
-		os.Symlink(repoFile, sourceFile)
+		if err := os.Symlink(repoFile, sourceFile); err != nil {
+			t.Fatalf("failed to create symlink: %v", err)
+		}
 
 		// Create backup
 		os.WriteFile(backupPath, []byte("# "+filepath.Base(mf.SourcePath)), 0644)
@@ -125,12 +145,18 @@ func TestRemove_WithKeepRepo_PreservesRepoFile(t *testing.T) {
 	sourceFile := filepath.Join(tempDir, ".zshrc")
 
 	// Create repo file with actual content
-	os.MkdirAll(filepath.Dir(repoFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
 	repoContent := "# My zsh config\nexport PATH=/usr/bin"
-	os.WriteFile(repoFile, []byte(repoContent), 0644)
+	if err := os.WriteFile(repoFile, []byte(repoContent), 0644); err != nil {
+		t.Fatalf("failed to create repo file: %v", err)
+	}
 
 	// Create symlink
-	os.Symlink(repoFile, sourceFile)
+	if err := os.Symlink(repoFile, sourceFile); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
 
 	// Act - Remove symlink with --keep-repo
 	err := os.Remove(sourceFile)
@@ -246,10 +272,14 @@ func TestRemove_PermissionDenied_ReturnsError(t *testing.T) {
 	sourceFile := filepath.Join(tempDir, ".zshrc")
 
 	// Create source file
-	os.WriteFile(sourceFile, []byte("# Test"), 0644)
+	if err := os.WriteFile(sourceFile, []byte("# Test"), 0644); err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
 
 	// Make file read-only
-	os.Chmod(sourceFile, 0444)
+	if err := os.Chmod(sourceFile, 0444); err != nil {
+		t.Fatalf("failed to set file permissions: %v", err)
+	}
 
 	// Act - Try to remove (this may succeed on some systems)
 	err := os.Remove(sourceFile)
@@ -259,7 +289,9 @@ func TestRemove_PermissionDenied_ReturnsError(t *testing.T) {
 		assert.Error(t, err, "should return error when permission denied")
 	}
 	// Cleanup
-	os.Chmod(sourceFile, 0755)
+	if err := os.Chmod(sourceFile, 0755); err != nil {
+		t.Fatalf("failed to restore file permissions: %v", err)
+	}
 }
 
 func TestRemove_SymlinkNotManaged_ReturnsError(t *testing.T) {
@@ -273,9 +305,15 @@ func TestRemove_SymlinkNotManaged_ReturnsError(t *testing.T) {
 	}
 
 	// Create symlink that's not managed
-	os.MkdirAll(filepath.Dir(repoFile), 0755)
-	os.WriteFile(repoFile, []byte("# Test"), 0644)
-	os.Symlink(repoFile, sourceFile)
+	if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
+	if err := os.WriteFile(repoFile, []byte("# Test"), 0644); err != nil {
+		t.Fatalf("failed to create repo file: %v", err)
+	}
+	if err := os.Symlink(repoFile, sourceFile); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
 
 	// Act - Check if symlink is managed
 	isManaged := false
@@ -311,9 +349,15 @@ func TestRemove_Flag_KeepRepo_PreservesFile(t *testing.T) {
 	}
 
 	// Create repo file and symlink
-	os.MkdirAll(filepath.Dir(repoFile), 0755)
-	os.WriteFile(repoFile, []byte("# Test"), 0644)
-	os.Symlink(repoFile, sourceFile)
+	if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
+	if err := os.WriteFile(repoFile, []byte("# Test"), 0644); err != nil {
+		t.Fatalf("failed to create repo file: %v", err)
+	}
+	if err := os.Symlink(repoFile, sourceFile); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
 
 	// Act - Remove with keep-repo
 	keepRepo := true
@@ -356,9 +400,15 @@ func TestRemove_Flag_All_RemovesAllFiles(t *testing.T) {
 	for _, mf := range cfg.ManagedFiles {
 		repoFile := filepath.Join(filesDir, mf.RepoPath)
 		sourceFile := filepath.Join(homeDir, filepath.Base(mf.SourcePath))
-		os.MkdirAll(filepath.Dir(repoFile), 0755)
-		os.WriteFile(repoFile, []byte("# content"), 0644)
-		os.Symlink(repoFile, sourceFile)
+		if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+			t.Fatalf("failed to create repo dir: %v", err)
+		}
+		if err := os.WriteFile(repoFile, []byte("# content"), 0644); err != nil {
+			t.Fatalf("failed to create repo file: %v", err)
+		}
+		if err := os.Symlink(repoFile, sourceFile); err != nil {
+			t.Fatalf("failed to create symlink: %v", err)
+		}
 	}
 
 	// Act - Remove all with --all
@@ -398,9 +448,15 @@ func TestRemove_Flag_Force_SkipsConfirmation(t *testing.T) {
 	}
 
 	// Create files
-	os.MkdirAll(filepath.Dir(repoFile), 0755)
-	os.WriteFile(repoFile, []byte("# Test"), 0644)
-	os.Symlink(repoFile, sourceFile)
+	if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
+	if err := os.WriteFile(repoFile, []byte("# Test"), 0644); err != nil {
+		t.Fatalf("failed to create repo file: %v", err)
+	}
+	if err := os.Symlink(repoFile, sourceFile); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
 
 	// Act - With --force, skip confirmation
 	force := true
@@ -441,9 +497,15 @@ func TestRemove_Flag_DryRun_NoChangesMade(t *testing.T) {
 	}
 
 	// Create files
-	os.MkdirAll(filepath.Dir(repoFile), 0755)
-	os.WriteFile(repoFile, []byte("# Test"), 0644)
-	os.Symlink(repoFile, sourceFile)
+	if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
+	if err := os.WriteFile(repoFile, []byte("# Test"), 0644); err != nil {
+		t.Fatalf("failed to create repo file: %v", err)
+	}
+	if err := os.Symlink(repoFile, sourceFile); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
 
 	// Act - Dry run doesn't make changes
 	dryRun := true
@@ -487,9 +549,15 @@ func TestRemove_GitEnabled_CommitsChanges(t *testing.T) {
 	}
 
 	// Create files
-	os.MkdirAll(filepath.Dir(repoFile), 0755)
-	os.WriteFile(repoFile, []byte("# Test"), 0644)
-	os.Symlink(repoFile, sourceFile)
+	if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
+	if err := os.WriteFile(repoFile, []byte("# Test"), 0644); err != nil {
+		t.Fatalf("failed to create repo file: %v", err)
+	}
+	if err := os.Symlink(repoFile, sourceFile); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
 
 	// Act - Remove with git enabled
 	/* keepRepo := false */ // Don't keep repo, so git commit happens
