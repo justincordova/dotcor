@@ -12,10 +12,11 @@ import (
 type MigrationFunc func(*Config) error
 
 // migrations maps version transitions to their migration functions
-var migrations = map[string]MigrationFunc{
-	// Add future migrations here
-	// "1.0->1.1": migrateV10ToV11,
-}
+// Currently unused - will be populated when migrations are added
+// var migrations = map[string]MigrationFunc{
+// 	// Add future migrations here
+// 	// "1.0->1.1": migrateV10ToV11,
+// }
 
 // MigrateConfig migrates config from old version to current
 // Returns error if migration fails

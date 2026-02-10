@@ -83,7 +83,6 @@ func runRoot(cmd *cobra.Command, args []string) {
 	// Now load config with logger available
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		cfg = defaultCfg
 		fmt.Printf("  %s[!] Not initialized%s\n", colorYellow, colorReset)
 		fmt.Println()
 		fmt.Printf("  %sGet started:%s\n", colorDim, colorReset)

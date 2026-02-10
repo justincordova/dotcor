@@ -401,59 +401,6 @@ func findOrphanedFilesTopLevel(repoPath string, tracked map[string]bool) []strin
 	return orphans
 }
 
-// findOrphanedFilesInDir finds files in subdirectories (non-recursive)
-// Walks entries at a specific directory level, checking if each is a directory or a tracked file
-func findOrphanedFilesInDir(repoPath string, relDir string, tracked map[string]bool) []string {
-	var orphans []string
-
-	// Simple walk - look for files not in tracked set
-	entries, err := os.ReadDir(repoPath + "/" + relDir)
-	if err != nil {
-		return orphans
-	}
-
-	for _, entry := range entries {
-		if entry.Name() == ".git" || entry.Name() == "config.yaml" {
-			continue
-		}
-
-		if !entry.IsDir() {
-			relPath := relDir + "/" + entry.Name()
-			if !tracked[relPath] {
-				orphans = append(orphans, relPath)
-			}
-		}
-	}
-
-	return orphans
-}
-
-// findOrphanedFilesRecursive recursively finds orphaned files
-func findOrphanedFilesRecursive(basePath, relDir string, tracked map[string]bool) []string {
-	var orphans []string
-
-	fullDir := basePath + "/" + relDir
-	entries, err := os.ReadDir(fullDir)
-	if err != nil {
-		return orphans
-	}
-
-	for _, entry := range entries {
-		relPath := relDir + "/" + entry.Name()
-
-		if entry.IsDir() {
-			subOrphans := findOrphanedFilesRecursive(basePath, relPath, tracked)
-			orphans = append(orphans, subOrphans...)
-		} else {
-			if !tracked[relPath] {
-				orphans = append(orphans, relPath)
-			}
-		}
-	}
-
-	return orphans
-}
-
 // checkPermissions verifies file and directory permissions
 func checkPermissions(fix bool, cmd *cobra.Command) (int, int) {
 	cfg, err := config.LoadConfig()
