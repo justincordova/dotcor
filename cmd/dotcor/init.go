@@ -62,21 +62,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 	configureLogger(cmd, defaultCfg)
 
-	// Check symlink support first
-	supported, err := fs.SupportsSymlinks()
-	if err != nil {
-		return fmt.Errorf("checking symlink support: %w", err)
-	}
-	if !supported {
-		fmt.Fprintln(os.Stderr, "[X] Symlinks not supported on this platform.")
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "Windows users: Enable Developer Mode")
-		fmt.Fprintln(os.Stderr, "  Settings → Update & Security → For developers → Developer Mode")
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "Then restart your terminal and try again.")
-		return fmt.Errorf("symlinks not supported")
-	}
-
 	// Get config directory
 	configDir, err := config.GetConfigDir()
 	if err != nil {

@@ -4,7 +4,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,27 +12,8 @@ import (
 	"github.com/justincordova/dotcor/internal/config"
 )
 
-func TestSupportsSymlinks(t *testing.T) {
-	// Arrange
-	// No arrangement needed
-
-	// Act
-	supported, err := SupportsSymlinks()
-
-	// Assert
-	require.NoError(t, err)
-	if runtime.GOOS != "windows" {
-		assert.True(t, supported, "SupportsSymlinks() should return true on Unix systems")
-	}
-}
-
 func TestIsSymlink(t *testing.T) {
 	// Arrange
-	supported, _ := SupportsSymlinks()
-	if !supported {
-		t.Skip("symlinks not supported on this platform")
-	}
-
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
@@ -92,11 +72,6 @@ func TestIsSymlink(t *testing.T) {
 
 func TestReadSymlink(t *testing.T) {
 	// Arrange
-	supported, _ := SupportsSymlinks()
-	if !supported {
-		t.Skip("symlinks not supported on this platform")
-	}
-
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
@@ -119,11 +94,6 @@ func TestReadSymlink(t *testing.T) {
 
 func TestIsValidSymlink(t *testing.T) {
 	// Arrange
-	supported, _ := SupportsSymlinks()
-	if !supported {
-		t.Skip("symlinks not supported on this platform")
-	}
-
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
@@ -190,11 +160,6 @@ func TestIsValidSymlink(t *testing.T) {
 
 func TestIsRelativeSymlink(t *testing.T) {
 	// Arrange
-	supported, _ := SupportsSymlinks()
-	if !supported {
-		t.Skip("symlinks not supported on this platform")
-	}
-
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
@@ -247,11 +212,6 @@ func TestIsRelativeSymlink(t *testing.T) {
 
 func TestResolveSymlink(t *testing.T) {
 	// Arrange
-	supported, _ := SupportsSymlinks()
-	if !supported {
-		t.Skip("symlinks not supported on this platform")
-	}
-
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
@@ -274,11 +234,6 @@ func TestResolveSymlink(t *testing.T) {
 
 func TestGetSymlinkStatus(t *testing.T) {
 	// Arrange
-	supported, _ := SupportsSymlinks()
-	if !supported {
-		t.Skip("symlinks not supported on this platform")
-	}
-
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
@@ -305,11 +260,6 @@ func TestGetSymlinkStatus(t *testing.T) {
 
 func TestRemoveSymlink(t *testing.T) {
 	// Arrange
-	supported, _ := SupportsSymlinks()
-	if !supported {
-		t.Skip("symlinks not supported on this platform")
-	}
-
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
@@ -362,11 +312,6 @@ func TestRemoveSymlinkErrorsOnRegularFile(t *testing.T) {
 
 func TestSymlinkPointsToRepo_ChecksRepositoryMembership(t *testing.T) {
 	// Arrange
-	supported, _ := SupportsSymlinks()
-	if !supported {
-		t.Skip("symlinks not supported on this platform")
-	}
-
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
@@ -399,11 +344,6 @@ func TestSymlinkPointsToRepo_ChecksRepositoryMembership(t *testing.T) {
 
 func TestCreateSymlink_RelativePath_ComputedCorrectly(t *testing.T) {
 	// Arrange
-	supported, _ := SupportsSymlinks()
-	if !supported {
-		t.Skip("symlinks not supported on this platform")
-	}
-
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
