@@ -22,23 +22,19 @@ func TestStatus_NotInitialized_ReturnsError(t *testing.T) {
 		os.Setenv("HOME", tempDir)
 		defer os.Setenv("HOME", originalHome)
 
-		// Build dotcor binary for testing
-		systemTempDir := os.TempDir()
-		buildPath := filepath.Join(systemTempDir, "dotcor-test-status-notinit")
-		buildCmd := exec.Command("go", "build", "-o", buildPath, "github.com/justincordova/dotcor/cmd/dotcor")
-		output, err := buildCmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("building test binary failed: %v\noutput: %s", err, string(output))
+		// Use pre-built binary
+		binaryPath := "/tmp/dotcor-test-binary"
+		if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
+			t.Fatalf("test binary not found at %s. Run 'go build -o %s ./cmd/dotcor' first.", binaryPath, binaryPath)
 		}
-		defer os.Remove(buildPath)
 
 		// Act - Run status command without init
 		var stdout, stderr bytes.Buffer
-		cmd := exec.Command(buildPath, "status")
+		cmd := exec.Command(binaryPath, "status")
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
 		cmd.Env = append(os.Environ(), fmt.Sprintf("HOME=%s", tempDir))
-		err = cmd.Run()
+		err := cmd.Run()
 
 		// Assert
 		stderrStr := stderr.String()

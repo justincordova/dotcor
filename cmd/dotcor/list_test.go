@@ -3,38 +3,53 @@ package main
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/justincordova/dotcor/internal/config"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestList_NoFiles_PrintsEmptyMessage(t *testing.T) {
 	t.Run("no managed files shows empty message", func(t *testing.T) {
-		// Arrange
-		cfg := CreateTestConfig(t)
-		cfg.ManagedFiles = []config.ManagedFile{}
+		// Arrange - Create temp directory with empty config file
+		tempDir := t.TempDir()
+		configDir := filepath.Join(tempDir, ".dotcor")
+		filesDir := filepath.Join(configDir, "files")
+		os.MkdirAll(filesDir, 0755)
 
-		// Act - call runList which handles the empty case
-		cmd := listCmd
-		cmd.SetArgs([]string{})
-		oldStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
+		// Create empty config file
+		configPath := filepath.Join(configDir, "config.yaml")
+		configContent := `version: "1.0"
+repo_path: ` + filesDir + `
+git_enabled: false
+managed_files: []
+`
+		err := os.WriteFile(configPath, []byte(configContent), 0644)
+		require.NoError(t, err)
 
-		_ = runList(cmd, []string{})
+		// Use pre-built binary
+		binaryPath := "/tmp/dotcor-test-binary"
+		if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
+			t.Fatalf("test binary not found at %s. Run 'go build -o %s ./cmd/dotcor' first.", binaryPath, binaryPath)
+		}
 
-		w.Close()
-		os.Stdout = oldStdout
-		var out bytes.Buffer
-		out.ReadFrom(r)
-		output := out.String()
+		// Act - Run list command
+		var stdout, stderr bytes.Buffer
+		cmd := exec.Command(binaryPath, "list")
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		cmd.Env = append(os.Environ(), "HOME="+tempDir)
+		err = cmd.Run()
 
 		// Assert
-		assert.Contains(t, output, "No files managed by DotCor.")
-		assert.Contains(t, output, "Run 'dotcor add <file>' to start managing dotfiles.")
+		require.NoError(t, err, "list command should succeed")
+		outputStr := stdout.String()
+		assert.Contains(t, outputStr, "No files managed by DotCor.", "should show empty message")
+		assert.Contains(t, outputStr, "Run 'dotcor add <file>' to start managing dotfiles.", "should suggest add command")
 	})
 }
 

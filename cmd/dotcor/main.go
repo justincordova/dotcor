@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	version = "0.5.3" // Minor fixes and documentation
+	version = "0.5.5" // Test coverage improvements
 )
 
 // ANSI color codes
