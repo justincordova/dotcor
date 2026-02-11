@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	version = "0.6.7" // Lock handling (show age in errors)
+	version = "0.6.8" // Simple features part 1
 )
 
 // ANSI color codes

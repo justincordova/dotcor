@@ -85,7 +85,7 @@ func showBackupDiff(sourcePath, backupPath string) {
 	cmd := exec.Command("diff", "-u", backupPath, sourcePath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Run()
+	_ = cmd.Run()
 }
 
 func showBackupStat(sourcePath, backupPath string) {
