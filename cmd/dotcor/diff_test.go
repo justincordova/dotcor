@@ -28,8 +28,12 @@ func TestDiff_NoArguments_ShowsAllChanges(t *testing.T) {
 		repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
 		// Create directories and init git
-		os.MkdirAll(filesDir, 0755)
-		os.MkdirAll(homeDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
 		runGit(t, filesDir, "init")
 		runGit(t, filesDir, "config", "user.email", "test@example.com")
 		runGit(t, filesDir, "config", "user.name", "Test User")
@@ -97,8 +101,12 @@ func TestDiff_WithFileArgument_ShowsFileDiff(t *testing.T) {
 		repoFile2 := filepath.Join(filesDir, "shell", "bashrc")
 
 		// Create directories and init git
-		os.MkdirAll(filesDir, 0755)
-		os.MkdirAll(homeDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
 		runGit(t, filesDir, "init")
 		runGit(t, filesDir, "config", "user.email", "test@example.com")
 		runGit(t, filesDir, "config", "user.name", "Test User")
@@ -171,8 +179,12 @@ func TestDiff_StatFlag_ShowsSummary(t *testing.T) {
 		repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
 		// Create directories and init git
-		os.MkdirAll(filesDir, 0755)
-		os.MkdirAll(homeDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
 		runGit(t, filesDir, "init")
 		runGit(t, filesDir, "config", "user.email", "test@example.com")
 		runGit(t, filesDir, "config", "user.name", "Test User")
@@ -237,8 +249,12 @@ func TestDiff_NoChanges_ShowsNothing(t *testing.T) {
 		repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
 		// Create directories and init git
-		os.MkdirAll(filesDir, 0755)
-		os.MkdirAll(homeDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
 		runGit(t, filesDir, "init")
 		runGit(t, filesDir, "config", "user.email", "test@example.com")
 		runGit(t, filesDir, "config", "user.name", "Test User")
