@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	version = "0.6.6" // Pre-flight validation
+	version = "0.6.7" // Lock handling (show age in errors)
 )
 
 // ANSI color codes
