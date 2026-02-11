@@ -176,12 +176,10 @@ dotcor list
 
 Output:
 ```
-Managed dotfiles (3):
+Managed dotfiles (1):
 
-SOURCE PATH                     REPO PATH              ADDED AT          PLATFORMS
-~/.zshrc                        shell/zshrc            Jan 04 10:30      all
-~/.config/nvim/init.vim         nvim/init.vim          Jan 04 10:31      all
-~/.gitconfig                    git/gitconfig          Jan 04 10:32      all
+SOURCE PATH          REPO PATH         ADDED AT
+~/.zshrc             shell/zshrc       Jan 04 10:30
 ```
 
 ---

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -204,4 +205,36 @@ func TestList_UncommittedFile_ShowsWarning(t *testing.T) {
 		assert.Contains(t, output, sourceFile)
 		assert.Contains(t, output, "not-symlink")
 	})
+}
+
+func TestList_OutputFormat_NoPlatformsColumn(t *testing.T) {
+	// This test verifies that the list output does NOT contain a PLATFORMS column
+	// which was removed from the implementation but may still appear in documentation
+
+	// Read README.md to verify documentation matches implementation
+	readmeContent, err := os.ReadFile("../../README.md")
+	require.NoError(t, err)
+
+	// Check that the README output example does NOT contain PLATFORMS column
+	// The old format was:
+	// SOURCE PATH                     REPO PATH              ADDED AT          PLATFORMS
+	// The correct format should not have PLATFORMS column
+
+	lines := string(readmeContent)
+	hasStaleFormat := false
+
+	// Check if stale format exists in README
+	for _, line := range []string{
+		"SOURCE PATH                     REPO PATH              ADDED AT          PLATFORMS",
+		"SOURCE PATH          REPO PATH         ADDED AT          PLATFORMS",
+		"PLATFORMS",
+	} {
+		if strings.Contains(lines, line) {
+			hasStaleFormat = true
+			break
+		}
+	}
+
+	// This test documents that PLATFORMS column should NOT exist
+	assert.False(t, hasStaleFormat, "README should not contain stale PLATFORMS column in list output example")
 }
