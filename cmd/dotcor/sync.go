@@ -61,8 +61,8 @@ func runSync(cmd *cobra.Command, args []string) error {
 	configureLogger(cmd, cfg)
 
 	// Filter to specific files if provided
-	var filesToSync []string
-	var filesToSyncRepoPaths []string
+	filesToSync := []string{}
+	filesToSyncRepoPaths := []string{}
 	if len(args) > 0 {
 		for _, arg := range args {
 			mf, err := cfg.GetManagedFile(arg)
