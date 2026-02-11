@@ -28,8 +28,14 @@ func TestHistory_SingleFile_ShowsCommits(t *testing.T) {
 		repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
 		// Create directories and init git
-		os.MkdirAll(filesDir, 0755)
-		os.MkdirAll(homeDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}; err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
 		runGit(t, filesDir, "init")
 		runGit(t, filesDir, "config", "user.email", "test@example.com")
 		runGit(t, filesDir, "config", "user.name", "Test User")
@@ -99,8 +105,12 @@ func TestHistory_LimitFlag_ShowsSpecifiedCount(t *testing.T) {
 		repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
 		// Create directories and init git
-		os.MkdirAll(filesDir, 0755)
-		os.MkdirAll(homeDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
 		runGit(t, filesDir, "init")
 		runGit(t, filesDir, "config", "user.email", "test@example.com")
 		runGit(t, filesDir, "config", "user.name", "Test User")
@@ -168,7 +178,9 @@ func TestHistory_UnmanagedFile_ReturnsError(t *testing.T) {
 
 		// Create directories and init git
 		os.MkdirAll(filesDir, 0755)
-		os.MkdirAll(homeDir, 0755)
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
 		runGit(t, filesDir, "init")
 		runGit(t, filesDir, "config", "user.email", "test@example.com")
 		runGit(t, filesDir, "config", "user.name", "Test User")
@@ -224,7 +236,9 @@ func TestHistory_NoHistory_EmptyOutput(t *testing.T) {
 
 		// Create directories and init git
 		os.MkdirAll(filesDir, 0755)
-		os.MkdirAll(homeDir, 0755)
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
 		runGit(t, filesDir, "init")
 		runGit(t, filesDir, "config", "user.email", "test@example.com")
 		runGit(t, filesDir, "config", "user.name", "Test User")
