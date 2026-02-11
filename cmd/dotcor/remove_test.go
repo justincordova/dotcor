@@ -400,10 +400,14 @@ func TestRemove_Flag_All_RemovesAllFiles(t *testing.T) {
 	tempDir := t.TempDir()
 	configDir := filepath.Join(tempDir, ".dotcor")
 	filesDir := filepath.Join(configDir, "files")
-	os.MkdirAll(filesDir, 0755)
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
 
 	homeDir := filepath.Join(tempDir, "home")
-	os.MkdirAll(homeDir, 0755)
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
 
 	cfg := &config.Config{
 		RepoPath:   filesDir,
@@ -502,7 +506,9 @@ func TestRemove_Flag_DryRun_NoChangesMade(t *testing.T) {
 	tempDir := t.TempDir()
 	configDir := filepath.Join(tempDir, ".dotcor")
 	filesDir := filepath.Join(configDir, "files")
-	os.MkdirAll(filesDir, 0755)
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
 
 	repoFile := filepath.Join(filesDir, "shell", "zshrc")
 	sourceFile := filepath.Join(tempDir, ".zshrc")
@@ -553,7 +559,9 @@ func TestRemove_GitEnabled_CommitsChanges(t *testing.T) {
 	tempDir := t.TempDir()
 	configDir := filepath.Join(tempDir, ".dotcor")
 	filesDir := filepath.Join(configDir, "files")
-	os.MkdirAll(filesDir, 0755)
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
 
 	repoFile := filepath.Join(filesDir, "shell", "zshrc")
 	sourceFile := filepath.Join(tempDir, ".zshrc")

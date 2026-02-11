@@ -60,8 +60,12 @@ func TestStatus_ValidSymlink_ShowsOK(t *testing.T) {
 		repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
 		// Create directories
-		os.MkdirAll(filesDir, 0755)
-		os.MkdirAll(homeDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
 
 		// Create repo file
 		CreateTestFile(t, repoFile, "test content")
@@ -126,8 +130,12 @@ func TestStatus_BrokenSymlink_ShowsError(t *testing.T) {
 		repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
 		// Create directories
-		os.MkdirAll(filesDir, 0755)
-		os.MkdirAll(homeDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
 
 		// Create symlink pointing to non-existent repo file
 		relPath, _ := filepath.Rel(filepath.Dir(sourcePath), repoFile)
@@ -191,8 +199,12 @@ func TestStatus_UncommittedChanges_ShowsWarning(t *testing.T) {
 		repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
 		// Create directories
-		os.MkdirAll(filesDir, 0755)
-		os.MkdirAll(homeDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
 
 		// Create repo file
 		CreateTestFile(t, repoFile, "test content")
@@ -265,16 +277,24 @@ func TestStatus_GitAheadBehind_ShowsCounts(t *testing.T) {
 		repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
 		// Create remote repo
-		os.MkdirAll(remoteDir, 0755)
+		if err := os.MkdirAll(remoteDir, 0755); err != nil {
+			t.Fatalf("failed to create remote dir: %v", err)
+		}
 		runGit(t, remoteDir, "init")
 		runGit(t, remoteDir, "config", "user.email", "test@example.com")
 		runGit(t, remoteDir, "config", "user.name", "Test User")
 		runGit(t, remoteDir, "checkout", "-b", "main")
 
 		// Create local repo and add remote
-		os.MkdirAll(localDir, 0755)
-		os.MkdirAll(filesDir, 0755)
-		os.MkdirAll(homeDir, 0755)
+		if err := os.MkdirAll(localDir, 0755); err != nil {
+			t.Fatalf("failed to create local dir: %v", err)
+		}
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
 		runGit(t, filesDir, "init")
 		runGit(t, filesDir, "config", "user.email", "test@example.com")
 		runGit(t, filesDir, "config", "user.name", "Test User")

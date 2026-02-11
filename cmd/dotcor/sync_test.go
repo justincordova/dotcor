@@ -19,7 +19,9 @@ func TestSync_NoChanges_ReturnsEarly(t *testing.T) {
 		filesDir := filepath.Join(configDir, "files")
 
 		// Create directories
-		os.MkdirAll(filesDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
 
 		// Initialize git repo in filesDir
 		runGit(t, filesDir, "init")
@@ -67,8 +69,12 @@ func TestSync_WithChanges_CommitsAndPushes(t *testing.T) {
 		remoteDir := filepath.Join(tempDir, "remote")
 
 		// Create directories
-		os.MkdirAll(filesDir, 0755)
-		os.MkdirAll(remoteDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(remoteDir, 0755); err != nil {
+			t.Fatalf("failed to create remote dir: %v", err)
+		}
 
 		// Initialize remote repo as a bare repository
 		runGit(t, remoteDir, "init", "--bare")
