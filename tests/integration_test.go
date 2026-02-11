@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/justincordova/dotcor/internal/config"
@@ -553,7 +554,8 @@ func TestIntegration_GenerateRepoPath(t *testing.T) {
 				t.Fatalf("GenerateRepoPath() error = %v", err)
 			}
 
-			if !filepath.HasPrefix(result, tt.wantPrefix) {
+			normalizedResult := filepath.Clean(result)
+			if !strings.HasPrefix(normalizedResult, tt.wantPrefix) {
 				t.Errorf("GenerateRepoPath(%s) = %q, want prefix %q", tt.sourcePath, result, tt.wantPrefix)
 			}
 		})
