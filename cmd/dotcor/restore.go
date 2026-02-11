@@ -13,15 +13,16 @@ import (
 )
 
 var restoreCmd = &cobra.Command{
-	Use:   "restore [file]",
-	Short: "Restore a dotfile from Git history or backup",
-	Long: `Restore a dotfile from Git history or from a backup.
+	Use:   "restore [file...]",
+	Short: "Restore dotfiles from Git history or backup",
+	Long: `Restore dotfiles from Git history or from backups.
 
 By default, restores from the most recent Git commit. Use --to to specify
 a different commit or reference. Use --from-backup to restore from a backup.
 
 Examples:
-  dotcor restore ~/.zshrc                # Restore from latest commit
+  dotcor restore ~/.zshrc                # Restore single file from latest commit
+  dotcor restore ~/.zshrc ~/.bashrc      # Restore multiple files
   dotcor restore ~/.zshrc --to HEAD~1    # Restore from previous commit
   dotcor restore ~/.zshrc --to abc123    # Restore from specific commit
   dotcor restore ~/.zshrc --from-backup  # Restore from backup
@@ -72,11 +73,29 @@ func runRestore(cmd *cobra.Command, args []string) error {
 
 	// Require file argument
 	if len(args) == 0 {
-		return fmt.Errorf("specify a file to restore")
+		return fmt.Errorf("specify files to restore")
 	}
 
-	sourcePath := args[0]
+	// Restore each file
+	successCount := 0
+	for _, sourcePath := range args {
+		err := restoreSingleFile(sourcePath, toRef, fromBackup, preview, force, cfg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[!] %s: %v\n", sourcePath, err)
+		} else {
+			successCount++
+		}
+	}
 
+	if successCount == 0 {
+		return fmt.Errorf("no files restored successfully")
+	}
+
+	return nil
+}
+
+// restoreSingleFile restores a single file
+func restoreSingleFile(sourcePath, toRef string, fromBackup, preview, force bool, cfg *config.Config) error {
 	// Get managed file info
 	mf, err := cfg.GetManagedFile(sourcePath)
 	if err != nil {
