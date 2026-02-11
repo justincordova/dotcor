@@ -85,8 +85,9 @@ func AcquireLock(cfg *config.Config) error {
 
 				// Lock is held by active process
 				info, _ := ReadLockInfo(lockPath)
-				cfg.Logger.Error("lock held by another process", "pid", info.PID, "hostname", info.Hostname)
-				return fmt.Errorf("%w: PID %d on %s. If this is incorrect, run 'dotcor doctor --fix'", ErrLockHeld, info.PID, info.Hostname)
+				age := time.Since(info.Timestamp)
+				cfg.Logger.Error("lock held by another process", "pid", info.PID, "hostname", info.Hostname, "age", age)
+				return fmt.Errorf("%w: PID %d on %s (lock held for %v). If this is incorrect, run 'dotcor doctor --fix'", ErrLockHeld, info.PID, info.Hostname, formatAge(age))
 			}
 			cfg.Logger.Error("failed to create lock file", "error", err)
 			return fmt.Errorf("creating lock file: %w", err)
@@ -286,4 +287,26 @@ func IsOwnLock() (bool, error) {
 	}
 
 	return info.PID == os.Getpid(), nil
+}
+
+// formatAge formats a duration into a human-readable string
+func formatAge(d time.Duration) string {
+	if d < time.Minute {
+		seconds := int(d.Seconds())
+		return fmt.Sprintf("%d second%s", seconds, pluralize(seconds))
+	} else if d < time.Hour {
+		minutes := int(d.Minutes())
+		return fmt.Sprintf("%d minute%s", minutes, pluralize(minutes))
+	} else {
+		hours := d.Hours()
+		return fmt.Sprintf("%.1f hour%s", hours, pluralize(int(hours)))
+	}
+}
+
+// pluralize returns 's' if n != 1
+func pluralize(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
 }
