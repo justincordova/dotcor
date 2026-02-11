@@ -51,23 +51,21 @@ DotCor is a CLI-first dotfile manager built in Go. It uses **symlinks** to keep 
 - Better output formatting
 - Checks: symlink validity, git health, permissions, config validity, locks, git remote, hook permissions
 
-### v0.6 - Polish & Bug Fixes
+### v0.6 - Polish & Machine Profiles
 - Address bugs and issues discovered during v0.2-v0.5 development
 - Performance improvements
 - UX refinements
 - Documentation updates
+- **Machine Profiles:**
+  - Profile switching (`dotcor set-profile <name>`)
+  - List available profiles (`dotcor list-profiles`)
+  - Profile structure: separate managed files lists per profile
 
-### v0.7 - Machine Profiles
-- Machine profiles with separate managed files lists per profile
-- Profile switching (`dotcor set-profile <name>`)
-- List available profiles (`dotcor list-profiles`)
-- Profile structure: Option A - separate lists per profile
+### v0.7 - Reserved (future features)
+- Deferred to v1.0+ based on user feedback
 
 ### v1.0 - Production Release
-- All pre-v1.0 features complete (v0.2-v0.7)
-- Comprehensive testing finished
-- Stable, production-ready
-- Documentation complete
+- All pre-v1.0 features complete (v0.2-v0.6)
 
 ### v2.0 - Post-Production Features
 **Potential features:**
@@ -2048,8 +2046,7 @@ The time spent on testing and reviewing saves exponentially more time debugging 
 - [ ] v0.3 - Recursive Add
 - [ ] v0.4 - Simple Template System
 - [ ] v0.5 - Improved Doctor
-- [ ] v0.6 - Polish & Bug Fixes
-- [ ] v0.7 - Machine Profiles
+- [ ] v0.6 - Polish & Machine Profiles
 - [ ] v1.0 - Production Release (testing, docs, stable)
 
 ---

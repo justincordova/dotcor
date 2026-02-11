@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	version = "0.5.5" // Test coverage improvements
+	version = "0.6.0" // GitService interface, DI, docs fixes, integration tests
 )
 
 // ANSI color codes
