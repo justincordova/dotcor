@@ -59,6 +59,12 @@ func runRestore(cmd *cobra.Command, args []string) error {
 	}
 	configureLogger(cmd, cfg)
 
+	// Add pre-flight validation
+	result := core.RunPreflightValidation(cfg, "restore", []string{})
+	if err := core.DisplayValidationResults(result); err != nil {
+		return err
+	}
+
 	// Handle --list-backups
 	if listBackups {
 		return listAllBackups(cmd)

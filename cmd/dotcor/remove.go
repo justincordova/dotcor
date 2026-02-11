@@ -55,6 +55,12 @@ func runRemove(cmd *cobra.Command, args []string) error {
 	}
 	configureLogger(cmd, cfg)
 
+	// Add pre-flight validation
+	result := core.RunPreflightValidation(cfg, "remove", []string{})
+	if err := core.DisplayValidationResults(result); err != nil {
+		return err
+	}
+
 	// Acquire lock (skip for dry-run)
 	if !dryRun {
 		if err := core.AcquireLock(cfg); err != nil {
