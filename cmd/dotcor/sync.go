@@ -34,6 +34,7 @@ Examples:
 func init() {
 	syncCmd.Flags().Bool("no-push", false, "Commit but don't push to remote")
 	syncCmd.Flags().Bool("preview", false, "Show what would be synced without making changes")
+	syncCmd.Flags().Bool("dry-run", false, "Alias for --preview")
 	syncCmd.Flags().BoolP("force", "f", false, "Sync without confirmation")
 	syncCmd.Flags().StringP("message", "m", "", "Custom commit message")
 	rootCmd.AddCommand(syncCmd)
@@ -42,8 +43,14 @@ func init() {
 func runSync(cmd *cobra.Command, args []string) error {
 	noPush, _ := cmd.Flags().GetBool("no-push")
 	preview, _ := cmd.Flags().GetBool("preview")
+	dryRun, _ := cmd.Flags().GetBool("dry-run")
 	force, _ := cmd.Flags().GetBool("force")
 	message, _ := cmd.Flags().GetString("message")
+
+	// Treat --dry-run as --preview
+	if dryRun {
+		preview = true
+	}
 
 	// Load config
 	cfg, err := config.LoadConfig()

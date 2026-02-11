@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -313,5 +314,70 @@ managed_files: []
 		statusCmd.Dir = filesDir
 		output, _ := statusCmd.CombinedOutput()
 		assert.Empty(t, string(output), "working tree should be clean after sync")
+	})
+}
+
+func TestSync_DryRun_ShowsPreview(t *testing.T) {
+	t.Run("--dry-run is alias for --preview", func(t *testing.T) {
+		// Arrange
+		tempDir := t.TempDir()
+		configDir := filepath.Join(tempDir, ".dotcor")
+		filesDir := filepath.Join(configDir, "files")
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		runGit(t, filesDir, "init")
+		runGit(t, filesDir, "config", "user.email", "test@example.com")
+		runGit(t, filesDir, "config", "user.name", "Test User")
+		runGit(t, filesDir, "checkout", "-b", "main")
+		testFile := filepath.Join(filesDir, "test.txt")
+		CreateTestFile(t, testFile, "initial")
+		runGit(t, filesDir, "add", "test.txt")
+		runGit(t, filesDir, "commit", "-m", "Initial")
+
+		// Create a new file to be synced
+		newFile := filepath.Join(filesDir, "new.txt")
+		CreateTestFile(t, newFile, "new content")
+
+		configPath := filepath.Join(configDir, "config.yaml")
+		configContent := `version: "1.0"
+repo_path: ` + filesDir + `
+git_enabled: true
+managed_files: []
+`
+		err := os.WriteFile(configPath, []byte(configContent), 0644)
+		require.NoError(t, err)
+
+		originalHome := os.Getenv("HOME")
+		os.Setenv("HOME", tempDir)
+		defer os.Setenv("HOME", originalHome)
+
+		// Create a fresh command to avoid global state issues
+		testCmd := &cobra.Command{
+			Use:  "sync",
+			RunE: runSync,
+		}
+		testCmd.Flags().Bool("no-push", false, "")
+		testCmd.Flags().Bool("preview", false, "")
+		testCmd.Flags().Bool("dry-run", false, "")
+		testCmd.Flags().Bool("force", false, "")
+		testCmd.Flags().String("message", "", "")
+
+		// Parse the flags
+		testCmd.SetArgs([]string{"--dry-run"})
+		if err := testCmd.ParseFlags([]string{"--dry-run"}); err != nil {
+			t.Fatalf("failed to parse flags: %v", err)
+		}
+
+		// Act - Run sync with --dry-run (should behave like --preview)
+		err = runSync(testCmd, []string{})
+
+		// Assert - Should return without error, file should not be committed
+		require.NoError(t, err)
+		// File should NOT be committed in dry-run mode
+		statusCmd := exec.Command("git", "status", "--porcelain")
+		statusCmd.Dir = filesDir
+		output, _ := statusCmd.CombinedOutput()
+		assert.Contains(t, string(output), "new.txt", "file should show as untracked in dry-run")
 	})
 }
