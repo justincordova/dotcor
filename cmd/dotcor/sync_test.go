@@ -128,7 +128,9 @@ func TestSync_GitCommitFails_MarksUncommitted(t *testing.T) {
 		configDir := filepath.Join(tempDir, ".dotcor")
 		filesDir := filepath.Join(configDir, "files")
 
-		os.MkdirAll(filesDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
 
 		// Initialize git repo
 		runGit(t, filesDir, "init")
@@ -146,8 +148,12 @@ func TestSync_GitCommitFails_MarksUncommitted(t *testing.T) {
 		homeDir := filepath.Join(tempDir, "home")
 		sourcePath := filepath.Join(homeDir, ".zshrc")
 		repoFile := filepath.Join(filesDir, "shell", "zshrc")
-		os.MkdirAll(homeDir, 0755)
-		os.MkdirAll(filepath.Dir(repoFile), 0755)
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
+		if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+			t.Fatalf("failed to create repo dir: %v", err)
+		}
 		CreateTestFile(t, repoFile, "test content")
 		relPath, _ := filepath.Rel(filepath.Dir(sourcePath), repoFile)
 		if err := os.Symlink(relPath, sourcePath); err != nil {
@@ -195,8 +201,12 @@ func TestSync_PushFails_ContinuesWithoutError(t *testing.T) {
 		filesDir := filepath.Join(configDir, "files")
 		remoteDir := filepath.Join(tempDir, "remote")
 
-		os.MkdirAll(filesDir, 0755)
-		os.MkdirAll(remoteDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(remoteDir, 0755); err != nil {
+			t.Fatalf("failed to create remote dir: %v", err)
+		}
 
 		// Initialize remote repo as a non-bare repository (will reject pushes)
 		runGit(t, remoteDir, "init")
@@ -255,7 +265,9 @@ func TestSync_NopushFlag_SkipsPush(t *testing.T) {
 		configDir := filepath.Join(tempDir, ".dotcor")
 		filesDir := filepath.Join(configDir, "files")
 
-		os.MkdirAll(filesDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
 
 		// Initialize git repo
 		runGit(t, filesDir, "init")
