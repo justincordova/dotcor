@@ -169,7 +169,9 @@ func TestDoctor_StaleLock_DetectsAndClears(t *testing.T) {
 
 		// Create a stale lock file manually
 		lockDir := filepath.Join(configDir, "lock")
-		os.MkdirAll(lockDir, 0755)
+		if err := os.MkdirAll(lockDir, 0755); err != nil {
+			t.Fatalf("failed to create lock dir: %v", err)
+		}
 		lockFile := filepath.Join(lockDir, "dotcor.lock")
 		oldTime := time.Now().Add(-2 * time.Hour)
 		lockContent := fmt.Sprintf(`{"pid": 99999, "hostname": "test", "timestamp": "%s"}`, oldTime.Format(time.RFC3339))
@@ -211,7 +213,9 @@ func TestDoctor_MissingGit_ReturnsWarning(t *testing.T) {
 		filesDir := filepath.Join(configDir, "files")
 
 		// Create directories
-		os.MkdirAll(filesDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
 
 		// Create config file
 		configPath := filepath.Join(configDir, "config.yaml")
@@ -257,7 +261,9 @@ func TestDoctor_FixFlag_AutoRepairs(t *testing.T) {
 		filesDir := filepath.Join(configDir, "files")
 
 		// Create config directory
-		os.MkdirAll(configDir, 0755)
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			t.Fatalf("failed to create config dir: %v", err)
+		}
 
 		// Create config file
 		configPath := filepath.Join(configDir, "config.yaml")
