@@ -37,7 +37,9 @@ func CreateTestConfigWithGit(t *testing.T, dir string) *config.Config {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	// Create directory and initialize git
-	os.MkdirAll(filesDir, 0755)
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
 	runGit(t, filesDir, "init")
 	runGit(t, filesDir, "config", "user.email", "test@example.com")
 	runGit(t, filesDir, "config", "user.name", "Test User")
