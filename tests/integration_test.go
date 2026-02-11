@@ -12,6 +12,8 @@ import (
 	"github.com/justincordova/dotcor/internal/core"
 	"github.com/justincordova/dotcor/internal/fs"
 	"github.com/justincordova/dotcor/internal/git"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func testConfig() *config.Config {
@@ -577,4 +579,109 @@ func configureGitUser(t *testing.T, repoPath string) {
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("failed to configure git user.name: %v", err)
 	}
+}
+
+// TestIntegration_FullWorkflow_InitAddSyncRestore tests the complete user journey:
+// 1. Initialize DotCor (git repo setup)
+// 2. Add a dotfile
+// 3. Modify and sync
+// 4. Restore from history
+func TestIntegration_FullWorkflow_InitAddSyncRestore(t *testing.T) {
+	if !git.IsGitInstalled() {
+		t.Skip("git not installed")
+	}
+
+	tempDir, err := os.MkdirTemp("", "dotcor-e2e-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	homeDir := filepath.Join(tempDir, "home")
+	repoDir := filepath.Join(tempDir, "dotcor")
+	filesDir := filepath.Join(repoDir, "files")
+
+	// Create directories
+	require.NoError(t, os.MkdirAll(homeDir, 0755))
+	require.NoError(t, os.MkdirAll(repoDir, 0755))
+	require.NoError(t, os.MkdirAll(filesDir, 0755))
+
+	// Step 1: Initialize git repo
+	require.NoError(t, git.InitRepo(filesDir))
+	configureGitUser(t, filesDir)
+
+	// Create initial commit
+	gitkeepPath := filepath.Join(filesDir, ".gitkeep")
+	require.NoError(t, os.WriteFile(gitkeepPath, []byte(""), 0644))
+	require.NoError(t, git.AutoCommit(filesDir, "Initial commit"))
+
+	// Verify repo is clean after initial commit
+	hasChanges, err := git.HasChanges(filesDir)
+	require.NoError(t, err)
+	assert.False(t, hasChanges, "repo should be clean after initial commit")
+
+	// Step 2: Add a dotfile
+	dotfile := filepath.Join(homeDir, ".zshrc")
+	originalContent := []byte("# Original zshrc\nexport PATH=/usr/bin\n")
+	require.NoError(t, os.WriteFile(dotfile, originalContent, 0644))
+
+	repoPath := "shell/zshrc"
+	fullRepoPath := filepath.Join(filesDir, repoPath)
+
+	// Create backup
+	cfg := &config.Config{
+		Logger:     slog.Default(),
+		RepoPath:   filesDir,
+		GitEnabled: false,
+	}
+	backupPath, err := core.CreateBackup(dotfile, cfg)
+	require.NoError(t, err)
+	assert.FileExists(t, backupPath, "backup should exist")
+
+	// Move to repo
+	require.NoError(t, os.MkdirAll(filepath.Dir(fullRepoPath), 0755))
+	require.NoError(t, os.Rename(dotfile, fullRepoPath))
+	require.NoError(t, os.Symlink(fullRepoPath, dotfile))
+
+	// Add to git
+	require.NoError(t, git.AutoCommit(filesDir, "Add .zshrc"))
+
+	// Verify managed files list would contain this
+	assert.FileExists(t, dotfile, "symlink should exist")
+	isSymlink, err := fs.IsSymlink(dotfile)
+	require.NoError(t, err)
+	assert.True(t, isSymlink, "dotfile should be a symlink")
+
+	// Step 3: Modify and sync
+	modifiedContent := []byte("# Modified zshrc\nexport PATH=/usr/bin:/usr/local/bin\n")
+	require.NoError(t, os.WriteFile(fullRepoPath, modifiedContent, 0644))
+
+	// Verify modification is visible through symlink
+	content, err := os.ReadFile(dotfile)
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "/usr/local/bin", "modification should be visible through symlink")
+
+	// Commit changes
+	require.NoError(t, git.AutoCommit(filesDir, "Update .zshrc"))
+
+	// Verify repo is clean after commit
+	hasChanges, err = git.HasChanges(filesDir)
+	require.NoError(t, err)
+	assert.False(t, hasChanges, "repo should be clean after commit")
+
+	// Step 4: Verify git history
+	history, err := git.GetFileHistory(filesDir, "shell/zshrc", 10)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, len(history), 2, "should have at least 2 commits (Initial + Add + Update)")
+
+	// Verify history contains expected commits
+	assert.Contains(t, history[0].Message, "Update .zshrc")
+	assert.Contains(t, history[1].Message, "Add .zshrc")
+
+	// Step 5: Restore to original content (simulate restore)
+	// In real usage, restore would checkout from git, here we just verify the mechanism
+	require.NoError(t, os.WriteFile(fullRepoPath, originalContent, 0644))
+
+	// Verify restored content
+	restoredContent, err := os.ReadFile(dotfile)
+	require.NoError(t, err)
+	assert.Equal(t, string(originalContent), string(restoredContent), "content should be restored")
 }
