@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	version = "0.6.8" // Simple features part 1
+	version = "0.6.9" // Simple features part 2
 )
 
 // ANSI color codes
