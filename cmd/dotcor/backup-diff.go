@@ -8,6 +8,7 @@ import (
 
 	"github.com/justincordova/dotcor/internal/config"
 	"github.com/justincordova/dotcor/internal/core"
+	"github.com/justincordova/dotcor/internal/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -71,9 +72,13 @@ func runBackupDiff(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  Backup: %s (%s)\n", latestBackup.BackupPath, latestBackup.Timestamp.Format("2006-01-02 15:04:05"))
 
 		if showStat {
-			showBackupStat(sourcePath, latestBackup.BackupPath)
+			if err := showBackupStat(sourcePath, latestBackup.BackupPath); err != nil {
+				fmt.Printf("  Warning: %v\n", err)
+			}
 		} else {
-			showBackupDiff(sourcePath, latestBackup.BackupPath)
+			if err := showBackupDiff(sourcePath, latestBackup.BackupPath); err != nil {
+				fmt.Printf("  Warning: %v\n", err)
+			}
 		}
 		fmt.Println("")
 	}
@@ -81,19 +86,30 @@ func runBackupDiff(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func showBackupDiff(sourcePath, backupPath string) {
-	cmd := exec.Command("diff", "-u", backupPath, sourcePath)
+func showBackupDiff(sourcePath, backupPath string) error {
+	diffPath, err := exec.LookPath(utils.DiffBinary)
+	if err != nil {
+		return fmt.Errorf("diff binary not found. Install diffutils: %w", err)
+	}
+
+	cmd := exec.Command(diffPath, utils.DiffUnifiedFlag, backupPath, sourcePath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	_ = cmd.Run()
+	return nil
 }
 
-func showBackupStat(sourcePath, backupPath string) {
-	cmd := exec.Command("diff", "--stat", backupPath, sourcePath)
+func showBackupStat(sourcePath, backupPath string) error {
+	diffPath, err := exec.LookPath(utils.DiffBinary)
+	if err != nil {
+		return fmt.Errorf("diff binary not found. Install diffutils: %w", err)
+	}
+
+	cmd := exec.Command(diffPath, utils.DiffStatFlag, backupPath, sourcePath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		fmt.Printf("  Error getting diff stat: %v\n", err)
-		return
+		return fmt.Errorf("error getting diff stat: %w", err)
 	}
 	fmt.Printf("  %s\n", strings.TrimSpace(string(output)))
+	return nil
 }

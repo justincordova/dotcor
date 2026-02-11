@@ -10,6 +10,7 @@ import (
 	"github.com/justincordova/dotcor/internal/config"
 	"github.com/justincordova/dotcor/internal/core"
 	"github.com/justincordova/dotcor/internal/fs"
+	"github.com/justincordova/dotcor/internal/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -100,8 +101,8 @@ func runListBackups(cmd *cobra.Command, args []string) error {
 	for _, backup := range backups {
 		age := time.Since(backup.Timestamp)
 		fmt.Printf("  %s\n", backup.SourcePath)
-		fmt.Printf("    Date: %s (%s)\n", backup.Timestamp.Format("2006-01-02 15:04:05"), formatAge(age))
-		fmt.Printf("    Size: %s\n", formatSize(backup.Size))
+		fmt.Printf("    Date: %s (%s)\n", backup.Timestamp.Format("2006-01-02 15:04:05"), utils.FormatAge(age))
+		fmt.Printf("    Size: %s\n", utils.FormatSize(backup.Size))
 		fmt.Printf("    Path: %s\n", backup.BackupPath)
 		fmt.Println("")
 	}
@@ -156,24 +157,4 @@ func reverse(s []string) {
 	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
 		s[i], s[j] = s[j], s[i]
 	}
-}
-
-func formatAge(d time.Duration) string {
-	if d < time.Minute {
-		seconds := int(d.Seconds())
-		return fmt.Sprintf("%d second%s", seconds, pluralize(seconds))
-	} else if d < time.Hour {
-		minutes := int(d.Minutes())
-		return fmt.Sprintf("%d minute%s", minutes, pluralize(minutes))
-	} else {
-		hours := d.Hours()
-		return fmt.Sprintf("%.1f hour%s", hours, pluralize(int(hours)))
-	}
-}
-
-func pluralize(n int) string {
-	if n == 1 {
-		return ""
-	}
-	return "s"
 }
