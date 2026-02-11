@@ -14,7 +14,7 @@ import (
 )
 
 var statusCmd = &cobra.Command{
-	Use:   "status",
+	Use:   "status [files...]",
 	Short: "Show status of managed dotfiles and repository",
 	Long: `Show comprehensive status of your DotCor setup.
 
@@ -25,6 +25,7 @@ Displays:
 
 Examples:
   dotcor status                # Show full status
+  dotcor status ~/.zshrc       # Show status for specific file
   dotcor status --quick        # Show summary only
   dotcor status --problems     # Show only files with issues`,
 	RunE: runStatus,
@@ -59,7 +60,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	configureLogger(cmd, cfg)
 
 	// Collect status
-	status := collectStatus(cfg)
+	status := collectStatus(cfg, args)
 
 	// Output
 	if jsonFormat {
@@ -123,11 +124,23 @@ type StatusStats struct {
 }
 
 // collectStatus gathers all status information
-func collectStatus(cfg *config.Config) StatusReport {
+func collectStatus(cfg *config.Config, fileArgs []string) StatusReport {
 	report := StatusReport{}
 
-	// Get managed files
+	// Get managed files, optionally filtered
 	files := cfg.ManagedFiles
+	if len(fileArgs) > 0 {
+		var filtered []config.ManagedFile
+		for _, arg := range fileArgs {
+			mf, err := cfg.GetManagedFile(arg)
+			if err == nil {
+				filtered = append(filtered, *mf)
+			} else {
+				fmt.Fprintf(os.Stderr, "[!] %s is not managed\n", arg)
+			}
+		}
+		files = filtered
+	}
 	report.Statistics.TotalFiles = len(files)
 
 	// Check each file

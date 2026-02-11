@@ -388,3 +388,134 @@ managed_files:
 		assert.Contains(t, outputStr, "ahead of remote", "should show ahead status")
 	})
 }
+
+func TestStatus_SpecificFiles_ShowsOnlyThose(t *testing.T) {
+	t.Run("status with file arguments shows only those files", func(t *testing.T) {
+		// Arrange
+		tempDir := t.TempDir()
+		configDir := filepath.Join(tempDir, ".dotcor")
+		filesDir := filepath.Join(configDir, "files")
+		homeDir := filepath.Join(tempDir, "home")
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
+
+		// Create two managed files
+		zshrcFile := filepath.Join(filesDir, "shell", "zshrc")
+		gitconfigFile := filepath.Join(filesDir, "gitconfig")
+		if err := os.MkdirAll(filepath.Dir(zshrcFile), 0755); err != nil {
+			t.Fatalf("failed to create dirs: %v", err)
+		}
+		CreateTestFile(t, zshrcFile, "zshrc content")
+		CreateTestFile(t, gitconfigFile, "gitconfig content")
+
+		// Create symlinks
+		sourceZshrc := filepath.Join(homeDir, ".zshrc")
+		sourceGitconfig := filepath.Join(homeDir, ".gitconfig")
+		if err := os.Symlink(zshrcFile, sourceZshrc); err != nil {
+			t.Fatalf("failed to create symlink: %v", err)
+		}
+		if err := os.Symlink(gitconfigFile, sourceGitconfig); err != nil {
+			t.Fatalf("failed to create symlink: %v", err)
+		}
+
+		// Create config with both files
+		configPath := filepath.Join(configDir, "config.yaml")
+		configContent := fmt.Sprintf(`version: "1.0"
+repo_path: %s
+git_enabled: true
+managed_files:
+  - source_path: "%s"
+    repo_path: shell/zshrc
+    added_at: "%s"
+  - source_path: "%s"
+    repo_path: gitconfig
+    added_at: "%s"
+`, filesDir, sourceZshrc, time.Now().Format(time.RFC3339), sourceGitconfig, time.Now().Format(time.RFC3339))
+		err := os.WriteFile(configPath, []byte(configContent), 0644)
+		require.NoError(t, err)
+
+		// Build dotcor binary
+		buildPath := filepath.Join(tempDir, "dotcor-test")
+		buildCmd := exec.Command("go", "build", "-o", buildPath, "github.com/justincordova/dotcor/cmd/dotcor")
+		output, err := buildCmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("building test binary failed: %v\noutput: %s", err, string(output))
+		}
+
+		// Act - Status only for zshrc
+		var stdout, stderr bytes.Buffer
+		cmd := exec.Command(buildPath, "status", sourceZshrc)
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		cmd.Env = append(os.Environ(), fmt.Sprintf("HOME=%s", tempDir))
+		err = cmd.Run()
+
+		// Assert
+		require.NoError(t, err, "status command should succeed")
+		outputStr := stdout.String()
+		assert.Contains(t, outputStr, ".zshrc", "output should contain zshrc")
+		assert.NotContains(t, outputStr, ".gitconfig", "output should not contain gitconfig")
+		assert.Contains(t, outputStr, "Summary: 1 files managed", "should show 1 file")
+	})
+}
+
+func TestStatus_NoArgs_ShowsAll(t *testing.T) {
+	t.Run("status without arguments shows all files", func(t *testing.T) {
+		// Arrange
+		tempDir := t.TempDir()
+		configDir := filepath.Join(tempDir, ".dotcor")
+		filesDir := filepath.Join(configDir, "files")
+		homeDir := filepath.Join(tempDir, "home")
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
+
+		testFile := filepath.Join(filesDir, "test.txt")
+		CreateTestFile(t, testFile, "content")
+		sourceFile := filepath.Join(homeDir, ".test")
+		if err := os.Symlink(testFile, sourceFile); err != nil {
+			t.Fatalf("failed to create symlink: %v", err)
+		}
+
+		configPath := filepath.Join(configDir, "config.yaml")
+		configContent := fmt.Sprintf(`version: "1.0"
+repo_path: %s
+git_enabled: true
+managed_files:
+  - source_path: "%s"
+    repo_path: test.txt
+    added_at: "%s"
+`, filesDir, sourceFile, time.Now().Format(time.RFC3339))
+		err := os.WriteFile(configPath, []byte(configContent), 0644)
+		require.NoError(t, err)
+
+		// Build dotcor binary
+		buildPath := filepath.Join(tempDir, "dotcor-test")
+		buildCmd := exec.Command("go", "build", "-o", buildPath, "github.com/justincordova/dotcor/cmd/dotcor")
+		output, err := buildCmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("building test binary failed: %v\noutput: %s", err, string(output))
+		}
+
+		// Act - Status without arguments
+		var stdout, stderr bytes.Buffer
+		cmd := exec.Command(buildPath, "status")
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		cmd.Env = append(os.Environ(), fmt.Sprintf("HOME=%s", tempDir))
+		err = cmd.Run()
+
+		// Assert
+		require.NoError(t, err, "status command should succeed")
+		outputStr := stdout.String()
+		assert.Contains(t, outputStr, ".test", "output should contain file")
+		assert.Contains(t, outputStr, "Summary: 1 files managed", "should show 1 file")
+	})
+}
