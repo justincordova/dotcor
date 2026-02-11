@@ -69,7 +69,7 @@ func runBackupDiff(cmd *cobra.Command, args []string) error {
 		}
 
 		fmt.Printf("Changes since backup for %s:\n", mf.SourcePath)
-		fmt.Printf("  Backup: %s (%s)\n", latestBackup.BackupPath, latestBackup.Timestamp.Format("2006-01-02 15:04:05"))
+		fmt.Printf("  Backup: %s (%s)\n", latestBackup.BackupPath, latestBackup.Timestamp.Format(utils.GitTimestampFormat))
 
 		if showStat {
 			if err := showBackupStat(sourcePath, latestBackup.BackupPath); err != nil {

@@ -123,7 +123,7 @@ func parseBackupPath(relPath string, info os.FileInfo, cfg *config.Config) *Back
 		return nil
 	}
 
-	timestamp, err := time.Parse("2006-01-02_15-04-05", parts[0])
+	timestamp, err := time.Parse(utils.BackupTimestampFormat, parts[0])
 	if err != nil {
 		return nil
 	}

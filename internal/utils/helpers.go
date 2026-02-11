@@ -15,6 +15,10 @@ const (
 	DiffBinary      = "diff"
 	DiffUnifiedFlag = "-u"
 	DiffStatFlag    = "--stat"
+
+	// Time format constants
+	BackupTimestampFormat = "2006-01-02_15-04-05"
+	GitTimestampFormat    = "2006-01-02 15:04:05"
 )
 
 // FormatSize formats file size in human-readable format
