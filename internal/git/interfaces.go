@@ -228,9 +228,8 @@ func (s *GitServiceImpl) IsGitInstalled() bool {
 
 // GitError represents an error from a git operation
 type GitError struct {
-	op     string
-	err    error
-	output string
+	op  string
+	err error
 }
 
 func (e *GitError) Error() string {
