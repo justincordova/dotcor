@@ -301,7 +301,7 @@ func ExpandGlob(pattern string) ([]string, error) {
 	for _, match := range matches {
 		info, err := os.Stat(match)
 		if err != nil {
-			continue // Skip files we can't stat
+			continue // Skip files we cannot stat
 		}
 		if !info.IsDir() {
 			files = append(files, match)
