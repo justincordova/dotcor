@@ -478,21 +478,44 @@ dotcor/
 │   ├── status.go
 │   ├── sync.go
 │   ├── restore.go
-│   └── history.go
+│   ├── history.go
+│   ├── diff.go
+│   ├── adopt.go
+│   ├── doctor.go
+│   ├── rebuild.go
+│   ├── rebuild-links.go
+│   ├── clone.go
+│   ├── cleanup.go
+│   └── test_helpers.go
 ├── internal/
 │   ├── config/          # Configuration management
 │   │   ├── config.go
-│   │   └── paths.go
+│   │   ├── paths.go
+│   │   └── migrate.go
 │   ├── core/            # Business logic
-│   │   ├── linker.go
-│   │   └── validator.go
+│   │   ├── backup.go
+│   │   ├── transaction.go
+│   │   ├── hooks.go
+│   │   ├── templates.go
+│   │   ├── validator.go
+│   │   ├── lock.go
+│   │   └── ignore.go
 │   ├── fs/              # File operations
 │   │   ├── fs.go
 │   │   └── symlink.go
-│   └── git/             # Git integration
-│       └── git.go
-├── PLAN.md              # Implementation plan
-└── README.md            # This file
+│   ├── git/             # Git integration
+│   │   └── git.go
+│   └── logger/          # Structured logging
+│       └── logger.go
+├── tests/
+│   └── integration_test.go
+├── docs/
+│   ├── LOGGING.md
+│   ├── TESTING.md
+│   ├── RELEASING.md
+│   └── PLAN.md
+├── README.md
+└── CLAUDE.md
 ```
 
 ### Building
