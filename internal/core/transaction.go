@@ -109,9 +109,7 @@ func (t *Transaction) ExecutedCount() int {
 	return len(t.executed)
 }
 
-// ============================================================================
 // Common Operations
-// ============================================================================
 
 // MoveFileOp moves a file from Src to Dst
 type MoveFileOp struct {
@@ -353,9 +351,7 @@ func (op *WriteFileOp) Describe() string {
 	return fmt.Sprintf("write file %s", op.Path)
 }
 
-// ============================================================================
 // Compound Operations (for convenience)
-// ============================================================================
 
 // AddFileTransaction creates a transaction for adding a file to dotcor.
 // It builds a planned transaction - call ExecuteAll() to run the operations.

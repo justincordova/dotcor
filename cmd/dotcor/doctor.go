@@ -38,7 +38,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	fix, _ := cmd.Flags().GetBool("fix")
 
 	fmt.Println("DotCor Doctor")
-	fmt.Println("=============")
+	fmt.Println("============")
 	fmt.Println("")
 
 	issues := 0
