@@ -160,7 +160,6 @@ func TestRebuildLinks_HostnameVariable_Replaced(t *testing.T) {
 		if err := os.MkdirAll(filesDir, 0755); err != nil {
 			t.Fatalf("failed to create files dir: %v", err)
 		}
-		os.MkdirAll(filesDir, 0755)
 
 		// Create a template file with hostname variable
 		templateContent := `# Config for {{ .Hostname }}
@@ -203,7 +202,6 @@ func TestRebuildLinks_UserVariable_Replaced(t *testing.T) {
 		if err := os.MkdirAll(filesDir, 0755); err != nil {
 			t.Fatalf("failed to create files dir: %v", err)
 		}
-		os.MkdirAll(filesDir, 0755)
 
 		// Create a template file with user variable
 		templateContent := `# Config for user {{ .User }}

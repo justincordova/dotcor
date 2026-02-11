@@ -21,13 +21,17 @@ func TestRebuildConfig_ValidRepo_ReconstructsConfig(t *testing.T) {
 		filesDir := filepath.Join(configDir, "files")
 
 		// Create repo directory and add some files
-		os.MkdirAll(filesDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
 		CreateTestFile(t, filepath.Join(filesDir, ".zshrc"), "zsh config")
 		CreateTestFile(t, filepath.Join(filesDir, ".gitconfig"), "git config")
 		CreateTestFile(t, filepath.Join(filesDir, "config.yaml"), "old config")
 
 		// Create config directory with minimal config
-		os.MkdirAll(configDir, 0755)
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			t.Fatalf("failed to create config dir: %v", err)
+		}
 		configPath := filepath.Join(configDir, "config.yaml")
 		configContent := fmt.Sprintf(`version: "1.0"
 repo_path: %s
@@ -71,11 +75,15 @@ func TestRebuildConfig_DryRun_ShowsPreview(t *testing.T) {
 		filesDir := filepath.Join(configDir, "files")
 
 		// Create repo directory
-		os.MkdirAll(filesDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
 		CreateTestFile(t, filepath.Join(filesDir, ".zshrc"), "zsh config")
 
 		// Create config directory
-		os.MkdirAll(configDir, 0755)
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			t.Fatalf("failed to create config dir: %v", err)
+		}
 		configPath := filepath.Join(configDir, "config.yaml")
 		configContent := fmt.Sprintf(`version: "1.0"
 repo_path: %s
@@ -119,11 +127,15 @@ func TestRebuildConfig_CorruptConfig_Reconstructs(t *testing.T) {
 		filesDir := filepath.Join(configDir, "files")
 
 		// Create repo directory with files
-		os.MkdirAll(filesDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
 		CreateTestFile(t, filepath.Join(filesDir, ".zshrc"), "zsh config")
 
 		// Create config directory with corrupt config
-		os.MkdirAll(configDir, 0755)
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			t.Fatalf("failed to create config dir: %v", err)
+		}
 		configPath := filepath.Join(configDir, "config.yaml")
 		err := os.WriteFile(configPath, []byte("invalid yaml content [[[["), 0644)
 		require.NoError(t, err)
@@ -164,12 +176,16 @@ func TestRebuildConfig_OrphanedFiles_ShowsWarning(t *testing.T) {
 		filesDir := filepath.Join(configDir, "files")
 
 		// Create repo directory with files
-		os.MkdirAll(filesDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
 		CreateTestFile(t, filepath.Join(filesDir, ".zshrc"), "zsh config")
 		CreateTestFile(t, filepath.Join(filesDir, ".vimrc"), "vim config")
 
 		// Create config directory with config that only tracks one file
-		os.MkdirAll(configDir, 0755)
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			t.Fatalf("failed to create config dir: %v", err)
+		}
 		configPath := filepath.Join(configDir, "config.yaml")
 		configContent := fmt.Sprintf(`version: "1.0"
 repo_path: %s

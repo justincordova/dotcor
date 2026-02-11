@@ -79,11 +79,17 @@ func TestRemove_MultipleFiles_Success(t *testing.T) {
 	configDir := filepath.Join(tempDir, ".dotcor")
 	filesDir := filepath.Join(configDir, "files")
 	backupsDir := filepath.Join(configDir, "backups")
-	os.MkdirAll(filesDir, 0755)
-	os.MkdirAll(backupsDir, 0755)
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
+	if err := os.MkdirAll(backupsDir, 0755); err != nil {
+		t.Fatalf("failed to create backups dir: %v", err)
+	}
 
 	homeDir := filepath.Join(tempDir, "home")
-	os.MkdirAll(homeDir, 0755)
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
 
 	cfg := &config.Config{
 		RepoPath:   filesDir,
@@ -141,7 +147,9 @@ func TestRemove_WithKeepRepo_PreservesRepoFile(t *testing.T) {
 	tempDir := t.TempDir()
 	configDir := filepath.Join(tempDir, ".dotcor")
 	filesDir := filepath.Join(configDir, "files")
-	os.MkdirAll(filesDir, 0755)
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
 
 	repoFile := filepath.Join(filesDir, "shell", "zshrc")
 	sourceFile := filepath.Join(tempDir, ".zshrc")
@@ -178,7 +186,9 @@ func TestRemove_RestoresFromBackup(t *testing.T) {
 	// Arrange
 	tempDir := t.TempDir()
 	backupsDir := filepath.Join(tempDir, "backups")
-	os.MkdirAll(backupsDir, 0755)
+	if err := os.MkdirAll(backupsDir, 0755); err != nil {
+		t.Fatalf("failed to create backups dir: %v", err)
+	}
 
 	homeDir := filepath.Join(tempDir, "home")
 	sourceFile := filepath.Join(homeDir, ".zshrc")
@@ -342,7 +352,9 @@ func TestRemove_Flag_KeepRepo_PreservesFile(t *testing.T) {
 	tempDir := t.TempDir()
 	configDir := filepath.Join(tempDir, ".dotcor")
 	filesDir := filepath.Join(configDir, "files")
-	os.MkdirAll(filesDir, 0755)
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
 
 	repoFile := filepath.Join(filesDir, "shell", "zshrc")
 	sourceFile := filepath.Join(tempDir, ".zshrc")
