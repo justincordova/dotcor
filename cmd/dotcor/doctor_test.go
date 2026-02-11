@@ -24,8 +24,12 @@ func TestDoctor_HealthySystem_AllChecksPass(t *testing.T) {
 		repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
 		// Create directories
-		os.MkdirAll(filesDir, 0755)
-		os.MkdirAll(homeDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
 
 		// Create repo file
 		CreateTestFile(t, repoFile, "test content")
@@ -149,15 +153,17 @@ func TestDoctor_StaleLock_DetectsAndClears(t *testing.T) {
 		filesDir := filepath.Join(configDir, "files")
 
 		// Create directories
-		os.MkdirAll(filesDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
 
 		// Create config file
 		configPath := filepath.Join(configDir, "config.yaml")
 		configContent := fmt.Sprintf(`version: "1.0"
-repo_path: %s
-git_enabled: false
-managed_files: []
-`, filesDir)
+ repo_path: %s
+ git_enabled: false
+ managed_files: []
+ `, filesDir)
 		err := os.WriteFile(configPath, []byte(configContent), 0644)
 		require.NoError(t, err)
 

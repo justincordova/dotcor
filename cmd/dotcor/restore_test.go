@@ -193,7 +193,9 @@ func CreateTestConfigWithFileHistory(t *testing.T, dir string) *config.Config {
 
 	// Create initial commit with test file
 	testFile := filepath.Join(filesDir, "test.txt")
-	os.WriteFile(testFile, []byte("initial content"), 0644)
+	if err := os.WriteFile(testFile, []byte("initial content"), 0644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
 	runGit(t, filesDir, "add", "test.txt")
 	runGit(t, filesDir, "commit", "-m", "Initial commit")
 

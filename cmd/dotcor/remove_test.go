@@ -870,7 +870,9 @@ func TestRemove_HelperFunctions_Work(t *testing.T) {
 		testDir := t.TempDir()
 		target := filepath.Join(testDir, "target.txt")
 		link := filepath.Join(testDir, "link.txt")
-		os.WriteFile(target, []byte("target"), 0644)
+		if err := os.WriteFile(target, []byte("target"), 0644); err != nil {
+			t.Fatalf("failed to create target file: %v", err)
+		}
 		CreateTestSymlink(t, target, link)
 		AssertSymlinkPointsTo(t, link, target)
 	})
