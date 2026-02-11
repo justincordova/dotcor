@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	version = "0.6.0" // GitService interface, DI, docs fixes, integration tests
+	version = "0.6.1" // Dry-run completion across all commands
 )
 
 // ANSI color codes

@@ -61,6 +61,14 @@ DotCor is a CLI-first dotfile manager built in Go. It uses **symlinks** to keep 
   - List available profiles (`dotcor list-profiles`)
   - Profile structure: separate managed files lists per profile
 
+#### v0.6.1 - Dry-Run Completion
+- Complete --dry-run across all commands (add, remove, sync, restore)
+- Consistent dry-run behavior across all commands
+
+#### v0.6.2 - Selective Operations
+- Selective sync for specific files
+- Selective status for specific files
+
 ### v0.7 - Reserved (future features)
 - Deferred to v1.0+ based on user feedback
 
