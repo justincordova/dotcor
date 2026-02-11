@@ -20,15 +20,43 @@ const (
 	colorReset     = "\033[0m"
 	colorDim       = "\033[2m"
 	colorBold      = "\033[1m"
+	colorRed       = "\033[31m"
 	colorGreen     = "\033[32m"
 	colorYellow    = "\033[33m"
+	colorBlue      = "\033[34m"
 	colorCyan      = "\033[36m"
+	colorGray      = "\033[90m"
 	colorWhite     = "\033[97m"
 	colorOrange    = "\033[38;5;208m"
 	colorPink      = "\033[38;5;205m"
 	colorLightPink = "\033[38;5;218m"
 	colorLime      = "\033[38;5;118m"
 )
+
+// Success prints success message in green
+func Success(msg string) {
+	fmt.Printf("%s✓%s %s\n", colorGreen, colorReset, msg)
+}
+
+// Warning prints warning message in yellow
+func Warning(msg string) {
+	fmt.Printf("%s⚠%s %s\n", colorYellow, colorReset, msg)
+}
+
+// Error prints error message in red
+func Error(msg string) {
+	fmt.Printf("%s✗%s %s\n", colorRed, colorReset, msg)
+}
+
+// Info prints info message in blue
+func Info(msg string) {
+	fmt.Printf("%sℹ%s %s\n", colorBlue, colorReset, msg)
+}
+
+// DryRun prints dry-run message in gray
+func DryRun(msg string) {
+	fmt.Printf("%s•%s %s\n", colorGray, colorReset, msg)
+}
 
 func printBanner() {
 	fmt.Println()
