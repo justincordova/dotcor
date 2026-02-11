@@ -179,7 +179,7 @@ func ListBackups(cfg *config.Config) ([]BackupInfo, error) {
 		// Get the timestamp directory name
 		relPath, err := filepath.Rel(backupDir, path)
 		if err != nil {
-			return nil // Skip files we can't process
+			return nil // Skip files we cannot process
 		}
 
 		// Get the parent directory (timestamp directory)
@@ -198,7 +198,7 @@ func ListBackups(cfg *config.Config) ([]BackupInfo, error) {
 		// Parse timestamp from the first directory component
 		timestamp, err := time.Parse(TimestampFormat, timestampStr)
 		if err != nil {
-			return nil // Skip if we can't parse timestamp
+			return nil // Skip if we cannot parse timestamp
 		}
 
 		// Reconstruct original source path with ~ prefix

@@ -135,7 +135,7 @@ func ReleaseLock(cfg *config.Config) error {
 
 	info, err := ReadLockInfo(lockPath)
 	if err != nil {
-		// Can't read lock, try to remove anyway
+		// Cannot read lock, try to remove anyway
 		cfg.Logger.Debug("cannot read lock info, attempting removal")
 		return os.Remove(lockPath)
 	}
@@ -204,7 +204,7 @@ func IsStale(lockPath string, cfg *config.Config) (bool, error) {
 	alive, err := isProcessAlive(info.PID)
 	if err != nil {
 		cfg.Logger.Debug("cannot check process status, assuming stale", "pid", info.PID, "error", err)
-		return true, nil // Can't check, assume stale
+		return true, nil // Cannot check, assume stale
 	}
 
 	if !alive {
