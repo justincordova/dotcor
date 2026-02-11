@@ -32,6 +32,7 @@ Examples:
 func init() {
 	listCmd.Flags().BoolP("long", "l", false, "Show detailed information")
 	listCmd.Flags().Bool("category", false, "Group files by category")
+	listCmd.Flags().Bool("categories", false, "Show count by category")
 	listCmd.Flags().Bool("status", false, "Show symlink status")
 	listCmd.Flags().Bool("json", false, "Output as JSON")
 	listCmd.Flags().Bool("paths-only", false, "Output only paths (for scripting)")
@@ -41,6 +42,7 @@ func init() {
 func runList(cmd *cobra.Command, args []string) error {
 	longFormat, _ := cmd.Flags().GetBool("long")
 	byCategory, _ := cmd.Flags().GetBool("category")
+	showCategories, _ := cmd.Flags().GetBool("categories")
 	showStatus, _ := cmd.Flags().GetBool("status")
 	jsonFormat, _ := cmd.Flags().GetBool("json")
 	pathsOnly, _ := cmd.Flags().GetBool("paths-only")
@@ -63,6 +65,11 @@ func runList(cmd *cobra.Command, args []string) error {
 	// Handle JSON output
 	if jsonFormat {
 		return outputJSON(cfg, files, showStatus)
+	}
+
+	// Handle categories count output
+	if showCategories {
+		return outputCategories(files)
 	}
 
 	// Handle paths-only output
@@ -288,4 +295,28 @@ func resolvePath(baseDir, path string) string {
 		}
 	}
 	return "/" + strings.Join(clean, "/")
+}
+
+// outputCategories shows count by category
+func outputCategories(files []config.ManagedFile) error {
+	categories := make(map[string][]config.ManagedFile)
+
+	for _, f := range files {
+		category := getCategory(f.RepoPath)
+		categories[category] = append(categories[category], f)
+	}
+
+	var categoryNames []string
+	for name := range categories {
+		categoryNames = append(categoryNames, name)
+	}
+	sort.Strings(categoryNames)
+
+	for _, category := range categoryNames {
+		categoryFiles := categories[category]
+		fmt.Printf("%-20s %3d file(s)\n", category+":", len(categoryFiles))
+	}
+
+	fmt.Printf("\n%d file(s) in %d categories\n", len(files), len(categories))
+	return nil
 }
