@@ -35,6 +35,7 @@ func init() {
 	statusCmd.Flags().BoolP("quick", "q", false, "Show summary only")
 	statusCmd.Flags().Bool("problems", false, "Show only files with problems")
 	statusCmd.Flags().Bool("json", false, "Output as JSON")
+	statusCmd.Flags().Bool("prompt", false, "Output minimal for shell prompts")
 	rootCmd.AddCommand(statusCmd)
 }
 
@@ -42,6 +43,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	quick, _ := cmd.Flags().GetBool("quick")
 	problemsOnly, _ := cmd.Flags().GetBool("problems")
 	jsonFormat, _ := cmd.Flags().GetBool("json")
+	prompt, _ := cmd.Flags().GetBool("prompt")
 
 	// Check if initialized
 	configPath, err := config.GetConfigPath()
@@ -63,6 +65,10 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	status := collectStatus(cfg, args)
 
 	// Output
+	if prompt {
+		return outputStatusPrompt(status, args)
+	}
+
 	if jsonFormat {
 		return outputStatusJSON(status)
 	}
@@ -358,6 +364,42 @@ func outputStatusQuick(status StatusReport) error {
 
 	if status.GitStatus.IsRepo && status.GitStatus.HasUncommitted {
 		fmt.Println("[!] Uncommitted changes in repository")
+	}
+
+	return nil
+}
+
+// outputStatusPrompt outputs minimal for shell prompts
+func outputStatusPrompt(status StatusReport, args []string) error {
+	files := status.Files
+	if len(args) > 0 {
+		var filtered []FileStatus
+		for _, f := range files {
+			for _, arg := range args {
+				if f.SourcePath == arg {
+					filtered = append(filtered, f)
+					break
+				}
+			}
+		}
+		files = filtered
+	}
+
+	syncedCount := 0
+	issuesCount := 0
+
+	for _, f := range files {
+		if f.Status == "ok" {
+			syncedCount++
+		} else {
+			issuesCount++
+		}
+	}
+
+	if issuesCount == 0 {
+		fmt.Printf("✓ %d synced\n", syncedCount)
+	} else {
+		fmt.Printf("⚠ %d synced, %d issues\n", syncedCount, issuesCount)
 	}
 
 	return nil
