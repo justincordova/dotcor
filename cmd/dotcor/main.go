@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	version = "0.6.3" // Critical code fixes
+	version = "0.6.4" // UX progress and prompts
 )
 
 // ANSI color codes
