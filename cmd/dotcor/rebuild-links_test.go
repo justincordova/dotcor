@@ -99,7 +99,6 @@ func TestRebuildLinks_NonTemplate_Skips(t *testing.T) {
 		if err := os.MkdirAll(filesDir, 0755); err != nil {
 			t.Fatalf("failed to create files dir: %v", err)
 		}
-		os.MkdirAll(filesDir, 0755)
 
 		// Create a regular (non-template) file
 		regularContent := `# Regular config file

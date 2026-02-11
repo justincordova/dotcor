@@ -31,9 +31,7 @@ func TestHistory_SingleFile_ShowsCommits(t *testing.T) {
 		if err := os.MkdirAll(filesDir, 0755); err != nil {
 			t.Fatalf("failed to create files dir: %v", err)
 		}
-		if err := if err := os.MkdirAll(homeDir, 0755); err != nil {
-			t.Fatalf("failed to create home dir: %v", err)
-		}; err != nil {
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
 			t.Fatalf("failed to create home dir: %v", err)
 		}
 		runGit(t, filesDir, "init")
@@ -177,7 +175,9 @@ func TestHistory_UnmanagedFile_ReturnsError(t *testing.T) {
 		homeDir := filepath.Join(tempDir, "home")
 
 		// Create directories and init git
-		os.MkdirAll(filesDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
 		if err := os.MkdirAll(homeDir, 0755); err != nil {
 			t.Fatalf("failed to create home dir: %v", err)
 		}
@@ -235,7 +235,9 @@ func TestHistory_NoHistory_EmptyOutput(t *testing.T) {
 		repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
 		// Create directories and init git
-		os.MkdirAll(filesDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
 		if err := os.MkdirAll(homeDir, 0755); err != nil {
 			t.Fatalf("failed to create home dir: %v", err)
 		}
