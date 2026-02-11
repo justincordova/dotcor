@@ -49,9 +49,11 @@ dotcor add ~/.config/nvim/*.lua  # Add with glob pattern
 
 # List managed files
 dotcor list
+dotcor list --categories  # Group by category
 
 # Check status
 dotcor status
+dotcor status --prompt  # Quick summary for shell prompts
 
 # Edit your dotfiles as usual (changes are immediately in the repo)
 vim ~/.zshrc
@@ -62,8 +64,14 @@ dotcor sync
 # View history
 dotcor history ~/.zshrc
 
-# Restore from history
-dotcor restore ~/.zshrc --to=HEAD~5
+# Restore from history (now supports multiple files)
+dotcor restore ~/.zshrc ~/.bashrc --to=HEAD~5
+
+# View backups
+dotcor list-backups ~/.zshrc
+
+# Compare to last backup
+dotcor backup-diff ~/.zshrc
 ```
 
 ---
@@ -285,6 +293,41 @@ Use 'dotcor restore ~/.zshrc --to=<commit>' to restore
 
 **Flags:**
 - `-n <number>` - Number of commits to show (default: 10)
+
+---
+
+### `dotcor backup-diff <file>`
+
+Show changes between current files and latest backups.
+
+```bash
+# Show diff for specific file
+dotcor backup-diff ~/.zshrc
+
+# Show diff summary with stats
+dotcor backup-diff ~/.zshrc --stat
+```
+
+Useful for reviewing what would be restored from backup before actually restoring.
+
+---
+
+### `dotcor list-backups [file]`
+
+List all available backups for managed dotfiles.
+
+```bash
+# List all backups
+dotcor list-backups
+
+# List backups for specific file
+dotcor list-backups ~/.zshrc
+```
+
+Shows:
+- Backup timestamp and age
+- File size
+- Full backup path
 
 ---
 
