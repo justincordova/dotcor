@@ -178,3 +178,42 @@ func TestClone_NoGitInstalled_ReturnsError(t *testing.T) {
 		assert.Contains(t, stdoutStr+stderrStr, "git", "should mention git in error")
 	})
 }
+
+func TestClone_ProgressShown(t *testing.T) {
+	t.Run("clone shows progress message", func(t *testing.T) {
+		// Arrange - Create a local git repo to clone from
+		remoteDir := t.TempDir()
+		homeDir := t.TempDir()
+
+		runGit(t, remoteDir, "init")
+		runGit(t, remoteDir, "config", "user.email", "test@example.com")
+		runGit(t, remoteDir, "config", "user.name", "Test User")
+		runGit(t, remoteDir, "checkout", "-b", "main")
+
+		// Add a file to the remote
+		remoteFile := filepath.Join(remoteDir, "test.txt")
+		CreateTestFile(t, remoteFile, "test content")
+		runGit(t, remoteDir, "add", "test.txt")
+		runGit(t, remoteDir, "commit", "-m", "Initial commit")
+
+		// Build dotcor binary
+		buildPath := filepath.Join(homeDir, "dotcor-test")
+		buildCmd := exec.Command("go", "build", "-o", buildPath, "github.com/justincordova/dotcor/cmd/dotcor")
+		output, err := buildCmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("building test binary failed: %v\noutput: %s", err, string(output))
+		}
+
+		// Act - Run clone command and capture output
+		var stdout bytes.Buffer
+		cmd := exec.Command(buildPath, "clone", remoteDir, "--force")
+		cmd.Stdout = &stdout
+		cmd.Env = append(os.Environ(), fmt.Sprintf("HOME=%s", homeDir))
+		err = cmd.Run()
+
+		// Assert
+		require.NoError(t, err, "clone should succeed")
+		outputStr := stdout.String()
+		assert.Contains(t, outputStr, "Cloning repository", "should show cloning message")
+	})
+}

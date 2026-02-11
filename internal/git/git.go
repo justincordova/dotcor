@@ -166,6 +166,35 @@ func Sync(repoPath string) error {
 	return nil
 }
 
+// PushWithProgress pushes to remote and shows progress
+func PushWithProgress(repoPath string) error {
+	// Get current branch name
+	branchCmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	branchCmd.Dir = repoPath
+	branchOutput, err := branchCmd.Output()
+	if err != nil {
+		return fmt.Errorf("getting current branch: %w", err)
+	}
+	branch := strings.TrimSpace(string(branchOutput))
+
+	// Check if upstream is configured for this branch
+	upstreamCmd := exec.Command("git", "config", fmt.Sprintf("branch.%s.remote", branch))
+	upstreamCmd.Dir = repoPath
+	hasUpstream := upstreamCmd.Run() == nil
+
+	// Push with progress
+	var pushCmd *exec.Cmd
+	if hasUpstream {
+		pushCmd = exec.Command("git", "push", "--progress")
+	} else {
+		pushCmd = exec.Command("git", "push", "-u", "origin", branch, "--progress")
+	}
+	pushCmd.Dir = repoPath
+	pushCmd.Stdout = nil
+	pushCmd.Stderr = nil
+	return pushCmd.Run()
+}
+
 // HasChanges checks if working tree has uncommitted changes
 func HasChanges(repoPath string) (bool, error) {
 	cmd := exec.Command("git", "status", "--porcelain")
@@ -373,6 +402,19 @@ func Clone(url, destPath string) error {
 		return fmt.Errorf("git clone failed: %s: %w", string(output), err)
 	}
 	return nil
+}
+
+// CloneWithProgress clones repository and shows progress
+func CloneWithProgress(url, destPath string) error {
+	if !IsGitInstalled() {
+		return fmt.Errorf("git is not installed")
+	}
+
+	// Clone with progress
+	cmd := exec.Command("git", "clone", "--progress", url, destPath)
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	return cmd.Run()
 }
 
 // Pull pulls changes from remote

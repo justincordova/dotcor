@@ -134,7 +134,7 @@ func runClone(cmd *cobra.Command, args []string) error {
 	// Clone repository
 	fmt.Printf("Cloning repository from %s...\n", repoURL)
 
-	if err := git.Clone(repoURL, filesDir); err != nil {
+	if err := git.CloneWithProgress(repoURL, filesDir); err != nil {
 		return fmt.Errorf("cloning repository: %w", err)
 	}
 

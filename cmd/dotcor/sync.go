@@ -278,6 +278,6 @@ func confirmSync(hasChanges bool, willPush bool) bool {
 
 // pushToRemote pushes changes to remote
 func pushToRemote(repoPath string) error {
-	// Use git push
-	return git.Sync(repoPath)
+	// Push with progress
+	return git.PushWithProgress(repoPath)
 }
