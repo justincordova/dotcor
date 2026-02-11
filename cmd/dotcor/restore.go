@@ -34,6 +34,7 @@ func init() {
 	restoreCmd.Flags().Bool("from-backup", false, "Restore from backup instead of Git history")
 	restoreCmd.Flags().Bool("list-backups", false, "List available backups")
 	restoreCmd.Flags().Bool("preview", false, "Show what would be restored without making changes")
+	restoreCmd.Flags().Bool("dry-run", false, "Alias for --preview")
 	restoreCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompts")
 	rootCmd.AddCommand(restoreCmd)
 }
@@ -43,7 +44,13 @@ func runRestore(cmd *cobra.Command, args []string) error {
 	fromBackup, _ := cmd.Flags().GetBool("from-backup")
 	listBackups, _ := cmd.Flags().GetBool("list-backups")
 	preview, _ := cmd.Flags().GetBool("preview")
+	dryRun, _ := cmd.Flags().GetBool("dry-run")
 	force, _ := cmd.Flags().GetBool("force")
+
+	// Treat --dry-run as --preview
+	if dryRun {
+		preview = true
+	}
 
 	// Load config
 	cfg, err := config.LoadConfig()
