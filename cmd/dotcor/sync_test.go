@@ -381,3 +381,161 @@ managed_files: []
 		assert.Contains(t, string(output), "new.txt", "file should show as untracked in dry-run")
 	})
 }
+
+func TestSync_SpecificFiles_CommitsOnlyThose(t *testing.T) {
+	t.Run("sync with file arguments commits only those files", func(t *testing.T) {
+		// Arrange
+		tempDir := t.TempDir()
+		configDir := filepath.Join(tempDir, ".dotcor")
+		filesDir := filepath.Join(configDir, "files")
+		homeDir := filepath.Join(tempDir, "home")
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
+
+		runGit(t, filesDir, "init")
+		runGit(t, filesDir, "config", "user.email", "test@example.com")
+		runGit(t, filesDir, "config", "user.name", "Test User")
+		runGit(t, filesDir, "checkout", "-b", "main")
+
+		// Create two files in repo
+		zshrcFile := filepath.Join(filesDir, "shell", "zshrc")
+		gitconfigFile := filepath.Join(filesDir, "gitconfig")
+		if err := os.MkdirAll(filepath.Dir(zshrcFile), 0755); err != nil {
+			t.Fatalf("failed to create dirs: %v", err)
+		}
+		CreateTestFile(t, zshrcFile, "zshrc content")
+		CreateTestFile(t, gitconfigFile, "gitconfig content")
+		runGit(t, filesDir, "add", ".")
+		runGit(t, filesDir, "commit", "-m", "Initial")
+
+		// Modify both files
+		if err := os.WriteFile(zshrcFile, []byte("modified zshrc"), 0644); err != nil {
+			t.Fatalf("failed to modify zshrc: %v", err)
+		}
+		if err := os.WriteFile(gitconfigFile, []byte("modified gitconfig"), 0644); err != nil {
+			t.Fatalf("failed to modify gitconfig: %v", err)
+		}
+
+		// Create symlinks
+		sourceZshrc := filepath.Join(homeDir, ".zshrc")
+		sourceGitconfig := filepath.Join(homeDir, ".gitconfig")
+		if err := os.Symlink(zshrcFile, sourceZshrc); err != nil {
+			t.Fatalf("failed to create symlink: %v", err)
+		}
+		if err := os.Symlink(gitconfigFile, sourceGitconfig); err != nil {
+			t.Fatalf("failed to create symlink: %v", err)
+		}
+
+		// Create config with both files managed
+		configPath := filepath.Join(configDir, "config.yaml")
+		configContent := `version: "1.0"
+repo_path: ` + filesDir + `
+git_enabled: true
+managed_files:
+  - source_path: "` + sourceZshrc + `"
+    repo_path: shell/zshrc
+    added_at: "2024-01-01T00:00:00Z"
+  - source_path: "` + sourceGitconfig + `"
+    repo_path: gitconfig
+    added_at: "2024-01-01T00:00:00Z"
+`
+		err := os.WriteFile(configPath, []byte(configContent), 0644)
+		require.NoError(t, err)
+
+		originalHome := os.Getenv("HOME")
+		os.Setenv("HOME", tempDir)
+		defer os.Setenv("HOME", originalHome)
+
+		// Create a fresh command to avoid global state issues
+		testCmd := &cobra.Command{
+			Use:  "sync",
+			RunE: runSync,
+		}
+		testCmd.Flags().Bool("no-push", false, "")
+		testCmd.Flags().Bool("preview", false, "")
+		testCmd.Flags().Bool("dry-run", false, "")
+		testCmd.Flags().Bool("force", true, "")
+		testCmd.Flags().String("message", "", "")
+
+		// Act - Sync only zshrc
+		testCmd.SetArgs([]string{sourceZshrc})
+		err = runSync(testCmd, []string{sourceZshrc})
+
+		// Assert - Only zshrc should be committed
+		require.NoError(t, err)
+
+		// Check that zshrc was committed (gitconfig should still be modified)
+		// gitconfig should show as modified but not staged (space before M)
+		statusCmd := exec.Command("git", "status", "--porcelain", "gitconfig")
+		statusCmd.Dir = filesDir
+		statusOutput, _ := statusCmd.CombinedOutput()
+		assert.Contains(t, string(statusOutput), " M", "gitconfig should still be modified (not staged)")
+	})
+}
+
+func TestSync_NoArgs_CommitsAll(t *testing.T) {
+	t.Run("sync without arguments commits all files", func(t *testing.T) {
+		// Arrange
+		tempDir := t.TempDir()
+		configDir := filepath.Join(tempDir, ".dotcor")
+		filesDir := filepath.Join(configDir, "files")
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+
+		runGit(t, filesDir, "init")
+		runGit(t, filesDir, "config", "user.email", "test@example.com")
+		runGit(t, filesDir, "config", "user.name", "Test User")
+		runGit(t, filesDir, "checkout", "-b", "main")
+
+		testFile := filepath.Join(filesDir, "test.txt")
+		CreateTestFile(t, testFile, "initial")
+		runGit(t, filesDir, "add", "test.txt")
+		runGit(t, filesDir, "commit", "-m", "Initial")
+
+		// Modify file
+		if err := os.WriteFile(testFile, []byte("modified"), 0644); err != nil {
+			t.Fatalf("failed to modify file: %v", err)
+		}
+
+		// Create config
+		configPath := filepath.Join(configDir, "config.yaml")
+		configContent := `version: "1.0"
+repo_path: ` + filesDir + `
+git_enabled: true
+managed_files: []
+`
+		err := os.WriteFile(configPath, []byte(configContent), 0644)
+		require.NoError(t, err)
+
+		originalHome := os.Getenv("HOME")
+		os.Setenv("HOME", tempDir)
+		defer os.Setenv("HOME", originalHome)
+
+		// Create a fresh command to avoid global state issues
+		testCmd := &cobra.Command{
+			Use:  "sync",
+			RunE: runSync,
+		}
+		testCmd.Flags().Bool("no-push", false, "")
+		testCmd.Flags().Bool("preview", false, "")
+		testCmd.Flags().Bool("dry-run", false, "")
+		testCmd.Flags().Bool("force", true, "")
+		testCmd.Flags().String("message", "", "")
+
+		// Act - Sync without arguments
+		testCmd.SetArgs([]string{})
+		err = runSync(testCmd, []string{})
+
+		// Assert - All changes committed
+		require.NoError(t, err)
+		statusCmd := exec.Command("git", "status", "--porcelain")
+		statusCmd.Dir = filesDir
+		output, _ := statusCmd.CombinedOutput()
+		assert.Empty(t, string(output), "all changes should be committed")
+	})
+}

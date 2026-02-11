@@ -84,6 +84,43 @@ func AutoCommit(repoPath, message string) error {
 	return nil
 }
 
+// AutoCommitFiles commits specific files or all changes
+func AutoCommitFiles(repoPath string, files []string, message string) error {
+	if !IsGitInstalled() {
+		return fmt.Errorf("git is not installed")
+	}
+
+	// Stage specific files or all changes
+	var cmd *exec.Cmd
+	if len(files) > 0 {
+		args := append([]string{"add"}, files...)
+		cmd = exec.Command("git", args...)
+		cmd.Dir = repoPath
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("staging files: %w", err)
+		}
+	} else {
+		cmd = exec.Command("git", "add", "-A")
+		cmd.Dir = repoPath
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("staging all changes: %w", err)
+		}
+	}
+
+	// Commit
+	commitCmd := exec.Command("git", "commit", "-m", message)
+	commitCmd.Dir = repoPath
+	if output, err := commitCmd.CombinedOutput(); err != nil {
+		// Check if it's "nothing to commit" error
+		if strings.Contains(string(output), "nothing to commit") {
+			return nil
+		}
+		return fmt.Errorf("committing: %s: %w", string(output), err)
+	}
+
+	return nil
+}
+
 // Sync commits all changes and pushes to remote (if configured)
 func Sync(repoPath string) error {
 	// Generate commit message with timestamp

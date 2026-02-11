@@ -14,7 +14,7 @@ import (
 )
 
 var syncCmd = &cobra.Command{
-	Use:   "sync",
+	Use:   "sync [files...]",
 	Short: "Commit all changes and push to remote",
 	Long: `Sync dotfiles by committing changes and optionally pushing to remote.
 
@@ -24,7 +24,8 @@ This command:
 3. Pushes to remote (if configured and not --no-push)
 
 Examples:
-  dotcor sync                 # Commit and push
+  dotcor sync                 # Commit and push all files
+  dotcor sync ~/.zshrc        # Sync specific file(s)
   dotcor sync --no-push       # Commit only
   dotcor sync --preview       # Show what would be synced
   dotcor sync -m "message"    # Custom commit message`,
@@ -58,6 +59,25 @@ func runSync(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading config: %w\nRun 'dotcor init' first", err)
 	}
 	configureLogger(cmd, cfg)
+
+	// Filter to specific files if provided
+	var filesToSync []string
+	var filesToSyncRepoPaths []string
+	if len(args) > 0 {
+		for _, arg := range args {
+			mf, err := cfg.GetManagedFile(arg)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "[!] %s is not managed\n", arg)
+			} else {
+				filesToSync = append(filesToSync, arg)
+				filesToSyncRepoPaths = append(filesToSyncRepoPaths, mf.RepoPath)
+			}
+		}
+		if len(filesToSync) == 0 && len(args) > 0 {
+			return fmt.Errorf("no valid files specified")
+		}
+		fmt.Printf("Syncing %d file(s)...\n", len(filesToSync))
+	}
 
 	// Check if git is available
 	if !git.IsGitInstalled() {
@@ -139,11 +159,22 @@ func runSync(cmd *cobra.Command, args []string) error {
 	if hasChanges {
 		commitMsg := message
 		if commitMsg == "" {
-			commitMsg = fmt.Sprintf("Sync dotfiles - %s", time.Now().Format("2006-01-02 15:04"))
+			if len(filesToSync) > 0 {
+				commitMsg = fmt.Sprintf("Sync %d file(s) - %s", len(filesToSync), time.Now().Format("2006-01-02 15:04"))
+			} else {
+				commitMsg = fmt.Sprintf("Sync dotfiles - %s", time.Now().Format("2006-01-02 15:04"))
+			}
 		}
 
-		if err := git.AutoCommit(repoPath, commitMsg); err != nil {
-			return fmt.Errorf("committing changes: %w", err)
+		// Use selective commit if files specified
+		if len(filesToSyncRepoPaths) > 0 {
+			if err := git.AutoCommitFiles(repoPath, filesToSyncRepoPaths, commitMsg); err != nil {
+				return fmt.Errorf("committing changes: %w", err)
+			}
+		} else {
+			if err := git.AutoCommit(repoPath, commitMsg); err != nil {
+				return fmt.Errorf("committing changes: %w", err)
+			}
 		}
 		fmt.Println("[OK] Changes committed")
 
