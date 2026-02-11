@@ -21,8 +21,15 @@ func TestRebuildLinks_TemplateFiles_RendersCorrectly(t *testing.T) {
 		homeDir := filepath.Join(tempDir, "home")
 
 		// Create directories
-		os.MkdirAll(filesDir, 0755)
-		os.MkdirAll(homeDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
 
 		// Create a template file with variables
 		templateContent := `# Shell configuration
@@ -89,6 +96,9 @@ func TestRebuildLinks_NonTemplate_Skips(t *testing.T) {
 		filesDir := filepath.Join(configDir, "files")
 
 		// Create directories
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
 		os.MkdirAll(filesDir, 0755)
 
 		// Create a regular (non-template) file
@@ -148,6 +158,9 @@ func TestRebuildLinks_HostnameVariable_Replaced(t *testing.T) {
 		filesDir := filepath.Join(configDir, "files")
 
 		// Create directories
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
 		os.MkdirAll(filesDir, 0755)
 
 		// Create a template file with hostname variable
@@ -188,6 +201,9 @@ func TestRebuildLinks_UserVariable_Replaced(t *testing.T) {
 		filesDir := filepath.Join(configDir, "files")
 
 		// Create directories
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
 		os.MkdirAll(filesDir, 0755)
 
 		// Create a template file with user variable

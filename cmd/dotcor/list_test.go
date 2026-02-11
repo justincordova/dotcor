@@ -19,7 +19,9 @@ func TestList_NoFiles_PrintsEmptyMessage(t *testing.T) {
 		tempDir := t.TempDir()
 		configDir := filepath.Join(tempDir, ".dotcor")
 		filesDir := filepath.Join(configDir, "files")
-		os.MkdirAll(filesDir, 0755)
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
 
 		// Create empty config file
 		configPath := filepath.Join(configDir, "config.yaml")

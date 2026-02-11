@@ -59,7 +59,9 @@ func TestInit_AddFile_CreatesSymlink_Success(t *testing.T) {
 	tempDir := t.TempDir()
 	configDir := filepath.Join(tempDir, ".dotcor")
 	filesDir := filepath.Join(configDir, "files")
-	os.MkdirAll(filesDir, 0755)
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
 
 	homeDir := filepath.Join(tempDir, "home")
 	sourceFile := filepath.Join(homeDir, ".zshrc")
@@ -68,7 +70,9 @@ func TestInit_AddFile_CreatesSymlink_Success(t *testing.T) {
 	managedFiles := []config.ManagedFile{}
 
 	// Create source file
-	os.MkdirAll(filepath.Dir(sourceFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(sourceFile), 0755); err != nil {
+		t.Fatalf("failed to create source dir: %v", err)
+	}
 	if err := os.WriteFile(sourceFile, []byte("# Test zshrc\nexport PATH=/bin"), 0644); err != nil {
 		t.Fatalf("failed to create source file: %v", err)
 	}
@@ -112,7 +116,9 @@ func TestInit_AddFile_WithCategory_Success(t *testing.T) {
 	// Arrange
 	configDir := t.TempDir()
 	filesDir := filepath.Join(configDir, "files")
-	os.MkdirAll(filesDir, 0755)
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
 
 	homeDir := filepath.Join(configDir, "home")
 	sourceFile := filepath.Join(homeDir, ".config", "nvim", "init.vim")
@@ -127,7 +133,9 @@ func TestInit_AddFile_WithCategory_Success(t *testing.T) {
 	}
 
 	// Act - Move file and create symlink
-	os.MkdirAll(filepath.Dir(repoFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
 	err := os.Rename(sourceFile, repoFile)
 	require.NoError(t, err)
 	err = os.Symlink(repoFile, sourceFile)
@@ -209,7 +217,9 @@ func TestInit_ApplySymlinks_CreatesAllLinks_Success(t *testing.T) {
 		sourcePath := filepath.Join(homeDir, strings.TrimPrefix(mf.SourcePath, "~/"))
 		repoPath := filepath.Join(filesDir, mf.RepoPath)
 
-		os.MkdirAll(filepath.Dir(sourcePath), 0755)
+		if err := os.MkdirAll(filepath.Dir(sourcePath), 0755); err != nil {
+			t.Fatalf("failed to create source dir: %v", err)
+		}
 		if err := os.Symlink(repoPath, sourcePath); err != nil {
 			t.Fatalf("failed to create symlink: %v", err)
 		}
@@ -236,7 +246,9 @@ func TestInit_ApplySymlinks_SkipsExistingValidLinks(t *testing.T) {
 	homeDir := filepath.Join(tempDir, "home")
 
 	// Create repo file
-	os.MkdirAll(filepath.Join(filesDir, "shell"), 0755)
+	if err := os.MkdirAll(filepath.Join(filesDir, "shell"), 0755); err != nil {
+		t.Fatalf("failed to create shell dir: %v", err)
+	}
 	repoFile := filepath.Join(filesDir, "shell", "zshrc")
 	if err := os.WriteFile(repoFile, []byte("# ZSH config"), 0644); err != nil {
 		t.Fatalf("failed to create repo file: %v", err)
@@ -450,7 +462,9 @@ func TestInit_ApplyFlag_CreatesSymlinks(t *testing.T) {
 	}
 
 	// Create home directory
-	os.MkdirAll(homeDir, 0755)
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("failed to create home dir: %v", err)
+	}
 	sourceFile := filepath.Join(homeDir, ".zshrc")
 
 	// Act - Create symlink (apply behavior)
@@ -517,7 +531,9 @@ func TestInit_EmitsCorrectLogs(t *testing.T) {
 	cfg.Logger = logger
 
 	// Act - Create directory
-	os.MkdirAll(filepath.Join(tempDir, ".dotcor"), 0755)
+	if err := os.MkdirAll(filepath.Join(tempDir, ".dotcor"), 0755); err != nil {
+		t.Fatalf("failed to create dotcor dir: %v", err)
+	}
 
 	// Log the operation
 	cfg.Logger.Info("created directory", "path", filepath.Join(tempDir, ".dotcor"))
@@ -557,7 +573,9 @@ func TestInit_GitInstalled_InitializesRepo(t *testing.T) {
 	// Arrange
 	tempDir := t.TempDir()
 	filesDir := filepath.Join(tempDir, ".dotcor", "files")
-	os.MkdirAll(filesDir, 0755)
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
 
 	// Act - Initialize git repo
 	cmd := exec.Command("git", "init")
@@ -597,8 +615,12 @@ func TestInit_CreatesConfigFile(t *testing.T) {
 	configPath := filepath.Join(dotcorDir, "config.yaml")
 	repoPath := filepath.Join(dotcorDir, "files")
 
-	os.MkdirAll(dotcorDir, 0755)
-	os.MkdirAll(repoPath, 0755)
+	if err := os.MkdirAll(dotcorDir, 0755); err != nil {
+		t.Fatalf("failed to create dotcor dir: %v", err)
+	}
+	if err := os.MkdirAll(repoPath, 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
 
 	// Act - Create config file manually
 	configContent := "repo_path: " + repoPath + "\ngit_enabled: true\nignore_patterns: []\nmanaged_files: []\n"
