@@ -304,9 +304,11 @@ func TestRemove_PermissionDenied_ReturnsError(t *testing.T) {
 	if err != nil {
 		assert.Error(t, err, "should return error when permission denied")
 	}
-	// Cleanup
-	if err := os.Chmod(sourceFile, 0755); err != nil {
-		t.Fatalf("failed to restore file permissions: %v", err)
+	// Cleanup - only if file still exists (remove failed)
+	if _, statErr := os.Stat(sourceFile); statErr == nil {
+		if err := os.Chmod(sourceFile, 0755); err != nil {
+			t.Fatalf("failed to restore file permissions: %v", err)
+		}
 	}
 }
 

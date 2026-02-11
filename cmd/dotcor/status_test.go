@@ -79,13 +79,13 @@ func TestStatus_ValidSymlink_ShowsOK(t *testing.T) {
 		// Create config file
 		configPath := filepath.Join(configDir, "config.yaml")
 		configContent := fmt.Sprintf(`version: "1.0"
- repo_path: %s
- git_enabled: false
- managed_files:
-   - source_path: %s
-     repo_path: shell/zshrc
-     added_at: "%s"
- `, filesDir, sourcePath, time.Now().Format(time.RFC3339))
+repo_path: %s
+git_enabled: false
+managed_files:
+  - source_path: %s
+    repo_path: shell/zshrc
+    added_at: "%s"
+`, filesDir, sourcePath, time.Now().Format(time.RFC3339))
 		err := os.WriteFile(configPath, []byte(configContent), 0644)
 		require.NoError(t, err)
 
@@ -147,12 +147,12 @@ func TestStatus_BrokenSymlink_ShowsError(t *testing.T) {
 		// Create config file
 		configPath := filepath.Join(configDir, "config.yaml")
 		configContent := fmt.Sprintf(`version: "1.0"
- repo_path: %s
- git_enabled: false
- managed_files:
-   - source_path: %s
-     repo_path: shell/zshrc
-     added_at: "%s"
+repo_path: %s
+git_enabled: false
+managed_files:
+  - source_path: %s
+    repo_path: shell/zshrc
+    added_at: "%s"
  `, filesDir, sourcePath, time.Now().Format(time.RFC3339))
 		err := os.WriteFile(configPath, []byte(configContent), 0644)
 		require.NoError(t, err)
@@ -218,10 +218,10 @@ func TestStatus_UncommittedChanges_ShowsWarning(t *testing.T) {
 		// Create config file with uncommitted files
 		configPath := filepath.Join(configDir, "config.yaml")
 		configContent := fmt.Sprintf(`version: "1.0"
- repo_path: %s
- git_enabled: false
- managed_files:
-   - source_path: %s
+repo_path: %s
+git_enabled: false
+managed_files:
+  - source_path: %s
     repo_path: shell/zshrc
     added_at: "%s"
     has_uncommitted: true

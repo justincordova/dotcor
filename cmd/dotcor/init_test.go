@@ -430,6 +430,12 @@ func TestInit_MissingParentDirectory_ReturnsError(t *testing.T) {
 	sourceFile := filepath.Join(tempDir, "nested", "path", ".zshrc")
 	repoFile := filepath.Join(tempDir, "files", "zshrc")
 
+	// Create files directory first
+	filesDir := filepath.Join(tempDir, "files")
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
+
 	if err := os.WriteFile(repoFile, []byte("# Test"), 0644); err != nil {
 		t.Fatalf("failed to create repo file: %v", err)
 	}

@@ -455,6 +455,11 @@ func TestAdd_BackupFails_ReturnsError(t *testing.T) {
 	}
 
 	// Make backups directory non-writable
+	// First create configDir with normal permissions
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
+	// Then create backupsDir with restricted permissions
 	if err := os.MkdirAll(backupsDir, 0444); err != nil {
 		t.Fatalf("failed to create backups dir: %v", err)
 	}

@@ -328,6 +328,11 @@ func TestDoctor_PermissionError_DetectsIssue(t *testing.T) {
 			t.Fatalf("failed to set file permissions: %v", err)
 		}
 
+		// Remove the file before creating symlink
+		if err := os.Remove(sourcePath); err != nil {
+			t.Fatalf("failed to remove source file: %v", err)
+		}
+
 		// Create valid symlink to make the permission check run
 		relPath, _ := filepath.Rel(filepath.Dir(sourcePath), repoFile)
 		if err := os.Symlink(relPath, sourcePath); err != nil {
