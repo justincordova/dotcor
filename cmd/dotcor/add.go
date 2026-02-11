@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -129,6 +130,35 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	if dryRun {
 		fmt.Println("Dry run - no changes will be made:")
 		fmt.Println("")
+	}
+
+	// Show summary and ask for confirmation
+	if !force && !dryRun {
+		// Calculate total size
+		var totalSize int64
+		for _, file := range files {
+			expandedPath, err := config.ExpandPath(file, cfg)
+			if err == nil {
+				if info, err := os.Stat(expandedPath); err == nil {
+					totalSize += info.Size()
+				}
+			}
+		}
+
+		fmt.Println("Summary:")
+		fmt.Printf("  Files to add: %d\n", len(files))
+		fmt.Printf("  Total size: %s\n", formatSize(totalSize))
+		fmt.Println("")
+		fmt.Print("Proceed? [Y/n]: ")
+
+		reader := bufio.NewReader(os.Stdin)
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(strings.ToLower(input))
+
+		if input == "n" || input == "no" {
+			fmt.Println("Cancelled.")
+			return nil
+		}
 	}
 
 	// Process each file

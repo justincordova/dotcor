@@ -93,13 +93,21 @@ func runRemove(cmd *cobra.Command, args []string) error {
 
 	// Confirmation
 	if !force && !dryRun {
-		fmt.Printf("Remove %d file(s) from management?\n", len(filesToRemove))
+		fmt.Println("Summary:")
+		fmt.Printf("  Files to remove: %d\n", len(filesToRemove))
+		fmt.Println("  Backups will be preserved")
+		fmt.Println("")
 		for _, f := range filesToRemove {
 			fmt.Printf("  - %s\n", f.SourcePath)
 		}
 		fmt.Println("")
+		fmt.Print("Proceed? [Y/n]: ")
 
-		if !confirmRemove() {
+		reader := bufio.NewReader(os.Stdin)
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(strings.ToLower(input))
+
+		if input == "n" || input == "no" {
 			fmt.Println("Cancelled.")
 			return nil
 		}
@@ -248,17 +256,6 @@ func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool,
 
 	fmt.Printf("  [OK] %s\n", mf.SourcePath)
 	return nil
-}
-
-// confirmRemove prompts for confirmation
-func confirmRemove() bool {
-	fmt.Print("Continue? [y/N]: ")
-
-	reader := bufio.NewReader(os.Stdin)
-	input, _ := reader.ReadString('\n')
-	input = strings.TrimSpace(strings.ToLower(input))
-
-	return input == "y" || input == "yes"
 }
 
 // cleanEmptyDirs removes empty parent directories up to the repo root
