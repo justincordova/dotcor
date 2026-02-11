@@ -144,7 +144,9 @@ func TestSync_GitCommitFails_MarksUncommitted(t *testing.T) {
 		os.MkdirAll(filepath.Dir(repoFile), 0755)
 		CreateTestFile(t, repoFile, "test content")
 		relPath, _ := filepath.Rel(filepath.Dir(sourcePath), repoFile)
-		os.Symlink(relPath, sourcePath)
+		if err := os.Symlink(relPath, sourcePath); err != nil {
+			t.Fatalf("failed to create symlink: %v", err)
+		}
 
 		// Modify the repo file to create uncommitted changes
 		CreateTestFile(t, repoFile, "modified content")

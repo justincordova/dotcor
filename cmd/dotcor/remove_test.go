@@ -625,8 +625,12 @@ func TestRemove_PostHookWarnsContinues(t *testing.T) {
 	postRemoveHook := filepath.Join(hooksDir, "post-remove")
 
 	// Create a failing hook script
-	os.MkdirAll(hooksDir, 0755)
-	os.WriteFile(postRemoveHook, []byte("#!/bin/sh\nexit 1"), 0755)
+	if err := os.MkdirAll(hooksDir, 0755); err != nil {
+		t.Fatalf("failed to create hooks dir: %v", err)
+	}
+	if err := os.WriteFile(postRemoveHook, []byte("#!/bin/sh\nexit 1"), 0755); err != nil {
+		t.Fatalf("failed to create hook script: %v", err)
+	}
 
 	// Act - Simulate hook execution
 	_, err := os.Stat(postRemoveHook)
@@ -815,9 +819,15 @@ func TestRemove_FileAlreadyRegular_CopiesCorrectly(t *testing.T) {
 	sourceFile := filepath.Join(tempDir, ".zshrc")
 
 	// Create regular file (not symlink)
-	os.MkdirAll(filepath.Dir(repoFile), 0755)
-	os.WriteFile(repoFile, []byte("# Repo content"), 0644)
-	os.WriteFile(sourceFile, []byte("# Regular file"), 0644)
+	if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
+	if err := os.WriteFile(repoFile, []byte("# Repo content"), 0644); err != nil {
+		t.Fatalf("failed to create repo file: %v", err)
+	}
+	if err := os.WriteFile(sourceFile, []byte("# Regular file"), 0644); err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
 
 	// Act - Copy from repo (overwrites regular file)
 	content, err := os.ReadFile(repoFile)
