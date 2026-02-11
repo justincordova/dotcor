@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	version = "0.6.5" // UX colors (helper functions added)
+	version = "0.6.6" // Pre-flight validation
 )
 
 // ANSI color codes
