@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	version = "0.6.2" // Selective file operations for sync and status
+	version = "0.6.3" // Critical code fixes
 )
 
 // ANSI color codes
