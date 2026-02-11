@@ -215,7 +215,7 @@ func getSymlinkStatus(cfg *config.Config, f config.ManagedFile) string {
 	}
 
 	if !isLink {
-		return "not-symlink"
+		return "not_symlink"
 	}
 
 	// Check if symlink is valid (target exists)

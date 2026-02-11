@@ -203,7 +203,7 @@ func TestList_UncommittedFile_ShowsWarning(t *testing.T) {
 		assert.Contains(t, output, "SOURCE")
 		assert.Contains(t, output, "STATUS")
 		assert.Contains(t, output, sourceFile)
-		assert.Contains(t, output, "not-symlink")
+		assert.Contains(t, output, "not_symlink")
 	})
 }
 
