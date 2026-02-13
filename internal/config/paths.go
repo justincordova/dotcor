@@ -107,7 +107,17 @@ func GetRepoFilePath(config *Config, repoPath string) (string, error) {
 // GenerateRepoPath generates repository path for a source file
 // Returns path relative to repository's files directory
 // Example: ~/.zshrc -> .zshrc
+//
+// Only accepts paths under the user's home directory. Returns error for:
+// - Paths outside home directory (e.g., /etc/hosts)
+// - Nil Config parameter
+// - Empty paths or paths that resolve to home directory
 func GenerateRepoPath(sourcePath string, cfg *Config) (string, error) {
+	// Validate cfg parameter
+	if cfg == nil {
+		return "", fmt.Errorf("config cannot be nil")
+	}
+
 	cfg.Logger.Debug("generating repo path", "source", sourcePath)
 
 	// Expand source path to absolute
@@ -116,16 +126,27 @@ func GenerateRepoPath(sourcePath string, cfg *Config) (string, error) {
 		return "", fmt.Errorf("expanding path: %w", err)
 	}
 
-	// Strip home directory prefix
+	// Get home directory
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("getting home directory: %w", err)
 	}
 
+	// Validate path is under home directory
+	if !strings.HasPrefix(expanded, home) {
+		return "", fmt.Errorf("path must be under home directory: %s", sourcePath)
+	}
+
+	// Strip home directory prefix
 	relPath := strings.TrimPrefix(expanded, home)
 	relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
 
-	cfg.Logger.Debug("repo path generated", "source", sourcePath, "repo", relPath)
+	// Handle edge case: path equals home directory
+	if relPath == "" {
+		return "", fmt.Errorf("path resolves to home directory: %s", sourcePath)
+	}
+
+	cfg.Logger.Debug("repo path generated", "source", sourcePath, "expanded", expanded, "repo", relPath)
 	return relPath, nil
 }
 
