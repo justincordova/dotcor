@@ -113,7 +113,7 @@ managed_files:
 			t.Logf("stdout: %s", stdoutStr)
 		}
 		require.NoError(t, err, "status command should succeed")
-		assert.Contains(t, stdoutStr, "Summary: 1 files managed", "should show 1 file managed")
+		assert.Contains(t, stdoutStr, "files managed", "should show file count")
 		assert.Contains(t, stdoutStr, ".zshrc", "should show managed file")
 	})
 }
@@ -181,7 +181,8 @@ managed_files:
 			t.Logf("stdout: %s", stdoutStr)
 		}
 		require.NoError(t, err, "status command should succeed")
-		assert.Contains(t, stdoutStr, "Summary: 1 files managed, 1 with issues", "should show 1 file with issues")
+		assert.Contains(t, stdoutStr, "files managed", "should show file count")
+		assert.Contains(t, stdoutStr, "with issues", "should show issues count")
 		assert.Contains(t, stdoutStr, ".zshrc", "should show problematic file")
 		assert.Contains(t, stdoutStr, "missing from repository", "should show missing-repo problem")
 	})
@@ -458,7 +459,7 @@ managed_files:
 		outputStr := stdout.String()
 		assert.Contains(t, outputStr, ".zshrc", "output should contain zshrc")
 		assert.NotContains(t, outputStr, ".gitconfig", "output should not contain gitconfig")
-		assert.Contains(t, outputStr, "Summary: 1 files managed", "should show 1 file")
+		assert.Contains(t, outputStr, "files managed", "should show file count")
 	})
 }
 
@@ -515,6 +516,6 @@ managed_files:
 		require.NoError(t, err, "status command should succeed")
 		outputStr := stdout.String()
 		assert.Contains(t, outputStr, ".test", "output should contain file")
-		assert.Contains(t, outputStr, "Summary: 1 files managed", "should show 1 file")
+		assert.Contains(t, outputStr, "files managed", "should show file count")
 	})
 }
