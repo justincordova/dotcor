@@ -271,13 +271,12 @@ func CheckFileStatus(cfg *config.Config, mf config.ManagedFile) FileStatus {
 // outputStatusFull outputs detailed status
 func outputStatusFull(status StatusReport, problemsOnly bool) error {
 	// Header
-	fmt.Println("DotCor Status")
-	fmt.Println("=============")
+	fmt.Printf("\n  %sDotCor Status%s\n", colorLightPink, colorReset)
 	fmt.Println("")
 
 	// Files section
 	if len(status.Files) > 0 {
-		fmt.Println("Managed Files:")
+		fmt.Printf("  %sManaged Files:%s\n", colorLightPink, colorReset)
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 
@@ -307,7 +306,7 @@ func outputStatusFull(status StatusReport, problemsOnly bool) error {
 
 	// Git section
 	if status.GitStatus.IsRepo {
-		fmt.Println("Git Repository:")
+		fmt.Printf("  %sGit Repository:%s\n", colorLightPink, colorReset)
 
 		if status.GitStatus.Branch != "" {
 			fmt.Printf("  Branch: %s\n", status.GitStatus.Branch)
@@ -337,7 +336,7 @@ func outputStatusFull(status StatusReport, problemsOnly bool) error {
 	}
 
 	// Summary
-	fmt.Printf("Summary: %d files managed", status.Statistics.TotalFiles)
+	fmt.Printf("  %sSummary:%s %d files managed", colorLightPink, colorReset, status.Statistics.TotalFiles)
 	if status.Statistics.ProblematicFiles > 0 {
 		fmt.Printf(", %d with issues", status.Statistics.ProblematicFiles)
 	}

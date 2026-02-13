@@ -151,7 +151,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		fmt.Println("Summary:")
+		fmt.Printf("  %sSummary:%s\n", colorLightPink, colorReset)
 		fmt.Printf("  Files to add: %d\n", len(files))
 		fmt.Printf("  Total size: %s\n", formatSize(totalSize))
 		fmt.Println("")

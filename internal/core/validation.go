@@ -161,7 +161,11 @@ func RunPreflightValidation(cfg *config.Config, operation string, files []string
 
 // DisplayValidationResults shows validation results to user
 func DisplayValidationResults(result ValidationResult) error {
-	fmt.Println("Pre-flight checks:")
+	// ANSI color codes
+	colorLightPink := "\033[38;5;218m"
+	colorReset := "\033[0m"
+
+	fmt.Printf("\n  %sPre-flight checks:%s\n", colorLightPink, colorReset)
 	fmt.Println("")
 
 	allPassed := true

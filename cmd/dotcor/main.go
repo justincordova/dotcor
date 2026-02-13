@@ -54,6 +54,11 @@ func Error(msg string) {
 	fmt.Printf("%s✗%s %s\n", colorRed, colorReset, msg)
 }
 
+// printSectionHeader prints a colored section header using the theme color
+func printSectionHeader(title string) {
+	fmt.Printf("\n  %s%s%s\n", colorLightPink, title, colorReset)
+}
+
 // Info prints info message in blue
 func Info(msg string) {
 	fmt.Printf("%sℹ%s %s\n", colorBlue, colorReset, msg)

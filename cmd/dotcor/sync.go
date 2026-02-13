@@ -220,12 +220,11 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 // showSyncPreview shows what would be synced
 func showSyncPreview(repoPath string, hasChanges bool, gitStatus git.StatusInfo, willPush bool) error {
-	fmt.Println("Sync Preview")
-	fmt.Println("============")
+	fmt.Printf("\n  %sSync Preview%s\n", colorLightPink, colorReset)
 	fmt.Println("")
 
 	if hasChanges {
-		fmt.Println("Uncommitted changes:")
+		fmt.Printf("  %sUncommitted changes:%s\n", colorLightPink, colorReset)
 		changedFiles, _ := git.GetChangedFiles(repoPath)
 		for _, f := range changedFiles {
 			fmt.Printf("  M %s\n", f)
