@@ -335,7 +335,7 @@ func addFile(cfg *config.Config, sourcePath string, customRepoPath string, force
 	}
 
 	// Generate repo path
-	repoPath, err := config.GenerateRepoPath(sourcePath, customRepoPath, cfg)
+	repoPath, err := config.GenerateRepoPath(sourcePath, cfg)
 	if err != nil {
 		return fmt.Errorf("generating repo path: %w", err)
 	}

@@ -23,31 +23,25 @@ var addCmd = &cobra.Command{
 Files are moved to the repository and replaced with symlinks.
 Supports glob patterns for batch operations.
 
-Examples:
+  Examples:
   dotcor add ~/.zshrc                    # Add single file
   dotcor add ~/.zshrc ~/.bashrc          # Add multiple files
   dotcor add ~/.config/nvim/*            # Add with glob pattern
-  dotcor add ~/.config/nvim --recursive  # Add directory recursively
   dotcor add ~/.zshrc --template         # Add as template file
-  dotcor add ~/.zshrc --category shell   # Add with custom category
   dotcor add ~/.zshrc --force            # Skip validation warnings`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: runAdd,
 }
 
 func init() {
-	addCmd.Flags().StringP("category", "c", "", "Override automatic category detection")
 	addCmd.Flags().BoolP("force", "f", false, "Force add, ignoring warnings (not errors)")
-	addCmd.Flags().BoolP("recursive", "r", false, "Recursively add all files in directory")
 	addCmd.Flags().Bool("template", false, "Treat file as template (adds .template extension)")
 	addCmd.Flags().Bool("dry-run", false, "Show what would be done without making changes")
 	rootCmd.AddCommand(addCmd)
 }
 
 func runAdd(cmd *cobra.Command, args []string) error {
-	category, _ := cmd.Flags().GetString("category")
 	force, _ := cmd.Flags().GetBool("force")
-	recursive, _ := cmd.Flags().GetBool("recursive")
 	isTemplate, _ := cmd.Flags().GetBool("template")
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
 
@@ -84,49 +78,6 @@ func runAdd(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("expanding %s: %w", arg, err)
 		}
 		files = append(files, expanded...)
-	}
-
-	// Handle recursive directories
-	if recursive {
-		var expandedFiles []string
-		totalFiles := 0
-
-		for _, file := range files {
-			expandedPath, err := config.ExpandPath(file, cfg)
-			if err != nil {
-				return fmt.Errorf("expanding %s: %w", file, err)
-			}
-
-			isDir, err := fs.IsDirectory(expandedPath, cfg)
-			if err == nil && isDir {
-				// Get all files in directory recursively
-				dirFiles, err := fs.GetFilesRecursive(expandedPath)
-				if err != nil {
-					return fmt.Errorf("recursively reading directory %s: %w", file, err)
-				}
-
-				// Normalize paths and add to list
-				for _, dirFile := range dirFiles {
-					normalized, _ := config.NormalizePath(dirFile)
-					if normalized != "" {
-						expandedFiles = append(expandedFiles, normalized)
-					} else {
-						expandedFiles = append(expandedFiles, dirFile)
-					}
-				}
-				totalFiles += len(dirFiles)
-			} else {
-				// Not a directory, keep as is
-				expandedFiles = append(expandedFiles, file)
-				totalFiles++
-			}
-		}
-
-		if totalFiles > 10 {
-			fmt.Printf("Adding %d files from directories...\n", totalFiles)
-		}
-
-		files = expandedFiles
 	}
 
 	if len(files) == 0 {
@@ -172,7 +123,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	skipped := 0
 
 	for _, file := range files {
-		result, _, err := processAddFile(cfg, file, category, force, isTemplate, dryRun)
+		result, _, err := processAddFile(cfg, file, force, isTemplate, dryRun)
 		switch result {
 		case addResultSuccess:
 			added++
@@ -225,7 +176,7 @@ const (
 )
 
 // processAddFile handles adding a single file
-func processAddFile(cfg *config.Config, sourcePath string, category string, force bool, isTemplate bool, dryRun bool) (addResult, string, error) {
+func processAddFile(cfg *config.Config, sourcePath string, force bool, isTemplate bool, dryRun bool) (addResult, string, error) {
 	// Expand source path
 	expanded, err := config.ExpandPath(sourcePath, cfg)
 	if err != nil {
@@ -276,16 +227,7 @@ func processAddFile(cfg *config.Config, sourcePath string, category string, forc
 	}
 
 	// Generate repo path
-	customRepoPath := ""
-	if category != "" {
-		// Category should be combined with the filename, not replace the entire path
-		// e.g., --category shell for ~/.zshrc should produce "shell/zshrc"
-		filename := filepath.Base(expanded)
-		// Strip leading dot from filename for repo path
-		repoFilename := strings.TrimPrefix(filename, ".")
-		customRepoPath = filepath.Join(category, repoFilename)
-	}
-	repoPath, err := config.GenerateRepoPath(sourcePath, customRepoPath, cfg)
+	repoPath, err := config.GenerateRepoPath(sourcePath, cfg)
 
 	// Add .template extension if template flag is set
 	if isTemplate {

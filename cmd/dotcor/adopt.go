@@ -215,7 +215,7 @@ func processAdoptSymlink(cfg *config.Config, symlinkPath string, dryRun bool) (a
 	var actualRepoPath string
 	if !targetInRepo {
 		// Generate repo path for the source
-		generatedRepoPath, err := config.GenerateRepoPath(symlinkPath, "", cfg)
+		generatedRepoPath, err := config.GenerateRepoPath(symlinkPath, cfg)
 		if err != nil {
 			return adoptResultError, fmt.Errorf("generating repo path: %w", err)
 		}
