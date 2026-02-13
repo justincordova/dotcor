@@ -2,6 +2,7 @@ package git
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -44,11 +45,14 @@ func InitRepo(repoPath string) error {
 }
 
 // IsRepo checks if directory is a git repository
+// Checks for .git directory directly to avoid walking up to parent repos
 func IsRepo(repoPath string) bool {
-	cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
-	cmd.Dir = repoPath
-	err := cmd.Run()
-	return err == nil
+	gitDir := repoPath + "/.git"
+	info, err := os.Stat(gitDir)
+	if err != nil {
+		return false
+	}
+	return info.IsDir()
 }
 
 // AutoCommit stages all changes and commits with message
