@@ -193,7 +193,8 @@ test_interactive() {
     info "Clean up with: $0 clean"
     echo ""
 
-    # Spawn a shell with test environment
+    # Spawn a shell with test environment, starting in TEST_HOME
+    cd "$TEST_HOME" || exit 1
     bash
 }
 
