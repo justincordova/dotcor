@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func testConfig() *Config {
+	return &Config{
+		Logger:         slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})),
+		Version:        CurrentConfigVersion,
+		RepoPath:       "~/.dotcor/files",
+		GitEnabled:     true,
+		IgnorePatterns: GetDefaultIgnorePatterns(),
+		ManagedFiles:   []ManagedFile{},
+	}
+}
 
 func TestExpandPath(t *testing.T) {
 	// Arrange
@@ -123,79 +135,49 @@ func TestNormalizePath(t *testing.T) {
 }
 
 func TestGenerateRepoPath(t *testing.T) {
-	// Arrange
 	tests := []struct {
 		name       string
 		sourcePath string
-		customPath string
-		want       string
+		wantRepo   string
 		wantErr    bool
 	}{
 		{
-			name:       "zshrc goes to shell",
+			name:       "flat dotfile in home",
 			sourcePath: "~/.zshrc",
-			customPath: "",
-			want:       "shell/zshrc",
+			wantRepo:   ".zshrc",
+			wantErr:    false,
 		},
 		{
-			name:       "bashrc goes to shell",
-			sourcePath: "~/.bashrc",
-			customPath: "",
-			want:       "shell/bashrc",
+			name:       "nested config file",
+			sourcePath: "~/.config/nvim/init.vim",
+			wantRepo:   ".config/nvim/init.vim",
+			wantErr:    false,
 		},
 		{
-			name:       "gitconfig goes to git",
-			sourcePath: "~/.gitconfig",
-			customPath: "",
-			want:       "git/gitconfig",
+			name:       "ssh config file",
+			sourcePath: "~/.ssh/config",
+			wantRepo:   ".ssh/config",
+			wantErr:    false,
 		},
 		{
-			name:       "vimrc goes to vim",
-			sourcePath: "~/.vimrc",
-			customPath: "",
-			want:       "vim/vimrc",
-		},
-		{
-			name:       "tmux.conf goes to tmux",
-			sourcePath: "~/.tmux.conf",
-			customPath: "",
-			want:       "tmux/tmux.conf",
-		},
-		{
-			name:       "config dir stripped",
-			sourcePath: "~/.config/nvim/init.lua",
-			customPath: "",
-			want:       "nvim/init.lua",
-		},
-		{
-			name:       "custom path override",
-			sourcePath: "~/.zshrc",
-			customPath: "custom/myshell",
-			want:       "custom/myshell",
-		},
-		{
-			name:       "unknown file goes to misc",
-			sourcePath: "~/.obscurefile",
-			customPath: "",
-			want:       "misc/obscurefile",
+			name:       "system file outside home",
+			sourcePath: "/etc/hosts",
+			wantRepo:   "",
+			wantErr:    true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Act
-			got, err := GenerateRepoPath(tt.sourcePath, tt.customPath, nil)
-
-			// Assert
-			if tt.wantErr {
-				assert.Error(t, err, "GenerateRepoPath() should return error")
-			} else {
-				assert.NoError(t, err, "GenerateRepoPath() should not return error")
+			cfg := testConfig()
+			got, err := GenerateRepoPath(tt.sourcePath, cfg)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GenerateRepoPath() error = %v, wantErr %v", err, tt.wantErr)
+				return
 			}
-
-			// Normalize separators for comparison
-			got = strings.ReplaceAll(got, string(filepath.Separator), "/")
-			assert.Equal(t, tt.want, got, "GenerateRepoPath() result")
+			if got != tt.wantRepo {
+				t.Errorf("GenerateRepoPath() = %v, want %v", got, tt.wantRepo)
+			}
 		})
 	}
 }
@@ -239,36 +221,6 @@ func TestComputeRelativeSymlink(t *testing.T) {
 			}
 
 			assert.True(t, strings.HasPrefix(got, tt.wantPrefix), "ComputeRelativeSymlink() result should have prefix")
-		})
-	}
-}
-
-func TestGetCategoryByPrefix(t *testing.T) {
-	// Arrange
-	tests := []struct {
-		filename string
-		want     string
-	}{
-		{".zshrc", "shell"},
-		{".zsh_history", "shell"},
-		{".bashrc", "shell"},
-		{".bash_profile", "shell"},
-		{".vimrc", "vim"},
-		{".vim", "vim"},
-		{".nvimrc", "nvim"},
-		{".gitconfig", "git"},
-		{".gitignore", "git"},
-		{".tmux.conf", "tmux"},
-		{".randomfile", "misc"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.filename, func(t *testing.T) {
-			// Act
-			got := getCategoryByPrefix(tt.filename)
-
-			// Assert
-			assert.Equal(t, tt.want, got, "getCategoryByPrefix() result")
 		})
 	}
 }
