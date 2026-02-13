@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	version = "0.7.0" // Complete v0.6.3-v0.7.0 roadmap
+	version = "0.7.3"
 )
 
 // ANSI color codes

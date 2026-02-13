@@ -18,23 +18,22 @@ func TestStatus_NotInitialized_ReturnsError(t *testing.T) {
 	t.Run("no config returns error", func(t *testing.T) {
 		// Arrange - Create temp directory without config
 		tempDir := t.TempDir()
-		originalHome := os.Getenv("HOME")
-		os.Setenv("HOME", tempDir)
-		defer os.Setenv("HOME", originalHome)
 
-		// Use pre-built binary
-		binaryPath := "/tmp/dotcor-test-binary"
-		if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
-			t.Fatalf("test binary not found at %s. Run 'go build -o %s ./cmd/dotcor' first.", binaryPath, binaryPath)
+		// Build dotcor binary (build with original HOME, not tempDir)
+		buildPath := filepath.Join(tempDir, "dotcor-test")
+		buildCmd := exec.Command("go", "build", "-o", buildPath, "github.com/justincordova/dotcor/cmd/dotcor")
+		output, err := buildCmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("building test binary failed: %v\noutput: %s", err, string(output))
 		}
 
 		// Act - Run status command without init
 		var stdout, stderr bytes.Buffer
-		cmd := exec.Command(binaryPath, "status")
+		cmd := exec.Command(buildPath, "status")
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
-		cmd.Env = append(os.Environ(), fmt.Sprintf("HOME=%s", tempDir))
-		err := cmd.Run()
+		cmd.Env = []string{"HOME=" + tempDir, "PATH=" + os.Getenv("PATH")}
+		err = cmd.Run()
 
 		// Assert
 		stderrStr := stderr.String()

@@ -34,15 +34,17 @@ managed_files: []
 		err := os.WriteFile(configPath, []byte(configContent), 0644)
 		require.NoError(t, err)
 
-		// Use pre-built binary
-		binaryPath := "/tmp/dotcor-test-binary"
-		if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
-			t.Fatalf("test binary not found at %s. Run 'go build -o %s ./cmd/dotcor' first.", binaryPath, binaryPath)
+		// Build dotcor binary
+		buildPath := filepath.Join(tempDir, "dotcor-test")
+		buildCmd := exec.Command("go", "build", "-o", buildPath, "github.com/justincordova/dotcor/cmd/dotcor")
+		output, err := buildCmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("building test binary failed: %v\noutput: %s", err, string(output))
 		}
 
 		// Act - Run list command
 		var stdout, stderr bytes.Buffer
-		cmd := exec.Command(binaryPath, "list")
+		cmd := exec.Command(buildPath, "list")
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
 		cmd.Env = append(os.Environ(), "HOME="+tempDir)
