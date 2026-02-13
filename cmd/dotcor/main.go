@@ -4,12 +4,18 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/joho/godotenv"
 	"github.com/justincordova/dotcor/internal/config"
 	"github.com/justincordova/dotcor/internal/git"
 	"github.com/justincordova/dotcor/internal/logger"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
+
+func init() {
+	// Load .env file if it exists
+	godotenv.Load()
+}
 
 var (
 	version = "0.7.3"
