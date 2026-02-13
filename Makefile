@@ -9,6 +9,7 @@ help:
 	@echo "  make test-verbose  Run tests with verbose output"
 	@echo "  make test-manual   Run full manual test in .manual-test/"
 	@echo "  make test-interactive Enter interactive test mode in .manual-test/"
+	@echo "  make test-copy     Copy ~/dotfiles to test environment"
 	@echo "  make test-clean    Clean .manual-test/ directory"
 	@echo "  make build         Build all packages"
 	@echo "  make run           Build and run dotcor"
@@ -76,6 +77,9 @@ test-manual:
 
 test-interactive:
 	@./scripts/test-manual.sh interactive
+
+test-copy:
+	@./scripts/test-manual.sh copy-dotfiles
 
 test-clean:
 	@./scripts/test-manual.sh clean

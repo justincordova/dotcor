@@ -2,7 +2,7 @@
 
 # DotCor Manual Test Script
 # Usage: ./scripts/test-manual.sh [command]
-# Commands: init, add, edit, status, clean, full-test
+# Commands: init, add, edit, status, clean, full-test, copy-dotfiles
 
 set -e
 
@@ -29,6 +29,10 @@ warn() {
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
+error() {
+    echo -e "\033[0;31m[ERROR]${NC} $1"
+}
+
 # Ensure binary exists
 check_binary() {
     if [ ! -f "$DOTCOR_BIN" ]; then
@@ -41,6 +45,14 @@ check_binary() {
 
 # Setup test environment
 setup_test_env() {
+    info "Setting up test environment at $TEST_HOME"
+    rm -rf "$TEST_HOME"
+    mkdir -p "$TEST_HOME"
+    export HOME="$TEST_HOME"
+}
+
+# Setup test environment with dotcor initialized (for most tests)
+setup_test_env_with_init() {
     info "Setting up test environment at $TEST_HOME"
     rm -rf "$TEST_HOME"
     mkdir -p "$TEST_HOME/.dotcor"
@@ -172,9 +184,44 @@ test_full() {
     info "Clean up with: $0 clean"
 }
 
+# Copy existing dotfiles for testing
+test_copy_dotfiles() {
+    DOTFILES_SOURCE="$HOME/dotfiles"
+
+    if [ ! -d "$DOTFILES_SOURCE" ]; then
+        error "Dotfiles not found at $DOTFILES_SOURCE"
+        exit 1
+    fi
+
+    info "Copying dotfiles from $DOTFILES_SOURCE to $TEST_HOME"
+    setup_test_env  # This creates empty test env, no .dotcor
+
+    # Copy everything except .dotcor, .config, .local if they exist in source
+    rsync -av --exclude='.dotcor' --exclude='.config' --exclude='.local' \
+        "$DOTFILES_SOURCE/" "$TEST_HOME/"
+
+    success "Copied dotfiles to test environment"
+    info "Test directory: $TEST_HOME"
+    echo ""
+    success "Ready! Try commands like:"
+    echo "  dotcor init"
+    echo "  dotcor status"
+    echo "  dotcor add <file>"
+    echo ""
+    info "Exit when done"
+    info "Clean up with: $0 clean"
+    echo ""
+
+    # Spawn a shell with test environment, starting in TEST_HOME
+    cd "$TEST_HOME" || exit 1
+    export HOME="$TEST_HOME"
+    export PATH="$PROJECT_ROOT/bin:$PATH"
+    bash
+}
+
 # Interactive test mode
 test_interactive() {
-    setup_test_env
+    setup_test_env  # No .dotcor - user can init themselves
     export HOME="$TEST_HOME"
     export PATH="$PROJECT_ROOT/bin:$PATH"
 
@@ -212,19 +259,21 @@ Commands:
   status         Test dotcor status
   full           Run full end-to-end test
   interactive    Enter interactive test mode (recommended!)
+  copy-dotfiles  Copy existing dotfiles from ~/dotfiles to test env
   clean          Clean test environment
   help           Show this help
 
 Examples:
   $0 interactive  # Test interactively
+  $0 copy-dotfiles # Copy your existing dotfiles for testing
   $0 full        # Run all tests automatically
   $0 clean       # Clean up test files
 
 Notes:
   - Binary location: $DOTCOR_BIN
-  - Test directory: $TEST_HOME (in project root)
-  - PATH includes bin/ for easy 'dotcor' command
+  - Test directory: $TEST_HOME
   - Builds binary if not present
+  - copy-dotfiles copies from ~/dotfiles (excludes .dotcor, .config, .local)
 EOF
 }
 
@@ -249,6 +298,9 @@ case "${1:-help}" in
         ;;
     interactive)
         test_interactive
+        ;;
+    copy-dotfiles)
+        test_copy_dotfiles
         ;;
     clean)
         clean_test_env
