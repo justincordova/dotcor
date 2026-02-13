@@ -1,4 +1,4 @@
-.PHONY: test test-cover build clean lint fmt vet run help
+.PHONY: test test-cover build clean lint fmt vet run help test-manual test-clean test-interactive
 
 # Default target
 help:
@@ -7,6 +7,9 @@ help:
 	@echo "  make test          Run all tests"
 	@echo "  make test-cover    Run tests with coverage report (opens in browser)"
 	@echo "  make test-verbose  Run tests with verbose output"
+	@echo "  make test-manual   Run manual test (interactive)"
+	@echo "  make test-interactive Enter interactive test mode"
+	@echo "  make test-clean    Clean manual test environment"
 	@echo "  make build         Build all packages"
 	@echo "  make run           Build and run dotcor"
 	@echo "  make clean         Clean build artifacts"
@@ -66,3 +69,13 @@ binary:
 # Install to GOPATH/bin
 install:
 	go install ./cmd/dotcor
+
+# Manual testing
+test-manual:
+	@./scripts/test-manual.sh full
+
+test-interactive:
+	@./scripts/test-manual.sh interactive
+
+test-clean:
+	@./scripts/test-manual.sh clean
