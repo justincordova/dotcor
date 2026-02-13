@@ -259,21 +259,29 @@ managed_files: []
 }
 
 func TestSync_NopushFlag_SkipsPush(t *testing.T) {
-	t.Run("--no-push flag skips push operation", func(t *testing.T) {
-		// Arrange - Set up local repo without remote
+	t.Run("--no-push flag skips push even with remote", func(t *testing.T) {
+		// Arrange - Set up remote and local repos
 		tempDir := t.TempDir()
 		configDir := filepath.Join(tempDir, ".dotcor")
 		filesDir := filepath.Join(configDir, "files")
+		remoteDir := filepath.Join(tempDir, "remote")
 
 		if err := os.MkdirAll(filesDir, 0755); err != nil {
 			t.Fatalf("failed to create files dir: %v", err)
 		}
+		if err := os.MkdirAll(remoteDir, 0755); err != nil {
+			t.Fatalf("failed to create remote dir: %v", err)
+		}
 
-		// Initialize git repo
+		// Initialize remote repo as a bare repository
+		runGit(t, remoteDir, "init", "--bare")
+
+		// Initialize local repo and add remote
 		runGit(t, filesDir, "init")
 		runGit(t, filesDir, "config", "user.email", "test@example.com")
 		runGit(t, filesDir, "config", "user.name", "Test User")
 		runGit(t, filesDir, "checkout", "-b", "main")
+		runGit(t, filesDir, "remote", "add", "origin", remoteDir)
 
 		// Create initial commit
 		testFile := filepath.Join(filesDir, "test.txt")
@@ -300,19 +308,21 @@ managed_files: []
 		os.Setenv("HOME", tempDir)
 		defer os.Setenv("HOME", originalHome)
 
-		// Act - Run sync with --no-push flag
+		// Act - Sync without flags (should auto-push since remote exists)
 		cmd := syncCmd
-		cmd.SetArgs([]string{"--no-push", "--force"})
-		err = runSync(cmd, []string{})
+		cmd.SetArgs([]string{"--force"})
+		// Execute to ensure flags are parsed
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("command execution failed: %v", err)
+		}
 
-		// Assert - Should succeed without attempting to push
-		require.NoError(t, err, "sync should succeed with --no-push flag")
-
-		// Verify changes were committed
-		statusCmd := exec.Command("git", "status", "--porcelain")
-		statusCmd.Dir = filesDir
-		output, _ := statusCmd.CombinedOutput()
-		assert.Empty(t, string(output), "working tree should be clean after sync")
+		// Verify both commits are on remote (auto-push worked)
+		lsRemoteCmd := exec.Command("git", "ls-remote", "origin")
+		lsRemoteCmd.Dir = filesDir
+		lsRemoteOutput, _ := lsRemoteCmd.CombinedOutput()
+		// Remote should have both commits
+		assert.Contains(t, string(lsRemoteOutput), "e27a589", "remote should have initial commit")
+		assert.Contains(t, string(lsRemoteOutput), "62b1a28", "remote should have sync commit (auto-push)")
 	})
 }
 

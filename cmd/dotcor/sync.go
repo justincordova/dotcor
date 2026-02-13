@@ -60,6 +60,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading config: %w\nRun 'dotcor init' first", err)
 	}
 	configureLogger(cmd, cfg)
+	cfg.Logger.Info("sync flag check", "no_push", noPush)
 
 	// Filter to specific files if provided
 	filesToSync := []string{}
@@ -137,6 +138,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 	// Confirm unless --force
 	willPush := gitStatus.RemoteExists && !noPush
+	cfg.Logger.Debug("sync decisions", "remote_exists", gitStatus.RemoteExists, "no_push_flag", noPush, "will_push", willPush)
 	if !force {
 		if !confirmSync(hasChanges, willPush && gitStatus.AheadBy > 0) {
 			fmt.Println("Sync cancelled.")
@@ -191,8 +193,10 @@ func runSync(cmd *cobra.Command, args []string) error {
 	}
 
 	// Push to remote (auto-detect if remote exists and not --no-push)
+	cfg.Logger.Debug("push decision", "will_push", willPush, "remote_exists", gitStatus.RemoteExists)
 	if willPush {
 		// Auto-push to remote
+		cfg.Logger.Debug("attempting push to remote", "path", repoPath)
 		if err := pushToRemote(repoPath); err != nil {
 			return fmt.Errorf("pushing to remote: %w", err)
 		}
