@@ -135,49 +135,76 @@ func TestNormalizePath(t *testing.T) {
 }
 
 func TestGenerateRepoPath(t *testing.T) {
+	// Arrange
 	tests := []struct {
 		name       string
 		sourcePath string
 		wantRepo   string
 		wantErr    bool
+		nilConfig  bool
 	}{
 		{
 			name:       "flat dotfile in home",
 			sourcePath: "~/.zshrc",
 			wantRepo:   ".zshrc",
 			wantErr:    false,
+			nilConfig:  false,
 		},
 		{
 			name:       "nested config file",
 			sourcePath: "~/.config/nvim/init.vim",
 			wantRepo:   ".config/nvim/init.vim",
 			wantErr:    false,
+			nilConfig:  false,
 		},
 		{
 			name:       "ssh config file",
 			sourcePath: "~/.ssh/config",
 			wantRepo:   ".ssh/config",
 			wantErr:    false,
+			nilConfig:  false,
 		},
 		{
 			name:       "system file outside home",
 			sourcePath: "/etc/hosts",
 			wantRepo:   "",
 			wantErr:    true,
+			nilConfig:  false,
+		},
+		{
+			name:       "nil config returns error",
+			sourcePath: "~/.zshrc",
+			wantRepo:   "",
+			wantErr:    true,
+			nilConfig:  true,
+		},
+		{
+			name:       "path resolves to home directory returns error",
+			sourcePath: "~",
+			wantRepo:   "",
+			wantErr:    true,
+			nilConfig:  false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := testConfig()
+			// Arrange
+			var cfg *Config
+			if !tt.nilConfig {
+				cfg = testConfig()
+			}
+
+			// Act
 			got, err := GenerateRepoPath(tt.sourcePath, cfg)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GenerateRepoPath() error = %v, wantErr %v", err, tt.wantErr)
-				return
+
+			// Assert
+			if tt.wantErr {
+				assert.Error(t, err, "GenerateRepoPath() should return error")
+			} else {
+				assert.NoError(t, err, "GenerateRepoPath() should not return error")
 			}
-			if got != tt.wantRepo {
-				t.Errorf("GenerateRepoPath() = %v, want %v", got, tt.wantRepo)
-			}
+			assert.Equal(t, tt.wantRepo, got, "GenerateRepoPath() result")
 		})
 	}
 }
