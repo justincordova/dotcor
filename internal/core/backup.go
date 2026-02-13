@@ -36,7 +36,6 @@ func GetBackupDir() (string, error) {
 // CreateBackup creates a timestamped backup of a file before destructive operations
 // Returns backup path and error
 func CreateBackup(sourcePath string, cfg *config.Config) (string, error) {
-	start := time.Now()
 	cfg.Logger.Debug("creating backup", "file", sourcePath)
 
 	expanded, err := config.ExpandPath(sourcePath, cfg)
@@ -93,11 +92,9 @@ func CreateBackup(sourcePath string, cfg *config.Config) (string, error) {
 		return "", fmt.Errorf("copying to backup: %w", err)
 	}
 
-	durationMs := time.Since(start).Milliseconds()
 	cfg.Logger.Info("backup created",
 		"file", sourcePath,
 		"path", backupPath,
-		"duration_ms", durationMs,
 	)
 
 	return backupPath, nil
@@ -105,7 +102,6 @@ func CreateBackup(sourcePath string, cfg *config.Config) (string, error) {
 
 // RestoreBackup restores a file from backup to target path
 func RestoreBackup(backupPath, targetPath string, cfg *config.Config) error {
-	start := time.Now()
 	cfg.Logger.Debug("restoring from backup",
 		"backup", backupPath,
 		"target", targetPath,
@@ -138,11 +134,9 @@ func RestoreBackup(backupPath, targetPath string, cfg *config.Config) error {
 		return fmt.Errorf("restoring from backup: %w", err)
 	}
 
-	durationMs := time.Since(start).Milliseconds()
 	cfg.Logger.Info("backup restored",
 		"backup", backupPath,
 		"target", targetPath,
-		"duration_ms", durationMs,
 	)
 
 	return nil

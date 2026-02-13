@@ -20,8 +20,7 @@ func MoveFile(src, dst string, cfg *config.Config) error {
 
 	err := os.Rename(src, dst)
 	if err == nil {
-		durationMs := time.Since(start).Milliseconds()
-		cfg.Logger.Info("file moved successfully", "src", src, "dst", dst, "duration_ms", durationMs)
+		cfg.Logger.Info("file moved successfully", "src", src, "dst", dst)
 		return nil
 	}
 
