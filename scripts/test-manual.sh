@@ -184,29 +184,108 @@ test_full() {
     info "Clean up with: $0 clean"
 }
 
-# Copy existing dotfiles for testing
-test_copy_dotfiles() {
-    DOTFILES_SOURCE="$HOME/dotfiles"
+# Create sample dotfiles for testing (replaces old copy-dotfiles)
+test_create_samples() {
+    info "Creating sample dotfiles in $TEST_HOME"
+    setup_test_env
 
-    if [ ! -d "$DOTFILES_SOURCE" ]; then
-        error "Dotfiles not found at $DOTFILES_SOURCE"
-        exit 1
-    fi
+    # Create sample dotfiles for testing
+    info "Creating sample dotfiles..."
+    
+    # Shell configs
+    cat > "$TEST_HOME/.zshrc" << 'EOF'
+# Test Zsh Configuration
+export PATH="$HOME/bin:$PATH"
+alias ll='ls -la'
+alias ..='cd ..'
 
-    info "Copying dotfiles from $DOTFILES_SOURCE to $TEST_HOME"
-    setup_test_env  # This creates empty test env, no .dotcor
+# Prompt
+PROMPT='%n@%m %~ $ '
+EOF
 
-    # Copy everything except .git and .dotcor
-    rsync -a --exclude='.git' --exclude='.dotcor' \
-        "$DOTFILES_SOURCE/" "$TEST_HOME/"
+    cat > "$TEST_HOME/.bashrc" << 'EOF'
+# Test Bash Configuration
+export PATH="$HOME/bin:$PATH"
+alias ll='ls -la'
+alias ..='cd ..'
 
-    success "Copied dotfiles to test environment"
-    info "Test directory: $TEST_HOME"
+# Prompt
+PS1='\u@\h \w $ '
+EOF
+
+    # Git config
+    cat > "$TEST_HOME/.gitconfig" << 'EOF'
+[user]
+    name = Test User
+    email = test@example.com
+[core]
+    editor = vim
+[init]
+    defaultBranch = main
+EOF
+
+    cat > "$TEST_HOME/.gitignore_global" << 'EOF'
+# Global Git Ignore
+.DS_Store
+*.log
+*.tmp
+.env
+node_modules/
+EOF
+
+    # Tmux config
+    cat > "$TEST_HOME/.tmux.conf" << 'EOF'
+# Test Tmux Configuration
+set -g prefix C-a
+unbind C-b
+bind C-a send-prefix
+
+# Enable mouse
+set -g mouse on
+
+# Status bar
+set -g status-style bg=blue,fg=white
+EOF
+
+    # Neovim config
+    mkdir -p "$TEST_HOME/.config/nvim"
+    cat > "$TEST_HOME/.config/nvim/init.lua" << 'EOF'
+-- Test Neovim Configuration
+vim.opt.number = true
+vim.opt.relativenumber = true
+vim.opt.tabstop = 2
+vim.opt.shiftwidth = 2
+vim.opt.expandtab = true
+
+-- Test keymap
+vim.keymap.set('n', '<leader>e', ':Explore<CR>')
+EOF
+
+    cat > "$TEST_HOME/.config/nvim/test.lua" << 'EOF'
+-- Additional test file
+print("Hello from Neovim!")
+EOF
+
+    # Add .local with some test data
+    mkdir -p "$TEST_HOME/.local/share/dotcor"
+    echo "Test local data file" > "$TEST_HOME/.local/share/test-data.txt"
+
+    success "Sample dotfiles created"
+    info "Created: .zshrc, .bashrc, .gitconfig, .gitignore_global, .tmux.conf"
+    info "Created: .config/nvim/ (init.lua, test.lua)"
+    info "Created: .local/share/ (test-data.txt)"
+
+    export HOME="$TEST_HOME"
+    export PATH="$PROJECT_ROOT/bin:$PATH"
+
+    info "Entering interactive test mode"
+    info "Your test HOME is: $HOME"
     echo ""
     success "Ready! Try commands like:"
     echo "  dotcor init"
     echo "  dotcor status"
-    echo "  dotcor add <file>"
+    echo "  dotcor add ~/.zshrc"
+    echo "  dotcor add ~/.config/nvim/*.lua"
     echo ""
     info "Exit when done"
     info "Clean up with: $0 clean"
@@ -214,28 +293,101 @@ test_copy_dotfiles() {
 
     # Spawn a shell with test environment, starting in TEST_HOME
     cd "$TEST_HOME" || exit 1
-    export HOME="$TEST_HOME"
-    export PATH="$PROJECT_ROOT/bin:$PATH"
     bash
 }
 
 # Interactive test mode
 test_interactive() {
-    # Clear test directory and copy dotfiles
+    # Clear test directory and create sample files
     info "Setting up test environment at $TEST_HOME"
     rm -rf "$TEST_HOME"
     mkdir -p "$TEST_HOME"
 
-    # Copy dotfiles if they exist
-    DOTFILES_SOURCE="$HOME/dotfiles"
-    if [ -d "$DOTFILES_SOURCE" ]; then
-        info "Copying dotfiles from $DOTFILES_SOURCE to $TEST_HOME"
-        rsync -a --exclude='.dotcor' --exclude='.git' \
-            "$DOTFILES_SOURCE/" "$TEST_HOME/"
-        success "Dotfiles copied successfully"
-    else
-        warn "Dotfiles not found at $DOTFILES_SOURCE - starting with empty directory"
-    fi
+    # Create sample dotfiles for testing
+    info "Creating sample dotfiles..."
+    
+    # Shell configs
+    cat > "$TEST_HOME/.zshrc" << 'EOF'
+# Test Zsh Configuration
+export PATH="$HOME/bin:$PATH"
+alias ll='ls -la'
+alias ..='cd ..'
+
+# Prompt
+PROMPT='%n@%m %~ $ '
+EOF
+
+    cat > "$TEST_HOME/.bashrc" << 'EOF'
+# Test Bash Configuration
+export PATH="$HOME/bin:$PATH"
+alias ll='ls -la'
+alias ..='cd ..'
+
+# Prompt
+PS1='\u@\h \w $ '
+EOF
+
+    # Git config
+    cat > "$TEST_HOME/.gitconfig" << 'EOF'
+[user]
+    name = Test User
+    email = test@example.com
+[core]
+    editor = vim
+[init]
+    defaultBranch = main
+EOF
+
+    cat > "$TEST_HOME/.gitignore_global" << 'EOF'
+# Global Git Ignore
+.DS_Store
+*.log
+*.tmp
+.env
+node_modules/
+EOF
+
+    # Tmux config
+    cat > "$TEST_HOME/.tmux.conf" << 'EOF'
+# Test Tmux Configuration
+set -g prefix C-a
+unbind C-b
+bind C-a send-prefix
+
+# Enable mouse
+set -g mouse on
+
+# Status bar
+set -g status-style bg=blue,fg=white
+EOF
+
+    # Neovim config
+    mkdir -p "$TEST_HOME/.config/nvim"
+    cat > "$TEST_HOME/.config/nvim/init.lua" << 'EOF'
+-- Test Neovim Configuration
+vim.opt.number = true
+vim.opt.relativenumber = true
+vim.opt.tabstop = 2
+vim.opt.shiftwidth = 2
+vim.opt.expandtab = true
+
+-- Test keymap
+vim.keymap.set('n', '<leader>e', ':Explore<CR>')
+EOF
+
+    cat > "$TEST_HOME/.config/nvim/test.lua" << 'EOF'
+-- Additional test file
+print("Hello from Neovim!")
+EOF
+
+    # Add .local with some test data
+    mkdir -p "$TEST_HOME/.local/share/dotcor"
+    echo "Test local data file" > "$TEST_HOME/.local/share/test-data.txt"
+
+    success "Sample dotfiles created"
+    info "Created: .zshrc, .bashrc, .gitconfig, .gitignore_global, .tmux.conf"
+    info "Created: .config/nvim/ (init.lua, test.lua)"
+    info "Created: .local/share/ (test-data.txt)"
 
     export HOME="$TEST_HOME"
     export PATH="$PROJECT_ROOT/bin:$PATH"
@@ -248,7 +400,8 @@ test_interactive() {
     success "Ready! Try commands like:"
     echo "  dotcor init"
     echo "  dotcor status"
-    echo "  dotcor add <file>"
+    echo "  dotcor add ~/.zshrc"
+    echo "  dotcor add ~/.config/nvim/*.lua"
     echo "  dotcor --version"
     echo ""
     info "Exit when done (test files preserved in $TEST_HOME)"
@@ -273,22 +426,22 @@ Commands:
   edit-sync      Test edit & sync workflow
   status         Test dotcor status
   full           Run full end-to-end test
-  interactive    Enter interactive test mode (auto-copies dotfiles!)
-  copy-dotfiles  Copy existing dotfiles from ~/dotfiles to test env (no shell)
+  interactive    Enter interactive test mode (creates sample dotfiles!)
+  create-samples Create sample dotfiles and enter shell
   clean          Clean test environment
   help           Show this help
 
 Examples:
-  $0 interactive  # Test interactively (auto-copies ~/dotfiles)
-  $0 copy-dotfiles # Copy dotfiles without starting shell
-  $0 full        # Run all tests automatically
-  $0 clean       # Clean up test files
+  $0 interactive    # Test interactively (creates sample files)
+  $0 create-samples # Create samples and enter shell
+  $0 full          # Run all tests automatically
+  $0 clean         # Clean up test files
 
 Notes:
   - Binary location: $DOTCOR_BIN
   - Test directory: $TEST_HOME
   - Builds binary if not present
-  - interactive mode auto-copies ~/dotfiles (excludes .git and .dotcor only)
+  - interactive mode creates sample dotfiles (.zshrc, .bashrc, .gitconfig, etc.)
 EOF
 }
 
@@ -314,8 +467,8 @@ case "${1:-help}" in
     interactive)
         test_interactive
         ;;
-    copy-dotfiles)
-        test_copy_dotfiles
+    create-samples)
+        test_create_samples
         ;;
     clean)
         clean_test_env
