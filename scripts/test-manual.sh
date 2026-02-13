@@ -221,7 +221,22 @@ test_copy_dotfiles() {
 
 # Interactive test mode
 test_interactive() {
-    setup_test_env  # No .dotcor - user can init themselves
+    # Clear test directory and copy dotfiles
+    info "Setting up test environment at $TEST_HOME"
+    rm -rf "$TEST_HOME"
+    mkdir -p "$TEST_HOME"
+
+    # Copy dotfiles if they exist
+    DOTFILES_SOURCE="$HOME/dotfiles"
+    if [ -d "$DOTFILES_SOURCE" ]; then
+        info "Copying dotfiles from $DOTFILES_SOURCE to $TEST_HOME"
+        rsync -av --exclude='.dotcor' --exclude='.config' --exclude='.local' \
+            "$DOTFILES_SOURCE/" "$TEST_HOME/"
+        success "Dotfiles copied successfully"
+    else
+        warn "Dotfiles not found at $DOTFILES_SOURCE - starting with empty directory"
+    fi
+
     export HOME="$TEST_HOME"
     export PATH="$PROJECT_ROOT/bin:$PATH"
 
@@ -233,7 +248,7 @@ test_interactive() {
     success "Ready! Try commands like:"
     echo "  dotcor init"
     echo "  dotcor status"
-    echo "  dotcor add ~/.testrc"
+    echo "  dotcor add <file>"
     echo "  dotcor --version"
     echo ""
     info "Exit when done (test files preserved in $TEST_HOME)"
@@ -258,14 +273,14 @@ Commands:
   edit-sync      Test edit & sync workflow
   status         Test dotcor status
   full           Run full end-to-end test
-  interactive    Enter interactive test mode (recommended!)
-  copy-dotfiles  Copy existing dotfiles from ~/dotfiles to test env
+  interactive    Enter interactive test mode (auto-copies dotfiles!)
+  copy-dotfiles  Copy existing dotfiles from ~/dotfiles to test env (no shell)
   clean          Clean test environment
   help           Show this help
 
 Examples:
-  $0 interactive  # Test interactively
-  $0 copy-dotfiles # Copy your existing dotfiles for testing
+  $0 interactive  # Test interactively (auto-copies ~/dotfiles)
+  $0 copy-dotfiles # Copy dotfiles without starting shell
   $0 full        # Run all tests automatically
   $0 clean       # Clean up test files
 
@@ -273,7 +288,7 @@ Notes:
   - Binary location: $DOTCOR_BIN
   - Test directory: $TEST_HOME
   - Builds binary if not present
-  - copy-dotfiles copies from ~/dotfiles (excludes .dotcor, .config, .local)
+  - interactive mode auto-copies ~/dotfiles (excludes .dotcor, .config, .local)
 EOF
 }
 
