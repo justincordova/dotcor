@@ -373,14 +373,16 @@ func AddFileTransaction(cfg *config.Config, sourcePath string, repoPath string, 
 
 	// 1. Move file to repo
 	tx.operations = append(tx.operations, &MoveFileOp{
-		Src: expandedSource,
-		Dst: fullRepoPath,
+		Src:    expandedSource,
+		Dst:    fullRepoPath,
+		Config: cfg,
 	})
 
 	// 2. Create symlink
 	tx.operations = append(tx.operations, &CreateSymlinkOp{
 		Target: fullRepoPath,
 		Link:   expandedSource,
+		Config: cfg,
 	})
 
 	// 3. Add to config
