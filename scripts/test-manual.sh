@@ -230,7 +230,7 @@ test_interactive() {
     DOTFILES_SOURCE="$HOME/dotfiles"
     if [ -d "$DOTFILES_SOURCE" ]; then
         info "Copying dotfiles from $DOTFILES_SOURCE to $TEST_HOME"
-        rsync -av --exclude='.dotcor' --exclude='.config' --exclude='.local' \
+        rsync -a --exclude='.dotcor' --exclude='.config' --exclude='.local' \
             "$DOTFILES_SOURCE/" "$TEST_HOME/"
         success "Dotfiles copied successfully"
     else
