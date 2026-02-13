@@ -162,7 +162,7 @@ func TestAdd_MultipleFiles_Success(t *testing.T) {
 	}
 }
 
-func TestAdd_WithCategory_Success(t *testing.T) {
+func TestAdd_NestedPath_Success(t *testing.T) {
 	// Arrange
 	tempDir := t.TempDir()
 	configDir := filepath.Join(tempDir, ".dotcor")
@@ -193,7 +193,7 @@ func TestAdd_WithCategory_Success(t *testing.T) {
 		t.Fatalf("failed to create source file: %v", err)
 	}
 
-	// Act - Simulate add with category
+	// Act - Simulate add with nested path
 	backupPath := filepath.Join(backupsDir, "init.vim")
 	if err := os.WriteFile(backupPath, []byte("set number\n"), 0644); err != nil {
 		t.Fatalf("failed to create backup: %v", err)
@@ -207,7 +207,7 @@ func TestAdd_WithCategory_Success(t *testing.T) {
 	err = os.Symlink(repoFile, sourceFile)
 	require.NoError(t, err)
 
-	// Add to config with custom category (no platforms field)
+	// Add to config with nested path (no platforms field)
 	cfg.ManagedFiles = append(cfg.ManagedFiles, config.ManagedFile{
 		SourcePath: "~/.config/nvim/init.vim",
 		RepoPath:   "nvim/init.vim",
@@ -217,7 +217,7 @@ func TestAdd_WithCategory_Success(t *testing.T) {
 	// Assert
 	AssertFileExists(t, repoFile)
 	AssertFileExists(t, sourceFile)
-	assert.Contains(t, repoFile, "nvim", "repo path should use custom category")
+	assert.Contains(t, repoFile, "nvim", "repo path should use nested directory structure")
 }
 
 // ========== Template Tests ==========
@@ -525,19 +525,6 @@ func TestAdd_TransactionFails_RestoresBackup(t *testing.T) {
 
 // ========== Flag Tests ==========
 
-func TestAdd_Flag_Category_UsesCustomCategory(t *testing.T) {
-	// Arrange
-	category := "mycategory"
-	sourcePath := "~/.zshrc"
-
-	// Act - Generate repo path with custom category
-	baseName := filepath.Base(sourcePath)
-	repoPath := filepath.Join(category, strings.TrimPrefix(baseName, "."))
-
-	// Assert
-	assert.Equal(t, "mycategory/zshrc", repoPath, "should use custom category")
-}
-
 func TestAdd_Flag_DryRun_NoChangesMade(t *testing.T) {
 	// Arrange
 	tempDir := t.TempDir()
@@ -580,49 +567,6 @@ func TestAdd_Flag_Force_SkipsValidation(t *testing.T) {
 	} else {
 		assert.False(t, !hasSecret, "without force, should reject file with secrets")
 	}
-}
-
-func TestAdd_Flag_Recursive_AddsDirectory(t *testing.T) {
-	// Arrange
-	tempDir := t.TempDir()
-	configDir := filepath.Join(tempDir, ".dotcor")
-	filesDir := filepath.Join(configDir, "files")
-	backupsDir := filepath.Join(configDir, "backups")
-	if err := os.MkdirAll(filesDir, 0755); err != nil {
-		t.Fatalf("failed to create files dir: %v", err)
-	}
-	if err := os.MkdirAll(backupsDir, 0755); err != nil {
-		t.Fatalf("failed to create backups dir: %v", err)
-	}
-
-	homeDir := filepath.Join(tempDir, "home")
-	configPath := filepath.Join(homeDir, ".config", "nvim")
-	if err := os.MkdirAll(configPath, 0755); err != nil {
-		t.Fatalf("failed to create config dir: %v", err)
-	}
-
-	// Create files in directory
-	if err := os.WriteFile(filepath.Join(configPath, "init.vim"), []byte("vim config"), 0644); err != nil {
-		t.Fatalf("failed to create init.vim: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(configPath, "custom.lua"), []byte("lua config"), 0644); err != nil {
-		t.Fatalf("failed to create custom.lua: %v", err)
-	}
-
-	// Act - Simulate recursive add
-	var addedFiles []string
-	if err := filepath.Walk(configPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return err
-		}
-		addedFiles = append(addedFiles, path)
-		return nil
-	}); err != nil {
-		t.Fatalf("failed to walk config path: %v", err)
-	}
-
-	// Assert
-	assert.Len(t, addedFiles, 2, "should find 2 files in directory recursively")
 }
 
 // ========== Glob Pattern Tests ==========
