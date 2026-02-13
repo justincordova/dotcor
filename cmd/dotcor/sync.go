@@ -15,25 +15,28 @@ import (
 
 var syncCmd = &cobra.Command{
 	Use:   "sync [files...]",
-	Short: "Commit all changes and push to remote",
+	Short: "Commit changes to repository",
 	Long: `Sync dotfiles by committing changes and optionally pushing to remote.
 
 This command:
 1. Checks for uncommitted changes
 2. Creates a timestamped commit
-3. Pushes to remote (if configured and not --no-push)
+3. Pushes to remote (only with --push flag)
+4. Shows warning if no remote is configured
 
 Examples:
-  dotcor sync                 # Commit and push all files
-  dotcor sync ~/.zshrc        # Sync specific file(s)
-  dotcor sync --no-push       # Commit only
+  dotcor sync                 # Commit all files
+  dotcor sync ~/.zshrc        # Commit specific file(s)
+  dotcor sync --push          # Commit and push to remote
+  dotcor sync --no-push       # Commit only (same as default)
   dotcor sync --preview       # Show what would be synced
   dotcor sync -m "message"    # Custom commit message`,
 	RunE: runSync,
 }
 
 func init() {
-	syncCmd.Flags().Bool("no-push", false, "Commit but don't push to remote")
+	syncCmd.Flags().Bool("push", false, "Commit and push to remote")
+	syncCmd.Flags().Bool("no-push", false, "Commit but don't push to remote (default behavior)")
 	syncCmd.Flags().Bool("preview", false, "Show what would be synced without making changes")
 	syncCmd.Flags().Bool("dry-run", false, "Alias for --preview")
 	syncCmd.Flags().BoolP("force", "f", false, "Sync without confirmation")
@@ -42,11 +45,17 @@ func init() {
 }
 
 func runSync(cmd *cobra.Command, args []string) error {
+	pushFlag, _ := cmd.Flags().GetBool("push")
 	noPush, _ := cmd.Flags().GetBool("no-push")
 	preview, _ := cmd.Flags().GetBool("preview")
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
 	force, _ := cmd.Flags().GetBool("force")
 	message, _ := cmd.Flags().GetString("message")
+
+	// Treat --no-push as default (no push)
+	if noPush {
+		pushFlag = false
+	}
 
 	// Treat --dry-run as --preview
 	if dryRun {
@@ -109,7 +118,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 	// Preview mode
 	if preview {
-		return showSyncPreview(repoPath, hasChanges, gitStatus, noPush)
+		return showSyncPreview(repoPath, hasChanges, gitStatus, pushFlag)
 	}
 
 	// Nothing to sync
@@ -128,14 +137,15 @@ func runSync(cmd *cobra.Command, args []string) error {
 		fmt.Println("")
 	}
 
-	if gitStatus.AheadBy > 0 && !noPush {
+	// Show push status if --push is used
+	if gitStatus.AheadBy > 0 && pushFlag {
 		fmt.Printf("%d commit(s) to push to remote.\n", gitStatus.AheadBy)
 		fmt.Println("")
 	}
 
 	// Confirm unless --force
 	if !force {
-		if !confirmSync(hasChanges, gitStatus.AheadBy > 0 && !noPush) {
+		if !confirmSync(hasChanges, pushFlag && gitStatus.AheadBy > 0) {
 			fmt.Println("Sync cancelled.")
 			return nil
 		}
@@ -187,8 +197,8 @@ func runSync(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Push to remote
-	if !noPush {
+	// Push to remote (only if --push is used)
+	if pushFlag {
 		// Check if remote exists
 		remoteURL, _ := git.GetRemoteURL(repoPath)
 		if remoteURL != "" {
@@ -198,6 +208,15 @@ func runSync(cmd *cobra.Command, args []string) error {
 			fmt.Println("[OK] Pushed to remote")
 		} else {
 			fmt.Println("[!] No remote configured. Use 'git remote add origin <url>' to set up.")
+		}
+	} else {
+		// Show warning if no remote is configured
+		remoteURL, _ := git.GetRemoteURL(repoPath)
+		if remoteURL == "" {
+			fmt.Println("")
+			fmt.Println("[!] Tip: You haven't added a remote repository yet.")
+			fmt.Println("  Use 'git remote add origin <url>' to set up remote.")
+			fmt.Println("  Then run 'dotcor sync --push' to push your changes.")
 		}
 	}
 
@@ -211,7 +230,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 }
 
 // showSyncPreview shows what would be synced
-func showSyncPreview(repoPath string, hasChanges bool, gitStatus git.StatusInfo, noPush bool) error {
+func showSyncPreview(repoPath string, hasChanges bool, gitStatus git.StatusInfo, pushFlag bool) error {
 	fmt.Println("Sync Preview")
 	fmt.Println("============")
 	fmt.Println("")
@@ -237,7 +256,7 @@ func showSyncPreview(repoPath string, hasChanges bool, gitStatus git.StatusInfo,
 	}
 
 	// Show push status
-	if !noPush {
+	if pushFlag {
 		if gitStatus.RemoteExists {
 			if gitStatus.AheadBy > 0 {
 				fmt.Printf("Would push %d commit(s) to remote.\n", gitStatus.AheadBy)
@@ -248,6 +267,13 @@ func showSyncPreview(repoPath string, hasChanges bool, gitStatus git.StatusInfo,
 			}
 		} else {
 			fmt.Println("No remote configured.")
+		}
+	} else {
+		if gitStatus.RemoteExists {
+			fmt.Println("Use --push flag to push to remote.")
+		} else {
+			fmt.Println("No remote configured.")
+			fmt.Println("Use 'git remote add origin <url>' to set up.")
 		}
 	}
 

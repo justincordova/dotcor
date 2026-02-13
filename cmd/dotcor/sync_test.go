@@ -247,13 +247,12 @@ managed_files: []
 		os.Setenv("HOME", tempDir)
 		defer os.Setenv("HOME", originalHome)
 
-		// Act - Try to sync (push will fail on non-bare repo)
+		// Act - Try to sync with --push (push will fail on non-bare repo)
 		cmd := syncCmd
-		cmd.SetArgs([]string{"--force"})
+		cmd.SetArgs([]string{"--push", "--force"})
 		err = runSync(cmd, []string{})
 
 		// Assert - Should fail because push to non-bare repo is rejected
-		// Current implementation returns error on push failure
 		assert.Error(t, err, "sync should return error when push fails")
 		assert.Contains(t, err.Error(), "pushing to remote", "error should mention push failure")
 	})
