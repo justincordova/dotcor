@@ -209,7 +209,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 			fmt.Printf("[!] Git commit failed: %v (files marked as uncommitted)\n", err)
 			fmt.Println("Run 'dotcor sync' to commit these changes.")
 		} else {
-			fmt.Println("[OK] Committed to Git")
+			fmt.Printf("%s[OK]%s Committed to Git\n", colorGreen, colorReset)
 		}
 	}
 
@@ -347,7 +347,7 @@ func processAddFile(cfg *config.Config, sourcePath string, category string, forc
 	}
 
 	tx.Commit()
-	fmt.Printf("  [OK] %s\n", normalized)
+	fmt.Printf("  %s[OK]%s %s\n", colorGreen, colorReset, normalized)
 
 	if err := core.RunHook(core.HookContext{HookType: "post-add", FilePath: sourcePath, RepoPath: repoPath}, cfg); err != nil {
 		fmt.Printf("  [!] Post-add hook warning: %v\n", err)

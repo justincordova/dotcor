@@ -13,6 +13,11 @@ func ConfigureFromFlags(cmd *cobra.Command) *slog.Logger {
 	logFile, _ := cmd.Flags().GetString("log-file")
 	jsonFormat, _ := cmd.Flags().GetBool("json")
 
+	// Check environment variable for debug mode
+	if !debug && os.Getenv("DOTCOR_DEBUG") != "" {
+		debug = true
+	}
+
 	level := levelFromFlags(debug, quiet)
 
 	var handler slog.Handler
@@ -66,6 +71,8 @@ func levelFromFlags(debug, quiet bool) slog.Level {
 	case quiet:
 		return slog.LevelWarn
 	default:
-		return slog.LevelInfo
+		// Default to WARN for consumers (clean output)
+		// Use DOTCOR_DEBUG=1 or --debug flag for development
+		return slog.LevelWarn
 	}
 }

@@ -96,7 +96,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if err := fs.EnsureDir(configDir, defaultCfg); err != nil {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
-	fmt.Printf("[OK] Created %s\n", configDir)
+	fmt.Printf("%s[OK]%s Created %s\n", colorGreen, colorReset, configDir)
 
 	if err := fs.EnsureDir(filesDir, defaultCfg); err != nil {
 		return fmt.Errorf("creating files directory: %w", err)
@@ -116,7 +116,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 			if err := git.InitRepo(filesDir); err != nil {
 				fmt.Printf("[!] Git init failed: %v\n", err)
 			} else {
-				fmt.Println("[OK] Initialized Git repository")
+				fmt.Printf("%s[OK]%s Initialized Git repository\n", colorGreen, colorReset)
 			}
 		}
 	} else {
@@ -140,7 +140,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		if err := cfg.SaveConfig(); err != nil {
 			return fmt.Errorf("saving config: %w", err)
 		}
-		fmt.Println("[OK] Created config.yaml")
+		fmt.Printf("%s[OK]%s Created config.yaml\n", colorGreen, colorReset)
 	}
 
 	// Handle --apply flag (create symlinks from existing config)
