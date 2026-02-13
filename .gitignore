@@ -60,6 +60,7 @@ __debug_bin
 # Test fixtures and local testing
 testdata/local/
 *.local
+.manual-test/
 
 # Git worktrees
 .worktrees/

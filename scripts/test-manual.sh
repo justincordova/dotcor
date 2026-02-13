@@ -9,7 +9,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DOTCOR_BIN="$PROJECT_ROOT/bin/dotcor"
-TEST_HOME="/tmp/dotcor-manual-test"
+TEST_HOME="$PROJECT_ROOT/.manual-test"
 
 # Colors
 GREEN='\033[0;32m'
@@ -176,15 +176,18 @@ test_full() {
 test_interactive() {
     setup_test_env
     export HOME="$TEST_HOME"
+    export PATH="$PROJECT_ROOT/bin:$PATH"
 
     info "Entering interactive test mode"
     info "Your test HOME is: $HOME"
     info "Binary is at: $DOTCOR_BIN"
+    info "PATH includes: $PROJECT_ROOT/bin"
     echo ""
     success "Ready! Try commands like:"
-    echo "  $DOTCOR_BIN init"
-    echo "  $DOTCOR_BIN status"
-    echo "  $DOTCOR_BIN add ~/.testrc"
+    echo "  dotcor init"
+    echo "  dotcor status"
+    echo "  dotcor add ~/.testrc"
+    echo "  dotcor --version"
     echo ""
     info "Exit when done (test files preserved in $TEST_HOME)"
     info "Clean up with: $0 clean"
@@ -218,7 +221,8 @@ Examples:
 
 Notes:
   - Binary location: $DOTCOR_BIN
-  - Test directory: $TEST_HOME
+  - Test directory: $TEST_HOME (in project root)
+  - PATH includes bin/ for easy 'dotcor' command
   - Builds binary if not present
 EOF
 }

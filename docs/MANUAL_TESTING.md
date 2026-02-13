@@ -24,19 +24,49 @@ make install
 
 ## Testing Commands Safely
 
-Use a **temporary test directory** to avoid affecting your actual dotfiles:
+## Quick Start
 
+### Build the Binary
 ```bash
-# Create a test environment
-export TEST_HOME=/tmp/dotcor-test-$$
-mkdir -p $TEST_HOME
+# Using Makefile (recommended)
+make binary
 
-# Use the binary with test home
-./bin/dotcor init
+# Or directly
+go build -o bin/dotcor ./cmd/dotcor
 
-# Or install and test with temporary home
-DOTCOR_HOME=$TEST_HOME ./bin/dotcor init
+# Then use it
+./bin/dotcor
 ```
+
+### Install to PATH
+```bash
+make install
+# Now you can run: dotcor from anywhere
+```
+
+---
+
+## Testing Commands Safely
+
+The project includes a dedicated manual testing environment in **`.manual-test/`** (in project root). This directory is gitignored so test files won't be committed.
+
+### Option 1: Interactive Testing (Recommended!)
+```bash
+make test-interactive
+# This opens a shell with:
+#   - HOME set to .manual-test/
+#   - PATH includes bin/ (so 'dotcor' uses v0.7.3)
+#   - Test environment isolated from real dotfiles
+```
+
+Now you can run commands normally:
+```bash
+dotcor init          # Uses built binary (v0.7.3)
+dotcor status
+dotcor add ~/.testrc
+```
+
+**Important:** In interactive mode, `dotcor` uses the built binary from `bin/` (not system version).
 
 ---
 
