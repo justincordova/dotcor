@@ -174,9 +174,9 @@ func IsTemporaryFile(filename string) bool {
 // IsSystemFile checks if filename indicates a system file
 func IsSystemFile(filename string) bool {
 	systemFiles := map[string]bool{
-		".DS_Store":   true,
-		"Thumbs.db":   true,
-		"desktop.ini": true,
+		".DS_Store":       true,
+		"Thumbs.db":       true,
+		"desktop.ini":     true,
 		".Spotlight-V100": true,
 		".Trashes":        true,
 		"ehthumbs.db":     true,

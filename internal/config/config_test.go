@@ -111,7 +111,6 @@ func TestGetUncommittedFiles(t *testing.T) {
 	}
 }
 
-
 func TestMarkAsUncommitted_UpdatesFileFlag(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
