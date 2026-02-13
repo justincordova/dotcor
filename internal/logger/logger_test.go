@@ -28,7 +28,7 @@ func TestLevelFromFlags(t *testing.T) {
 		quiet    bool
 		expected slog.Level
 	}{
-		{"default", false, false, slog.LevelInfo},
+		{"default", false, false, slog.LevelWarn},
 		{"debug", true, false, slog.LevelDebug},
 		{"quiet", false, true, slog.LevelWarn},
 		{"debug overrides quiet", true, true, slog.LevelDebug},
