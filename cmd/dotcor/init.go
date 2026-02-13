@@ -114,13 +114,13 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if git.IsGitInstalled() {
 		if !git.IsRepo(filesDir) {
 			if err := git.InitRepo(filesDir); err != nil {
-				fmt.Printf("[!] Git init failed: %v\n", err)
+				fmt.Printf("%s[!]%s Git init failed: %v\n", colorYellow, colorReset, err)
 			} else {
 				fmt.Printf("%s[OK]%s Initialized Git repository\n", colorGreen, colorReset)
 			}
 		}
 	} else {
-		fmt.Println("[!] Git not found. Installing Git is recommended for version control.")
+		fmt.Printf("%s[!]%s Git not found. Installing Git is recommended for version control.\n", colorYellow, colorReset)
 	}
 
 	// Create or load config
@@ -181,19 +181,19 @@ func applySymlinks(cfg *config.Config) error {
 		// Get full paths
 		sourcePath, err := config.ExpandPath(mf.SourcePath, cfg)
 		if err != nil {
-			fmt.Printf("  [X] %s (invalid path)\n", mf.SourcePath)
+			fmt.Printf("  %s[X]%s %s (invalid path)\n", colorRed, colorReset, mf.SourcePath)
 			continue
 		}
 
 		repoPath, err := config.GetRepoFilePath(cfg, mf.RepoPath)
 		if err != nil {
-			fmt.Printf("  [X] %s (invalid repo path)\n", mf.SourcePath)
+			fmt.Printf("  %s[X]%s %s (invalid repo path)\n", colorRed, colorReset, mf.SourcePath)
 			continue
 		}
 
 		// Check if repo file exists
 		if !fs.PathExists(repoPath) {
-			fmt.Printf("  [X] %s (not in repository)\n", mf.SourcePath)
+			fmt.Printf("  %s[X]%s %s (not in repository)\n", colorRed, colorReset, mf.SourcePath)
 			continue
 		}
 
@@ -210,7 +210,7 @@ func applySymlinks(cfg *config.Config) error {
 		if fs.PathExists(sourcePath) {
 			backupPath, err := core.CreateBackup(sourcePath, cfg)
 			if err != nil {
-				fmt.Printf("  [X] %s (backup failed: %v)\n", mf.SourcePath, err)
+				fmt.Printf("  %s[X]%s %s (backup failed: %v)\n", colorRed, colorReset, mf.SourcePath, err)
 				continue
 			}
 			fmt.Printf("  → Backed up to %s\n", backupPath)
@@ -219,11 +219,11 @@ func applySymlinks(cfg *config.Config) error {
 
 		// Create symlink
 		if err := fs.CreateSymlink(repoPath, sourcePath, cfg); err != nil {
-			fmt.Printf("  [X] %s (%v)\n", mf.SourcePath, err)
+			fmt.Printf("  %s[X]%s %s (%v)\n", colorRed, colorReset, mf.SourcePath, err)
 			continue
 		}
 
-		fmt.Printf("  [OK] %s\n", mf.SourcePath)
+		fmt.Printf("  %s[OK]%s %s\n", colorGreen, colorReset, mf.SourcePath)
 		created++
 	}
 
@@ -292,9 +292,9 @@ func interactiveInit(cfg *config.Config) error {
 
 	for _, dotfile := range found {
 		if err := addFile(cfg, dotfile, "", false); err != nil {
-			fmt.Printf("  [X] %s: %v\n", dotfile, err)
+			fmt.Printf("  %s[X]%s %s: %v\n", colorRed, colorReset, dotfile, err)
 		} else {
-			fmt.Printf("  [OK] %s\n", dotfile)
+			fmt.Printf("  %s[OK]%s %s\n", colorGreen, colorReset, dotfile)
 			added++
 		}
 	}
@@ -303,12 +303,12 @@ func interactiveInit(cfg *config.Config) error {
 	if git.IsGitInstalled() && added > 0 {
 		repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
 		if err != nil {
-			fmt.Printf("[!] Git commit skipped: invalid repo path: %v\n", err)
+			fmt.Printf("%s[!]%s Git commit skipped: invalid repo path: %v\n", colorYellow, colorReset, err)
 		} else {
 			if err := git.AutoCommit(repoPath, fmt.Sprintf("Add %d dotfiles via interactive init", added)); err != nil {
-				fmt.Printf("[!] Git commit failed: %v\n", err)
+				fmt.Printf("%s[!]%s Git commit failed: %v\n", colorYellow, colorReset, err)
 			} else {
-				fmt.Println("[OK] Committed to Git")
+				fmt.Printf("%s[OK]%s Committed to Git\n", colorGreen, colorReset)
 			}
 		}
 	}

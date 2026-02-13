@@ -69,7 +69,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 		for _, arg := range args {
 			mf, err := cfg.GetManagedFile(arg)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "[!] %s is not managed\n", arg)
+				fmt.Fprintf(os.Stderr, "%s[!]%s %s is not managed\n", colorYellow, colorReset, arg)
 			} else {
 				filesToSync = append(filesToSync, arg)
 				filesToSyncRepoPaths = append(filesToSyncRepoPaths, mf.RepoPath)
@@ -147,7 +147,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 	}
 
 	if err := core.RunHook(core.HookContext{HookType: "pre-sync", FilePath: ""}, cfg); err != nil {
-		fmt.Printf("[!] Pre-sync hook warning: %v\n", err)
+		fmt.Printf("%s[!]%s Pre-sync hook warning: %v\n", colorYellow, colorReset, err)
 	}
 
 	// Acquire lock
@@ -181,13 +181,13 @@ func runSync(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("committing changes: %w", err)
 			}
 		}
-		fmt.Println("[OK] Changes committed")
+		fmt.Printf("%s[OK]%s Changes committed\n", colorGreen, colorReset)
 
 		// Clear uncommitted flags for all files
 		uncommittedFiles := cfg.GetUncommittedFiles()
 		for _, mf := range uncommittedFiles {
 			if err := cfg.ClearUncommitted(mf.SourcePath); err != nil {
-				fmt.Printf("[!] Failed to clear uncommitted flag for %s: %v\n", mf.SourcePath, err)
+				fmt.Printf("%s[!]%s Failed to clear uncommitted flag for %s: %v\n", colorYellow, colorReset, mf.SourcePath, err)
 			}
 		}
 	}
@@ -200,17 +200,17 @@ func runSync(cmd *cobra.Command, args []string) error {
 		if err := pushToRemote(repoPath); err != nil {
 			return fmt.Errorf("pushing to remote: %w", err)
 		}
-		fmt.Println("[OK] Pushed to remote")
+		fmt.Printf("%s[OK]%s Pushed to remote\n", colorGreen, colorReset)
 	} else if !gitStatus.RemoteExists {
 		// No remote configured - show tip
 		fmt.Println("")
-		fmt.Println("[!] Tip: You haven't added a remote repository yet.")
-		fmt.Println("  Use 'git remote add origin <url>' to set up remote.")
-		fmt.Println("  Then changes will be auto-pushed on sync.")
+		fmt.Printf("%s[!]%s Tip: You haven't added a remote repository yet.\n", colorYellow, colorReset)
+		fmt.Printf("  Use 'git remote add origin <url>' to set up remote.\n")
+		fmt.Printf("  Then changes will be auto-pushed on sync.\n")
 	}
 
 	if err := core.RunHook(core.HookContext{HookType: "post-sync", FilePath: ""}, cfg); err != nil {
-		fmt.Printf("[!] Post-sync hook warning: %v\n", err)
+		fmt.Printf("%s[!]%s Post-sync hook warning: %v\n", colorYellow, colorReset, err)
 	}
 
 	fmt.Println("")
@@ -249,7 +249,7 @@ func showSyncPreview(repoPath string, hasChanges bool, gitStatus git.StatusInfo,
 		if gitStatus.AheadBy > 0 {
 			fmt.Printf("Would push %d commit(s) to remote.\n", gitStatus.AheadBy)
 		} else if gitStatus.BehindBy > 0 {
-			fmt.Printf("[!] Remote is %d commit(s) ahead. Consider 'git pull' first.\n", gitStatus.BehindBy)
+			fmt.Printf("%s[!]%s Remote is %d commit(s) ahead. Consider 'git pull' first.\n", colorYellow, colorReset, gitStatus.BehindBy)
 		} else {
 			fmt.Println("Already in sync with remote.")
 		}

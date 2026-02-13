@@ -180,7 +180,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 			skipped++
 		case addResultError:
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "  [X] %s: %v\n", file, err)
+				fmt.Fprintf(os.Stderr, "  %s[X]%s %s: %v\n", colorRed, colorReset, file, err)
 			}
 			skipped++
 		}
@@ -206,7 +206,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("expanding repo path: %w", err)
 		}
 		if err := git.AutoCommit(repoPath, "Add dotfiles"); err != nil {
-			fmt.Printf("[!] Git commit failed: %v (files marked as uncommitted)\n", err)
+			fmt.Printf("%s[!]%s Git commit failed: %v (files marked as uncommitted)\n", colorYellow, colorReset, err)
 			fmt.Println("Run 'dotcor sync' to commit these changes.")
 		} else {
 			fmt.Printf("%s[OK]%s Committed to Git\n", colorGreen, colorReset)
@@ -260,7 +260,7 @@ func processAddFile(cfg *config.Config, sourcePath string, category string, forc
 	if err := core.ValidateSourceFile(expanded, cfg); err != nil {
 		// Check if it's a warning vs error
 		if isWarning(err) && force {
-			fmt.Printf("  [!] %s: %v (forced)\n", normalized, err)
+			fmt.Printf("  %s[!]%s %s: %v (forced)\n", colorYellow, colorReset, normalized, err)
 		} else {
 			return addResultError, "", err
 		}
@@ -272,7 +272,7 @@ func processAddFile(cfg *config.Config, sourcePath string, category string, forc
 		if !force {
 			return addResultError, "", fmt.Errorf("potential secrets detected: %v\nUse --force to add anyway", secrets)
 		}
-		fmt.Printf("  [!] %s: potential secrets detected (forced)\n", normalized)
+		fmt.Printf("  %s[!]%s %s: potential secrets detected (forced)\n", colorYellow, colorReset, normalized)
 	}
 
 	// Generate repo path
@@ -306,7 +306,7 @@ func processAddFile(cfg *config.Config, sourcePath string, category string, forc
 	}
 
 	if err := core.RunHook(core.HookContext{HookType: "pre-add", FilePath: sourcePath}, cfg); err != nil {
-		fmt.Printf("  [!] Pre-add hook warning: %v\n", err)
+		fmt.Printf("  %s[!]%s Pre-add hook warning: %v\n", colorYellow, colorReset, err)
 	}
 
 	// Create backup
@@ -340,7 +340,7 @@ func processAddFile(cfg *config.Config, sourcePath string, category string, forc
 		// Try to restore from backup if we have one
 		if backupPath != "" {
 			if restoreErr := core.RestoreBackup(backupPath, expanded, cfg); restoreErr != nil {
-				fmt.Fprintf(os.Stderr, "  [!] Failed to restore backup: %v\n", restoreErr)
+				fmt.Fprintf(os.Stderr, "  %s[!]%s Failed to restore backup: %v\n", colorYellow, colorReset, restoreErr)
 			}
 		}
 		return addResultError, "", err
@@ -350,7 +350,7 @@ func processAddFile(cfg *config.Config, sourcePath string, category string, forc
 	fmt.Printf("  %s[OK]%s %s\n", colorGreen, colorReset, normalized)
 
 	if err := core.RunHook(core.HookContext{HookType: "post-add", FilePath: sourcePath, RepoPath: repoPath}, cfg); err != nil {
-		fmt.Printf("  [!] Post-add hook warning: %v\n", err)
+		fmt.Printf("  %s[!]%s Post-add hook warning: %v\n", colorYellow, colorReset, err)
 	}
 
 	// Return relative repoPath (consistent with dry-run return)

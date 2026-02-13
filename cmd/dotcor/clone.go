@@ -138,14 +138,14 @@ func runClone(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cloning repository: %w", err)
 	}
 
-	fmt.Println("[OK] Repository cloned")
+	fmt.Printf("%s[OK]%s Repository cloned\n", colorGreen, colorReset)
 
 	// Set up git remote if this is a remote URL
 	if isValidGitURL(repoURL) {
 		if err := git.SetRemote(filesDir, "origin", repoURL); err != nil {
-			fmt.Fprintf(os.Stderr, "[!] Warning: failed to set git remote: %v\n", err)
+			fmt.Fprintf(os.Stderr, "%s[!]%s Warning: failed to set git remote: %v\n", colorYellow, colorReset, err)
 		} else {
-			fmt.Println("[OK] Git remote configured")
+			fmt.Printf("%s[OK]%s Git remote configured\n", colorGreen, colorReset)
 		}
 	}
 
@@ -155,12 +155,12 @@ func runClone(cmd *cobra.Command, args []string) error {
 		// Copy config to correct location
 		destConfig := configDir + "/config.yaml"
 		if err := fs.CopyFile(configPath, destConfig, cfg); err != nil {
-			fmt.Printf("[!] Could not copy config: %v\n", err)
+			fmt.Printf("%s[!]%s Could not copy config: %v\n", colorYellow, colorReset, err)
 		} else {
 			// Reload the config from the copied location
 			cfg, err = config.LoadConfig()
 			if err == nil {
-				fmt.Println("[OK] Configuration loaded from repository")
+				fmt.Printf("%s[OK]%s Configuration loaded from repository\n", colorGreen, colorReset)
 			}
 		}
 	} else {
@@ -168,7 +168,7 @@ func runClone(cmd *cobra.Command, args []string) error {
 		if err := cfg.SaveConfig(); err != nil {
 			return fmt.Errorf("saving config: %w", err)
 		}
-		fmt.Println("[OK] Created default configuration")
+		fmt.Printf("%s[OK]%s Created default configuration\n", colorGreen, colorReset)
 		fmt.Println("  Note: Run 'dotcor rebuild-config --scan' to detect files")
 	}
 

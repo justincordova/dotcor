@@ -117,7 +117,7 @@ func verifyConfig(cfg *config.Config, repoPath string) error {
 
 	// Report
 	if len(missing) == 0 && len(orphaned) == 0 {
-		fmt.Println("[OK] Configuration matches repository")
+		fmt.Printf("%s[OK]%s Configuration matches repository\n", colorGreen, colorReset)
 		fmt.Printf("  %d file(s) tracked\n", len(cfg.ManagedFiles))
 		return nil
 	}
@@ -125,7 +125,7 @@ func verifyConfig(cfg *config.Config, repoPath string) error {
 	if len(missing) > 0 {
 		fmt.Printf("Missing from repository (%d):\n", len(missing))
 		for _, m := range missing {
-			fmt.Printf("  [X] %s\n", m)
+			fmt.Printf("  %s[X]%s %s\n", colorRed, colorReset, m)
 		}
 		fmt.Println("")
 	}
@@ -216,7 +216,7 @@ func scanAndRebuild(cfg *config.Config, repoPath string, force bool) error {
 
 		cfg.ManagedFiles = append(cfg.ManagedFiles, mf)
 		added++
-		fmt.Printf("  [OK] Added %s → %s\n", repoFile, sourcePath)
+		fmt.Printf("  %s[OK]%s Added %s → %s\n", colorGreen, colorReset, repoFile, sourcePath)
 	}
 
 	// Save config
@@ -231,9 +231,9 @@ func scanAndRebuild(cfg *config.Config, repoPath string, force bool) error {
 	if git.IsGitInstalled() && added > 0 {
 		message := fmt.Sprintf("Rebuild config: add %d file(s)", added)
 		if err := git.AutoCommit(repoPath, message); err != nil {
-			fmt.Printf("[!] Git commit failed: %v\n", err)
+			fmt.Printf("%s[!]%s Git commit failed: %v\n", colorYellow, colorReset, err)
 		} else {
-			fmt.Println("[OK] Committed to Git")
+			fmt.Printf("%s[OK]%s Committed to Git\n", colorGreen, colorReset)
 		}
 	}
 

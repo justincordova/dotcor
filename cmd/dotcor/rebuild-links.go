@@ -100,13 +100,13 @@ func runRebuildLinks(cmd *cobra.Command, args []string) error {
 		// Get paths
 		sourcePath, err := config.ExpandPath(mf.SourcePath, cfg)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  [X] %s (invalid source path)\n", mf.SourcePath)
+			fmt.Fprintf(os.Stderr, "  %s[X]%s %s (invalid source path)\n", colorRed, colorReset, mf.SourcePath)
 			continue
 		}
 
 		repoPath, err := config.GetRepoFilePath(cfg, mf.RepoPath)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  [X] %s (invalid repo path)\n", mf.SourcePath)
+			fmt.Fprintf(os.Stderr, "  %s[X]%s %s (invalid repo path)\n", colorRed, colorReset, mf.SourcePath)
 			continue
 		}
 
@@ -119,13 +119,13 @@ func runRebuildLinks(cmd *cobra.Command, args []string) error {
 		// Read template content
 		templateContent, err := os.ReadFile(repoPath)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  [X] %s (failed to read template: %v)\n", mf.SourcePath, err)
+			fmt.Fprintf(os.Stderr, "  %s[X]%s %s (failed to read template: %v)\n", colorRed, colorReset, mf.SourcePath, err)
 			continue
 		}
 
 		// Check if file actually contains template variables
 		if !containsTemplateVariables(string(templateContent)) {
-			fmt.Printf("  [!] Skipping %s: no template variables found\n", mf.SourcePath)
+			fmt.Printf("  %s[!]%s Skipping %s: no template variables found\n", colorYellow, colorReset, mf.SourcePath)
 			skipped++
 			continue
 		}
@@ -149,7 +149,7 @@ func runRebuildLinks(cmd *cobra.Command, args []string) error {
 
 		// Write rendered content with preserved permissions
 		if err := os.WriteFile(baseRepoPath, []byte(renderedContent), originalMode); err != nil {
-			fmt.Fprintf(os.Stderr, "  [X] %s (failed to write: %v)\n", mf.SourcePath, err)
+			fmt.Fprintf(os.Stderr, "  %s[X]%s %s (failed to write: %v)\n", colorRed, colorReset, mf.SourcePath, err)
 			continue
 		}
 
@@ -161,11 +161,11 @@ func runRebuildLinks(cmd *cobra.Command, args []string) error {
 
 		// Create symlink to rendered file
 		if err := fs.CreateSymlink(baseRepoPath, sourcePath, cfg); err != nil {
-			fmt.Fprintf(os.Stderr, "  [X] %s (failed to create symlink: %v)\n", mf.SourcePath, err)
+			fmt.Fprintf(os.Stderr, "  %s[X]%s %s (failed to create symlink: %v)\n", colorRed, colorReset, mf.SourcePath, err)
 			continue
 		}
 
-		fmt.Printf("  [OK] %s\n", mf.SourcePath)
+		fmt.Printf("  %s[OK]%s %s\n", colorGreen, colorReset, mf.SourcePath)
 		rebuilt++
 	}
 

@@ -86,7 +86,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 		for _, arg := range args {
 			mf, err := cfg.GetManagedFile(arg)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "  [X] %s: not managed\n", arg)
+				fmt.Fprintf(os.Stderr, "  %s[X]%s %s: not managed\n", colorRed, colorReset, arg)
 				continue
 			}
 			filesToRemove = append(filesToRemove, *mf)
@@ -130,7 +130,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 	for _, mf := range filesToRemove {
 		err := processRemoveFile(cfg, mf, keepRepo, dryRun)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  [X] %s: %v\n", mf.SourcePath, err)
+			fmt.Fprintf(os.Stderr, "  %s[X]%s %s: %v\n", colorRed, colorReset, mf.SourcePath, err)
 			continue
 		}
 		removed++
@@ -149,13 +149,13 @@ func runRemove(cmd *cobra.Command, args []string) error {
 	if git.IsGitInstalled() && removed > 0 && !keepRepo {
 		repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
 		if err != nil {
-			fmt.Printf("[!] Git commit skipped: invalid repo path: %v\n", err)
+			fmt.Printf("%s[!]%s Git commit skipped: invalid repo path: %v\n", colorYellow, colorReset, err)
 		} else {
 			message := fmt.Sprintf("Remove %d file(s) from management", removed)
 			if err := git.AutoCommit(repoPath, message); err != nil {
-				fmt.Printf("[!] Git commit failed: %v\n", err)
+				fmt.Printf("%s[!]%s Git commit failed: %v\n", colorYellow, colorReset, err)
 			} else {
-				fmt.Println("[OK] Committed to Git")
+				fmt.Printf("%s[OK]%s Committed to Git\n", colorGreen, colorReset)
 			}
 		}
 	}
@@ -185,7 +185,7 @@ func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool,
 	}
 
 	if err := core.RunHook(core.HookContext{HookType: "pre-remove", FilePath: mf.SourcePath}, cfg); err != nil {
-		fmt.Printf("  [!] Pre-remove hook warning: %v\n", err)
+		fmt.Printf("  %s[!]%s Pre-remove hook warning: %v\n", colorYellow, colorReset, err)
 	}
 
 	// Check if source is a symlink
@@ -208,10 +208,10 @@ func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool,
 		}
 
 		if err := core.RunHook(core.HookContext{HookType: "post-remove", FilePath: mf.SourcePath}, cfg); err != nil {
-			fmt.Printf("  [!] Post-remove hook warning: %v\n", err)
+			fmt.Printf("  %s[!]%s Post-remove hook warning: %v\n", colorYellow, colorReset, err)
 		}
 
-		fmt.Printf("  [OK] %s (removed from management, kept in repo)\n", mf.SourcePath)
+		fmt.Printf("  %s[OK]%s %s (removed from management, kept in repo)\n", colorGreen, colorReset, mf.SourcePath)
 		return nil
 	}
 
@@ -220,7 +220,7 @@ func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool,
 	// First, create backup of repo file
 	if fs.PathExists(repoPath) {
 		if _, err := core.CreateBackup(repoPath, cfg); err != nil {
-			fmt.Printf("  [!] Backup failed for %s: %v\n", mf.RepoPath, err)
+			fmt.Printf("  %s[!]%s Backup failed for %s: %v\n", colorYellow, colorReset, mf.RepoPath, err)
 		}
 	}
 
@@ -257,10 +257,10 @@ func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool,
 	}
 
 	if err := core.RunHook(core.HookContext{HookType: "post-remove", FilePath: mf.SourcePath}, cfg); err != nil {
-		fmt.Printf("  [!] Post-remove hook warning: %v\n", err)
+		fmt.Printf("  %s[!]%s Post-remove hook warning: %v\n", colorYellow, colorReset, err)
 	}
 
-	fmt.Printf("  [OK] %s\n", mf.SourcePath)
+	fmt.Printf("  %s[OK]%s %s\n", colorGreen, colorReset, mf.SourcePath)
 	return nil
 }
 

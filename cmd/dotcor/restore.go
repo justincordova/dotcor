@@ -81,7 +81,7 @@ func runRestore(cmd *cobra.Command, args []string) error {
 	for _, sourcePath := range args {
 		err := restoreSingleFile(sourcePath, toRef, fromBackup, preview, force, cfg)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "[!] %s: %v\n", sourcePath, err)
+			fmt.Fprintf(os.Stderr, "%s[!]%s %s: %v\n", colorYellow, colorReset, sourcePath, err)
 		} else {
 			successCount++
 		}
@@ -156,7 +156,7 @@ func restoreFromGit(repoRoot, repoPath, fullRepoPath, ref string, preview, force
 	}
 
 	if err := core.RunHook(core.HookContext{HookType: "pre-restore", FilePath: repoPath}, cfg); err != nil {
-		fmt.Printf("[!] Pre-restore hook warning: %v\n", err)
+		fmt.Printf("%s[!]%s Pre-restore hook warning: %v\n", colorYellow, colorReset, err)
 	}
 
 	// Acquire lock
@@ -172,9 +172,9 @@ func restoreFromGit(repoRoot, repoPath, fullRepoPath, ref string, preview, force
 	// Create backup of current version
 	backupPath, err := core.CreateBackup(fullRepoPath, cfg)
 	if err != nil {
-		fmt.Printf("[!] Could not create backup: %v\n", err)
+		fmt.Printf("%s[!]%s Could not create backup: %v\n", colorYellow, colorReset, err)
 	} else {
-		fmt.Printf("[OK] Backed up current version to %s\n", backupPath)
+		fmt.Printf("%s[OK]%s Backed up current version to %s\n", colorGreen, colorReset, backupPath)
 	}
 
 	// Restore from Git
@@ -183,10 +183,10 @@ func restoreFromGit(repoRoot, repoPath, fullRepoPath, ref string, preview, force
 	}
 
 	if err := core.RunHook(core.HookContext{HookType: "post-restore", FilePath: repoPath}, cfg); err != nil {
-		fmt.Printf("[!] Post-restore hook warning: %v\n", err)
+		fmt.Printf("%s[!]%s Post-restore hook warning: %v\n", colorYellow, colorReset, err)
 	}
 
-	fmt.Printf("[OK] Restored %s from %s\n", repoPath, ref)
+	fmt.Printf("%s[OK]%s Restored %s from %s\n", colorGreen, colorReset, repoPath, ref)
 	return nil
 }
 
@@ -230,11 +230,11 @@ func restoreFromBackup(sourcePath, repoPath string, preview, force bool, cfg *co
 	}
 
 	if err := core.RunHook(core.HookContext{HookType: "pre-restore", FilePath: sourcePath}, cfg); err != nil {
-		fmt.Printf("[!] Pre-restore hook warning: %v\n", err)
+		fmt.Printf("%s[!]%s Pre-restore hook warning: %v\n", colorYellow, colorReset, err)
 	}
 
 	if err := core.RunHook(core.HookContext{HookType: "post-restore", FilePath: sourcePath}, cfg); err != nil {
-		fmt.Printf("[!] Post-restore hook warning: %v\n", err)
+		fmt.Printf("%s[!]%s Post-restore hook warning: %v\n", colorYellow, colorReset, err)
 	}
 
 	// Acquire lock
@@ -253,10 +253,10 @@ func restoreFromBackup(sourcePath, repoPath string, preview, force bool, cfg *co
 	}
 
 	if err := core.RunHook(core.HookContext{HookType: "post-restore", FilePath: sourcePath}, cfg); err != nil {
-		fmt.Printf("[!] Post-restore hook warning: %v\n", err)
+		fmt.Printf("%s[!]%s Post-restore hook warning: %v\n", colorYellow, colorReset, err)
 	}
 
-	fmt.Printf("[OK] Restored %s from backup\n", sourcePath)
+	fmt.Printf("%s[OK]%s Restored %s from backup\n", colorGreen, colorReset, sourcePath)
 	return nil
 }
 

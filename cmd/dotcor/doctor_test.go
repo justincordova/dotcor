@@ -75,9 +75,9 @@ managed_files:
 		t.Logf("stdout: %s", stdoutStr)
 
 		require.NoError(t, err, "doctor should succeed")
-		assert.Contains(t, stdoutStr, "[OK] Configuration valid", "should show valid config")
-		assert.Contains(t, stdoutStr, "[OK] No lock file", "should show no lock file")
-		assert.Contains(t, stdoutStr, "[OK] All 1 symlinks healthy", "should show healthy symlinks")
+		assert.Contains(t, stdoutStr, "Configuration valid", "should show valid config")
+		assert.Contains(t, stdoutStr, "No lock file", "should show no lock file")
+		assert.Contains(t, stdoutStr, "All 1 symlinks healthy", "should show healthy symlinks")
 	})
 }
 

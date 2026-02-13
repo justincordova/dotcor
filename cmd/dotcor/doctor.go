@@ -104,7 +104,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	fmt.Println("-------")
 
 	if issues == 0 {
-		fmt.Println("[OK] No issues found. Your DotCor setup is healthy!")
+		fmt.Printf("%s[OK]%s No issues found. Your DotCor setup is healthy!\n", colorGreen, colorReset)
 	} else {
 		fmt.Printf("Found %d issue(s)", issues)
 		if fix && fixed > 0 {
@@ -124,7 +124,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 func checkConfiguration(fix bool, cmd *cobra.Command) (issues, fixed int) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		fmt.Printf("  [X] Config error: %v\n", err)
+		fmt.Printf("  %s[X]%s Config error: %v\n", colorRed, colorReset, err)
 		issues++
 
 		if fix {
@@ -132,7 +132,7 @@ func checkConfiguration(fix bool, cmd *cobra.Command) (issues, fixed int) {
 			newCfg, err := config.NewDefaultConfig()
 			if err == nil {
 				if err := newCfg.SaveConfig(); err == nil {
-					fmt.Println("  [OK] Created new default config")
+					fmt.Printf("  %s[OK]%s Created new default config\n", colorGreen, colorReset)
 					fixed++
 				}
 			}
@@ -144,13 +144,13 @@ func checkConfiguration(fix bool, cmd *cobra.Command) (issues, fixed int) {
 	// Check repo path
 	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
 	if err != nil {
-		fmt.Printf("  [X] Invalid repo path: %v\n", err)
+		fmt.Printf("  %s[X]%s Invalid repo path: %v\n", colorRed, colorReset, err)
 		issues++
 		return
 	}
 
 	if !fs.PathExists(repoPath) {
-		fmt.Printf("  [X] Repository directory missing: %s\n", repoPath)
+		fmt.Printf("  %s[X]%s Repository directory missing: %s\n", colorRed, colorReset, repoPath)
 		issues++
 
 		if fix {
@@ -158,14 +158,14 @@ func checkConfiguration(fix bool, cmd *cobra.Command) (issues, fixed int) {
 			if err == nil {
 				configureLogger(cmd, cfg)
 				if err := fs.EnsureDir(repoPath, cfg); err == nil {
-					fmt.Printf("  [OK] Created repository directory: %s\n", repoPath)
+					fmt.Printf("  %s[OK]%s Created repository directory: %s\n", colorGreen, colorReset, repoPath)
 					fixed++
 				}
 			}
 		}
 	}
 
-	fmt.Println("  [OK] Configuration valid")
+	fmt.Printf("  %s[OK]%s Configuration valid\n", colorGreen, colorReset)
 	return
 }
 
@@ -173,7 +173,7 @@ func checkConfiguration(fix bool, cmd *cobra.Command) (issues, fixed int) {
 func checkLockFile(fix bool, cmd *cobra.Command) (issues, fixed int) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		fmt.Printf("  [X] Config error: %v\n", err)
+		fmt.Printf("  %s[X]%s Config error: %v\n", colorRed, colorReset, err)
 		issues++
 		return
 	}
@@ -185,13 +185,13 @@ func checkLockFile(fix bool, cmd *cobra.Command) (issues, fixed int) {
 	}
 
 	if info == nil {
-		fmt.Println("  [OK] No lock file")
+		fmt.Printf("  %s[OK]%s No lock file\n", colorGreen, colorReset)
 		return
 	}
 
 	// Check if lock is from our process
 	if info.PID == os.Getpid() {
-		fmt.Println("  [OK] Lock held by current process")
+		fmt.Printf("  %s[OK]%s Lock held by current process\n", colorGreen, colorReset)
 		return
 	}
 
@@ -203,20 +203,20 @@ func checkLockFile(fix bool, cmd *cobra.Command) (issues, fixed int) {
 
 	stale, _ := core.IsStale(lockPath, cfg)
 	if !stale {
-		fmt.Printf("  [!] Lock held by PID %d on %s\n", info.PID, info.Hostname)
+		fmt.Printf("  %s[!]%s Lock held by PID %d on %s\n", colorYellow, colorReset, info.PID, info.Hostname)
 		fmt.Println("    (Lock appears active - another dotcor process may be running)")
 		return
 	}
 
-	fmt.Printf("  [X] Stale lock from PID %d (process dead)\n", info.PID)
+	fmt.Printf("  %s[X]%s Stale lock from PID %d (process dead)\n", colorRed, colorReset, info.PID)
 	issues++
 
 	if fix {
 		if err := core.ForceReleaseLock(cfg); err == nil {
-			fmt.Println("  [OK] Removed stale lock")
+			fmt.Printf("  %s[OK]%s Removed stale lock\n", colorGreen, colorReset)
 			fixed++
 		} else {
-			fmt.Printf("  [X] Could not remove lock: %v\n", err)
+			fmt.Printf("  %s[X]%s Could not remove lock: %v\n", colorRed, colorReset, err)
 		}
 	}
 
@@ -238,21 +238,21 @@ func checkRepository(fix bool, cmd *cobra.Command) (issues, fixed int) {
 
 	// Check if git is installed
 	if !git.IsGitInstalled() {
-		fmt.Println("  [!] Git is not installed (recommended)")
+		fmt.Printf("  %s[!]%s Git is not installed (recommended)\n", colorYellow, colorReset)
 		return
 	}
 
 	// Check if it's a git repo
 	if !git.IsRepo(repoPath) {
-		fmt.Printf("  [X] Not a Git repository: %s\n", repoPath)
+		fmt.Printf("  %s[X]%s Not a Git repository: %s\n", colorRed, colorReset, repoPath)
 		issues++
 
 		if fix {
 			if err := git.InitRepo(repoPath); err == nil {
-				fmt.Println("  [OK] Initialized Git repository")
+				fmt.Printf("  %s[OK]%s Initialized Git repository\n", colorGreen, colorReset)
 				fixed++
 			} else {
-				fmt.Printf("  [X] Could not initialize: %v\n", err)
+				fmt.Printf("  %s[X]%s Could not initialize: %v\n", colorRed, colorReset, err)
 			}
 		}
 		return
@@ -261,10 +261,10 @@ func checkRepository(fix bool, cmd *cobra.Command) (issues, fixed int) {
 	// Check for uncommitted changes
 	hasChanges, _ := git.HasChanges(repoPath)
 	if hasChanges {
-		fmt.Println("  [!] Uncommitted changes in repository")
+		fmt.Printf("  %s[!]%s Uncommitted changes in repository\n", colorYellow, colorReset)
 		fmt.Println("    Run 'dotcor sync' to commit changes")
 	} else {
-		fmt.Println("  [OK] Git repository healthy")
+		fmt.Printf("  %s[OK]%s Git repository healthy\n", colorGreen, colorReset)
 	}
 
 	return
@@ -297,12 +297,12 @@ func checkSymlinks(fix bool, cmd *cobra.Command) (issues, fixed int) {
 
 		// Check if source exists
 		if !fs.PathExists(sourcePath) {
-			fmt.Printf("  [X] Missing symlink: %s\n", mf.SourcePath)
+			fmt.Printf("  %s[X]%s Missing symlink: %s\n", colorRed, colorReset, mf.SourcePath)
 			issues++
 
 			if fix && fs.PathExists(repoPath) {
 				if err := fs.CreateSymlink(repoPath, sourcePath, cfg); err == nil {
-					fmt.Printf("  [OK] Recreated symlink: %s\n", mf.SourcePath)
+					fmt.Printf("  %s[OK]%s Recreated symlink: %s\n", colorGreen, colorReset, mf.SourcePath)
 					fixed++
 				}
 			}
@@ -312,7 +312,7 @@ func checkSymlinks(fix bool, cmd *cobra.Command) (issues, fixed int) {
 		// Check if it's a symlink
 		isLink, _ := fs.IsSymlink(sourcePath)
 		if !isLink {
-			fmt.Printf("  [X] Not a symlink: %s (regular file)\n", mf.SourcePath)
+			fmt.Printf("  %s[X]%s Not a symlink: %s (regular file)\n", colorRed, colorReset, mf.SourcePath)
 			issues++
 			continue
 		}
@@ -320,14 +320,14 @@ func checkSymlinks(fix bool, cmd *cobra.Command) (issues, fixed int) {
 		// Check if symlink is valid
 		valid, _ := fs.IsValidSymlink(sourcePath)
 		if !valid {
-			fmt.Printf("  [X] Broken symlink: %s\n", mf.SourcePath)
+			fmt.Printf("  %s[X]%s Broken symlink: %s\n", colorRed, colorReset, mf.SourcePath)
 			issues++
 
 			if fix && fs.PathExists(repoPath) {
 				// Remove broken symlink and recreate
 				os.Remove(sourcePath)
 				if err := fs.CreateSymlink(repoPath, sourcePath, cfg); err == nil {
-					fmt.Printf("  [OK] Fixed symlink: %s\n", mf.SourcePath)
+					fmt.Printf("  %s[OK]%s Fixed symlink: %s\n", colorGreen, colorReset, mf.SourcePath)
 					fixed++
 				}
 			}
@@ -335,7 +335,7 @@ func checkSymlinks(fix bool, cmd *cobra.Command) (issues, fixed int) {
 	}
 
 	if issues == 0 {
-		fmt.Printf("  [OK] All %d symlinks healthy\n", len(files))
+		fmt.Printf("  %s[OK]%s All %d symlinks healthy\n", colorGreen, colorReset, len(files))
 	}
 
 	return
@@ -364,11 +364,11 @@ func checkOrphanedFiles(fix bool, cmd *cobra.Command) (issues, fixed int) {
 	orphans := findOrphanedFilesTopLevel(repoPath, tracked)
 
 	if len(orphans) == 0 {
-		fmt.Println("  [OK] No orphaned files")
+		fmt.Printf("  %s[OK]%s No orphaned files\n", colorGreen, colorReset)
 		return
 	}
 
-	fmt.Printf("  [!] Found %d orphaned file(s) in repository:\n", len(orphans))
+	fmt.Printf("  %s[!]%s Found %d orphaned file(s) in repository:\n", colorYellow, colorReset, len(orphans))
 	for _, orphan := range orphans {
 		fmt.Printf("    - %s\n", orphan)
 	}
@@ -444,14 +444,14 @@ func checkPermissions(fix bool, cmd *cobra.Command) (int, int) {
 		// Warn about overly permissive files (world-writable)
 		mode := sourceInfo.Mode()
 		if mode.Perm()&0002 != 0 {
-			fmt.Printf("  [X] World-writable: %s\n", mf.SourcePath)
+			fmt.Printf("  %s[X]%s World-writable: %s\n", colorRed, colorReset, mf.SourcePath)
 			issues++
 
 			if fix {
 				// Remove world-writable permission
 				newMode := mode.Perm() &^ 0002
 				if err := os.Chmod(sourcePath, newMode); err == nil {
-					fmt.Printf("  [OK] Fixed permissions: %s\n", mf.SourcePath)
+					fmt.Printf("  %s[OK]%s Fixed permissions: %s\n", colorGreen, colorReset, mf.SourcePath)
 					fixed++
 				}
 			}
@@ -459,12 +459,12 @@ func checkPermissions(fix bool, cmd *cobra.Command) (int, int) {
 
 		// Check if repo file is readable
 		if repoInfo.Mode().Perm()&0400 == 0 {
-			fmt.Printf("  [X] Not readable: %s\n", mf.RepoPath)
+			fmt.Printf("  %s[X]%s Not readable: %s\n", colorRed, colorReset, mf.RepoPath)
 			issues++
 
 			if fix {
 				if err := os.Chmod(repoPath, repoInfo.Mode()|0400); err == nil {
-					fmt.Printf("  [OK] Made readable: %s\n", mf.RepoPath)
+					fmt.Printf("  %s[OK]%s Made readable: %s\n", colorGreen, colorReset, mf.RepoPath)
 					fixed++
 				}
 			}
@@ -472,7 +472,7 @@ func checkPermissions(fix bool, cmd *cobra.Command) (int, int) {
 	}
 
 	if issues == 0 {
-		fmt.Printf("  [OK] All %d files have correct permissions\n", len(files))
+		fmt.Printf("  %s[OK]%s All %d files have correct permissions\n", colorGreen, colorReset, len(files))
 	}
 
 	return issues, fixed
@@ -501,7 +501,7 @@ func checkGitConfig(fix bool, cmd *cobra.Command) (int, int) {
 	// Check git user.name
 	userName, err := git.GetConfig(repoPath, "user.name")
 	if err != nil || userName == "" {
-		fmt.Println("  [X] Git user.name not configured")
+		fmt.Printf("  %s[X]%s Git user.name not configured\n", colorRed, colorReset)
 		issues++
 
 		if fix {
@@ -512,7 +512,7 @@ func checkGitConfig(fix bool, cmd *cobra.Command) (int, int) {
 			}
 			if currentUser != "" {
 				if err := git.SetConfig(repoPath, "user.name", currentUser); err == nil {
-					fmt.Printf("  [OK] Set user.name to %s\n", currentUser)
+					fmt.Printf("  %s[OK]%s Set user.name to %s\n", colorGreen, colorReset, currentUser)
 					fixed++
 				}
 			}
@@ -522,17 +522,17 @@ func checkGitConfig(fix bool, cmd *cobra.Command) (int, int) {
 	// Check git user.email
 	userEmail, err := git.GetConfig(repoPath, "user.email")
 	if err != nil || userEmail == "" {
-		fmt.Println("  [X] Git user.email not configured")
+		fmt.Printf("  %s[X]%s Git user.email not configured\n", colorRed, colorReset)
 		issues++
 
 		if fix {
 			// Suggest setting email
-			fmt.Println("  [!] Run: git config --global user.email 'your-email@example.com'")
+			fmt.Printf("  %s[!]%s Run: git config --global user.email 'your-email@example.com'\n", colorYellow, colorReset)
 		}
 	}
 
 	if issues == 0 {
-		fmt.Println("  [OK] Git user configuration valid")
+		fmt.Printf("  %s[OK]%s Git user configuration valid\n", colorGreen, colorReset)
 	}
 
 	return issues, fixed
@@ -564,15 +564,15 @@ func checkGitRemote(fix bool, cmd *cobra.Command) (int, int) {
 	}
 
 	if remoteURL == "" {
-		fmt.Println("  [X] No git remote configured")
+		fmt.Printf("  %s[X]%s No git remote configured\n", colorRed, colorReset)
 		issues++
 
 		if fix {
-			fmt.Println("  [!] Run: git remote add origin <url>")
-			fmt.Println("  [!] Or create a new repository on GitHub/GitLab/Bitbucket")
+			fmt.Printf("  %s[!]%s Run: git remote add origin <url>\n", colorYellow, colorReset)
+			fmt.Printf("  %s[!]%s Or create a new repository on GitHub/GitLab/Bitbucket\n", colorYellow, colorReset)
 		}
 	} else {
-		fmt.Printf("  [OK] Git remote configured: %s\n", remoteURL)
+		fmt.Printf("  %s[OK]%s Git remote configured: %s\n", colorGreen, colorReset, remoteURL)
 	}
 
 	return issues, fixed
@@ -615,7 +615,7 @@ func checkHookPermissions(fix bool, cmd *cobra.Command) (int, int) {
 		info, err := os.Stat(hookPath)
 		if err != nil {
 			if !os.IsNotExist(err) {
-				fmt.Printf("  [X] Cannot access hook: %s (%v)\n", hookName, err)
+				fmt.Printf("  %s[X]%s Cannot access hook: %s (%v)\n", colorRed, colorReset, hookName, err)
 				issues++
 			}
 			continue
@@ -629,12 +629,12 @@ func checkHookPermissions(fix bool, cmd *cobra.Command) (int, int) {
 
 		// Check if hook is executable
 		if info.Mode().Perm()&0111 == 0 {
-			fmt.Printf("  [X] Hook not executable: %s\n", hookName)
+			fmt.Printf("  %s[X]%s Hook not executable: %s\n", colorRed, colorReset, hookName)
 			issues++
 
 			if fix {
 				if err := os.Chmod(hookPath, 0755); err == nil {
-					fmt.Printf("  [OK] Made executable: %s\n", hookName)
+					fmt.Printf("  %s[OK]%s Made executable: %s\n", colorGreen, colorReset, hookName)
 					fixed++
 				}
 			}
@@ -645,7 +645,7 @@ func checkHookPermissions(fix bool, cmd *cobra.Command) (int, int) {
 		if foundHooks == 0 {
 			fmt.Println("  - No hooks found")
 		} else {
-			fmt.Printf("  [OK] All %d hook(s) are executable\n", foundHooks)
+			fmt.Printf("  %s[OK]%s All %d hook(s) are executable\n", colorGreen, colorReset, foundHooks)
 		}
 	}
 

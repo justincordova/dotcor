@@ -101,7 +101,7 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 			skipped++
 		case adoptResultError:
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "  [X] %s: %v\n", symlink, err)
+				fmt.Fprintf(os.Stderr, "  %s[X]%s %s: %v\n", colorRed, colorReset, symlink, err)
 			}
 			skipped++
 		}
@@ -124,11 +124,11 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 	if git.IsGitInstalled() && adopted > 0 && !dryRun {
 		repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
 		if err != nil {
-			fmt.Printf("[!] Git commit skipped: invalid repo path: %v\n", err)
+			fmt.Printf("%s[!]%s Git commit skipped: invalid repo path: %v\n", colorYellow, colorReset, err)
 		} else {
 			message := fmt.Sprintf("Adopt %d existing symlink(s)", adopted)
 			if err := git.AutoCommit(repoPath, message); err != nil {
-				fmt.Printf("[!] Git commit failed: %v\n", err)
+				fmt.Printf("%s[!]%s Git commit failed: %v\n", colorYellow, colorReset, err)
 			}
 		}
 	}
@@ -231,7 +231,7 @@ func processAdoptSymlink(cfg *config.Config, symlinkPath string, dryRun bool) (a
 			return adoptResultError, fmt.Errorf("copying target to repo: %w", err)
 		}
 
-		fmt.Printf("  [OK] Copied %s to %s\n", absoluteTarget, repoFilePath)
+		fmt.Printf("  %s[OK]%s Copied %s to %s\n", colorGreen, colorReset, absoluteTarget, repoFilePath)
 	} else {
 		// Target already in repo, use its existing relative path
 		actualRepoPath = relPath
@@ -264,7 +264,7 @@ func processAdoptSymlink(cfg *config.Config, symlinkPath string, dryRun bool) (a
 		return adoptResultError, fmt.Errorf("adding to config: %w", err)
 	}
 
-	fmt.Printf("  [OK] Updated %s → %s\n", normalized, actualRepoPath)
+	fmt.Printf("  %s[OK]%s Updated %s → %s\n", colorGreen, colorReset, normalized, actualRepoPath)
 	return adoptResultSuccess, nil
 }
 

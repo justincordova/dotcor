@@ -88,7 +88,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		fmt.Println("")
 		fmt.Println("Uncommitted Files:")
 		for _, mf := range uncommittedFiles {
-			fmt.Printf("  [!] %s\n", mf.SourcePath)
+			fmt.Printf("  %s[!]%s %s\n", colorYellow, colorReset, mf.SourcePath)
 		}
 		fmt.Println("")
 		fmt.Println("Run 'dotcor sync' to commit these changes.")
@@ -142,7 +142,7 @@ func collectStatus(cfg *config.Config, fileArgs []string) StatusReport {
 			if err == nil {
 				filtered = append(filtered, *mf)
 			} else {
-				fmt.Fprintf(os.Stderr, "[!] %s is not managed\n", arg)
+				fmt.Fprintf(os.Stderr, "%s[!]%s %s is not managed\n", colorYellow, colorReset, arg)
 			}
 		}
 		files = filtered
@@ -314,9 +314,9 @@ func outputStatusFull(status StatusReport, problemsOnly bool) error {
 		}
 
 		if status.GitStatus.HasUncommitted {
-			fmt.Println("  [!] Uncommitted changes")
+			fmt.Printf("  %s[!]%s Uncommitted changes\n", colorYellow, colorReset)
 		} else {
-			fmt.Println("  [OK] Working tree clean")
+			fmt.Printf("  %s[OK]%s Working tree clean\n", colorGreen, colorReset)
 		}
 
 		if status.GitStatus.RemoteExists {
@@ -327,7 +327,7 @@ func outputStatusFull(status StatusReport, problemsOnly bool) error {
 				fmt.Printf("  ↓ %d commit(s) behind remote\n", status.GitStatus.BehindBy)
 			}
 			if status.GitStatus.AheadBy == 0 && status.GitStatus.BehindBy == 0 && !status.GitStatus.HasUncommitted {
-				fmt.Println("  [OK] In sync with remote")
+				fmt.Printf("  %s[OK]%s In sync with remote\n", colorGreen, colorReset)
 			}
 		} else {
 			fmt.Println("  - No remote configured")
@@ -356,14 +356,14 @@ func outputStatusFull(status StatusReport, problemsOnly bool) error {
 func outputStatusQuick(status StatusReport) error {
 	// One-line summary
 	if status.Statistics.ProblematicFiles == 0 {
-		fmt.Printf("[OK] %d files managed, all healthy\n", status.Statistics.TotalFiles)
+		fmt.Printf("%s[OK]%s %d files managed, all healthy\n", colorGreen, colorReset, status.Statistics.TotalFiles)
 	} else {
-		fmt.Printf("[!] %d files managed, %d with issues\n",
-			status.Statistics.TotalFiles, status.Statistics.ProblematicFiles)
+		fmt.Printf("%s[!]%s %d files managed, %d with issues\n",
+			colorYellow, colorReset, status.Statistics.TotalFiles, status.Statistics.ProblematicFiles)
 	}
 
 	if status.GitStatus.IsRepo && status.GitStatus.HasUncommitted {
-		fmt.Println("[!] Uncommitted changes in repository")
+		fmt.Printf("%s[!]%s Uncommitted changes in repository\n", colorYellow, colorReset)
 	}
 
 	return nil
@@ -472,9 +472,9 @@ func outputStatusJSON(status StatusReport) error {
 func getStatusIcon(status string) string {
 	switch status {
 	case "ok":
-		return "[OK]"
+		return colorGreen + "[OK]" + colorReset
 	case "missing-repo", "missing-source", "broken", "not-symlink", "wrong-target":
-		return "[X]"
+		return colorRed + "[X]" + colorReset
 	default:
 		return "?"
 	}
