@@ -196,8 +196,8 @@ test_copy_dotfiles() {
     info "Copying dotfiles from $DOTFILES_SOURCE to $TEST_HOME"
     setup_test_env  # This creates empty test env, no .dotcor
 
-    # Copy everything except .dotcor, .config, .local if they exist in source
-    rsync -av --exclude='.dotcor' --exclude='.config' --exclude='.local' \
+    # Copy everything except .git, .dotcor, .config, .local if they exist in source
+    rsync -a --exclude='.git' --exclude='.dotcor' --exclude='.config' --exclude='.local' \
         "$DOTFILES_SOURCE/" "$TEST_HOME/"
 
     success "Copied dotfiles to test environment"
@@ -230,7 +230,7 @@ test_interactive() {
     DOTFILES_SOURCE="$HOME/dotfiles"
     if [ -d "$DOTFILES_SOURCE" ]; then
         info "Copying dotfiles from $DOTFILES_SOURCE to $TEST_HOME"
-        rsync -a --exclude='.dotcor' --exclude='.config' --exclude='.local' \
+        rsync -a --exclude='.dotcor' --exclude='.config' --exclude='.local' --exclude='.git' \
             "$DOTFILES_SOURCE/" "$TEST_HOME/"
         success "Dotfiles copied successfully"
     else
@@ -288,7 +288,7 @@ Notes:
   - Binary location: $DOTCOR_BIN
   - Test directory: $TEST_HOME
   - Builds binary if not present
-  - interactive mode auto-copies ~/dotfiles (excludes .dotcor, .config, .local)
+  - interactive mode auto-copies ~/dotfiles (excludes .git, .dotcor, .config, .local)
 EOF
 }
 
