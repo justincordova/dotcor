@@ -91,7 +91,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	backupsDir := filepath.Join(configDir, "backups")
 	hooksDir := filepath.Join(configDir, "hooks")
 
-	fmt.Println("Initializing DotCor...")
+	fmt.Printf("%sInitializing DotCor...%s\n", colorLightPink, colorReset)
 
 	if err := fs.EnsureDir(configDir, defaultCfg); err != nil {
 		return fmt.Errorf("creating config directory: %w", err)
@@ -154,9 +154,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("")
-	fmt.Println("DotCor initialized successfully!")
+	fmt.Printf("%sDotCor initialized successfully!%s\n", colorLightPink, colorReset)
 	fmt.Println("")
-	fmt.Println("Next steps:")
+	fmt.Printf("%sNext steps:%s\n", colorLightPink, colorReset)
 	fmt.Println("  dotcor add ~/.zshrc     # Add a dotfile")
 	fmt.Println("  dotcor list             # List managed files")
 	fmt.Println("  dotcor status           # Check status")
@@ -172,7 +172,7 @@ func applySymlinks(cfg *config.Config) error {
 		return nil
 	}
 
-	fmt.Printf("\nCreating symlinks for %d files...\n", len(files))
+	fmt.Printf("\n%sCreating symlinks for %d files...%s\n", colorLightPink, len(files), colorReset)
 
 	created := 0
 	skipped := 0
