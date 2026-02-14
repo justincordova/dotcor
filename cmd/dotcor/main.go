@@ -87,10 +87,11 @@ func printBanner() {
 var rootCmd = &cobra.Command{
 	Use:   "dotcor",
 	Short: "A simple, fast dotfile manager with symlinks and Git automation",
-	Long: `DotCor combines the simplicity of GNU Stow with automatic Git commits.
+	Long: fmt.Sprintf(`DotCor combines %s%sthe simplicity of GNU Stow%s%s with automatic Git commits.
 
 Manage your dotfiles with symlinks - edit files directly, changes instantly
 appear in your repository. Built-in Git automation handles commits and sync.`,
+		colorRed, colorBold, colorReset, colorRed),
 	Version: version,
 	Run:     runRoot,
 }
