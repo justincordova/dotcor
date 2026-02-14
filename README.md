@@ -422,7 +422,7 @@ managed_files:
     has_uncommitted: false
 
   - source_path: ~/Library/Preferences/foo.plist
-    repo_path: foo.plist
+    repo_path: Library/Preferences/foo.plist
     added_at: 2025-01-04T10:31:00Z
     has_uncommitted: false
   ```
