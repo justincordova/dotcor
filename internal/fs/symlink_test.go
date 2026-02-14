@@ -411,8 +411,18 @@ func TestSymlinkWithFlatPaths(t *testing.T) {
 	// Assert
 	assert.NoError(t, err, "CreateSymlink should succeed")
 
-	// Verify symlink points to correct target
-	linkTarget, err := os.Readlink(symlinkPath)
-	assert.NoError(t, err, "should be able to read symlink")
-	assert.Contains(t, linkTarget, "dotcor/files/.config/nvim/init.vim")
+	// Verify symlink is created
+	isLink, err := IsSymlink(symlinkPath)
+	require.NoError(t, err, "IsSymlink should not error")
+	assert.True(t, isLink, "CreateSymlink should create a symlink")
+
+	// Verify symlink points to correct target using exact path
+	linkTarget, err := ReadSymlink(symlinkPath)
+	assert.NoError(t, err, "should be able to read symlink target")
+	assert.False(t, filepath.IsAbs(linkTarget), "CreateSymlink should create relative symlink")
+
+	// Verify the relative path is correct
+	expectedRelPath, err := filepath.Rel(filepath.Dir(symlinkPath), repoFile)
+	require.NoError(t, err, "should be able to compute relative path")
+	assert.Equal(t, expectedRelPath, linkTarget, "symlink target should match expected relative path")
 }
