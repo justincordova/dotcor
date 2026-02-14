@@ -78,7 +78,7 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Printf("Current backups: %d files, %s\n", backupCount, formatSize(totalSize))
+	fmt.Printf("%sCurrent backups:%s %d files, %s\n", colorLightPink, colorReset, backupCount, formatSize(totalSize))
 	fmt.Println("")
 
 	// Preview what would be deleted (doesn't actually delete)
@@ -131,7 +131,7 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 	// Show new stats
 	newCount, _ := core.GetBackupCount(cfg)
 	newSize, _ := core.GetTotalBackupSize(cfg)
-	fmt.Printf("Remaining: %d files, %s\n", newCount, formatSize(newSize))
+	fmt.Printf("%sRemaining:%s %d files, %s\n", colorLightPink, colorReset, newCount, formatSize(newSize))
 
 	return nil
 }
