@@ -148,7 +148,7 @@ func runRoot(cmd *cobra.Command, args []string) {
 	if err != nil {
 		fmt.Printf("  %s[!] Not initialized%s\n", colorYellow, colorReset)
 		fmt.Println()
-		fmt.Printf("  %sGet started:%s\n", colorDim, colorReset)
+		fmt.Printf("  %sGet started:%s\n", colorLightPink, colorReset)
 		fmt.Println("    dotcor init          Initialize DotCor")
 		fmt.Println("    dotcor --help        Show all commands")
 		fmt.Println()
@@ -176,7 +176,7 @@ func showQuickStatus(cfg *config.Config) {
 	}
 
 	// Status section
-	fmt.Printf("  %sStatus%s\n", colorBold, colorReset)
+	fmt.Printf("  %s%sStatus%s\n", colorBold, colorLightPink, colorReset)
 	fmt.Printf("  %s──────%s\n", colorDim, colorReset)
 
 	// Files status
@@ -213,7 +213,7 @@ func showQuickStatus(cfg *config.Config) {
 	}
 
 	fmt.Println()
-	fmt.Printf("  %sCommands:%s  status · add · sync · --help\n", colorDim, colorReset)
+	fmt.Printf("  %sCommands:%s  status · add · sync · --help\n", colorLightPink, colorReset)
 	fmt.Println()
 }
 
