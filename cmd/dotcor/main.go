@@ -102,6 +102,25 @@ func init() {
 	rootCmd.PersistentFlags().Bool("quiet", false, "Suppress INFO messages")
 	rootCmd.PersistentFlags().String("log-file", "", "Write logs to file")
 	rootCmd.PersistentFlags().Bool("json", false, "Output logs in JSON format")
+
+	// Replace help command to add ? as an alias
+	rootCmd.SetHelpCommand(&cobra.Command{
+		Use:     "help [command]",
+		Aliases: []string{"?"},
+		Short:   "Help about any command",
+		Long: `Help provides help for any command in the application.
+Simply type dotcor help [path to command] for full details.`,
+		Run: func(c *cobra.Command, args []string) {
+			cmd, _, e := c.Root().Find(args)
+			if cmd == nil || e != nil {
+				c.Printf("Unknown help topic %#q\n", args)
+				c.Root().Usage()
+			} else {
+				cmd.InitDefaultHelpFlag()
+				cmd.Help()
+			}
+		},
+	})
 }
 
 func configureLogger(cmd *cobra.Command, cfg *config.Config) {
