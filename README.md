@@ -49,7 +49,6 @@ dotcor add ~/.config/nvim/*.lua  # Add with glob pattern
 
 # List managed files
 dotcor list
-dotcor list --categories  # Group by category
 
 # Check status
 dotcor status
@@ -87,9 +86,9 @@ DotCor uses **symlinks** to keep your actual dotfiles in a Git repository while 
 3. **Sync** - Commits all changes and pushes to remote
 
 ```
-~/.zshrc (symlink) ──points to──> ~/.dotcor/files/shell/zshrc (actual file)
-                                          ↓
-                                      Git repository
+~/.zshrc (symlink) ──points to──> ~/.dotcor/files/.zshrc (actual file)
+                                           ↓
+                                       Git repository
 ```
 
 ### Directory Structure
@@ -99,16 +98,16 @@ DotCor uses **symlinks** to keep your actual dotfiles in a Git repository while 
 ├── config.yaml          # Metadata: which files are managed
 └── files/               # Git repository with your actual dotfiles
     ├── .git/
-    ├── shell/
-    │   ├── zshrc        ← actual file
-    │   └── bashrc       ← actual file
-    └── nvim/
-        └── init.vim     ← actual file
+    ├── .zshrc           ← actual file
+    ├── .bashrc          ← actual file
+    └── .config/
+        └── nvim/
+            └── init.vim ← actual file
 
 # Your home directory (symlinks):
-~/.zshrc                 → symlink to ~/.dotcor/files/shell/zshrc
-~/.bashrc                → symlink to ~/.dotcor/files/shell/bashrc
-~/.config/nvim/init.vim  → symlink to ~/.dotcor/files/nvim/init.vim
+~/.zshrc                 → symlink to ~/.dotcor/files/.zshrc
+~/.bashrc                → symlink to ~/.dotcor/files/.bashrc
+~/.config/nvim/init.vim  → symlink to ~/.dotcor/files/.config/nvim/init.vim
 ```
 
 ### Workflow Benefits
@@ -207,9 +206,9 @@ Shows:
 Example output:
 ```
 Symlinks:
-✓ ~/.zshrc                 → shell/zshrc
-✓ ~/.bashrc                → shell/bashrc
-✗ ~/.vimrc                 → vim/vimrc (broken: target missing)
+✓ ~/.zshrc                 → .zshrc
+✓ ~/.bashrc                → .bashrc
+✗ ~/.vimrc                 → .vimrc (broken: target missing)
 
 Repository:
 ● 2 uncommitted changes
@@ -282,7 +281,7 @@ dotcor history ~/.zshrc
 
 Output:
 ```
-History for ~/.zshrc (shell/zshrc):
+History for ~/.zshrc (.zshrc):
 
 abc123f - 2025-01-04 15:30 - Update zsh aliases
 def456a - 2025-01-03 09:15 - Add new PATH entries
@@ -393,8 +392,8 @@ dotcor restore ~/.zshrc --to=HEAD~1
 
 # Or use Git directly
 cd ~/.dotcor/files
-git log shell/zshrc
-git checkout HEAD~5 -- shell/zshrc
+git log .zshrc
+git checkout HEAD~5 -- .zshrc
 ```
 
 ---
@@ -418,7 +417,7 @@ ignore_patterns:
 
 managed_files:
   - source_path: ~/.zshrc
-    repo_path: shell/zshrc
+    repo_path: .zshrc
     added_at: 2025-01-04T10:30:00Z
     has_uncommitted: false
 
