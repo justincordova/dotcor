@@ -87,6 +87,9 @@ func runRemove(cmd *cobra.Command, args []string) error {
 			mf, err := cfg.GetManagedFile(arg)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "  %s[X]%s %s: not managed\n", colorRed, colorReset, arg)
+				if !strings.HasPrefix(arg, "~") && !strings.HasPrefix(arg, "/") && !strings.HasPrefix(arg, ".") {
+					fmt.Fprintf(os.Stderr, "      %s[!]%s Tip: Use ~ for home directory (e.g., ~/.zshrc)\n", colorYellow, colorReset)
+				}
 				continue
 			}
 			filesToRemove = append(filesToRemove, *mf)
@@ -99,7 +102,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 
 	// Confirmation
 	if !force && !dryRun {
-		fmt.Println("Summary:")
+		fmt.Printf("%sSummary:%s\n", colorLightPink, colorReset)
 		fmt.Printf("  Files to remove: %d\n", len(filesToRemove))
 		fmt.Println("  Backups will be preserved")
 		fmt.Println("")
