@@ -91,7 +91,7 @@ test_add() {
     "$DOTCOR_BIN" add ~/.config/nvim/init.lua
 
     # Verify
-    "$DOTCOR_BIN" list
+    "$DOTCOR_BIN" status
     success "Add completed"
 }
 
@@ -156,7 +156,6 @@ test_full() {
     # Check status
     info "Step 3: Check status"
     "$DOTCOR_BIN" status
-    "$DOTCOR_BIN" list
 
     # Edit file
     info "Step 4: Edit file (symlink magic)"
