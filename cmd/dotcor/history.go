@@ -107,7 +107,7 @@ func runHistory(cmd *cobra.Command, args []string) error {
 // outputHistoryFull shows detailed commit history
 func outputHistoryFull(commits []git.CommitInfo, filePath string) error {
 	if filePath != "" {
-		fmt.Printf("History for %s:\n", filePath)
+		fmt.Printf("%sHistory for %s:%s\n", colorLightPink, filePath, colorReset)
 		fmt.Println("")
 	}
 
