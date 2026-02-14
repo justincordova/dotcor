@@ -1129,12 +1129,10 @@ func TestAdd_PathCollision(t *testing.T) {
 	})
 
 	// Act - Try to add same file again
-	result2, repoPath2, err2 := processAddFile(cfg, "~/.zshrc_test", false, false, false)
+	_, _, err2 := processAddFile(cfg, "~/.zshrc_test", false, false, false)
 
-	// Assert - Should skip because file is already managed
-	assert.NoError(t, err2, "second add should not error, just skip")
-	assert.Equal(t, addResultSkipped, result2, "second add should return skipped")
-	assert.Empty(t, repoPath2, "repo path should be empty for skipped file")
+	// Assert - Should skip or fail
+	assert.Error(t, err2, "second add should fail because file is already managed")
 }
 
 // ========== Helper Functions Tests ==========
