@@ -123,7 +123,7 @@ func verifyConfig(cfg *config.Config, repoPath string) error {
 	}
 
 	if len(missing) > 0 {
-		fmt.Printf("Missing from repository (%d):\n", len(missing))
+		fmt.Printf("%sMissing from repository:%s (%d)\n", colorLightPink, colorReset, len(missing))
 		for _, m := range missing {
 			fmt.Printf("  %s[X]%s %s\n", colorRed, colorReset, m)
 		}
@@ -131,7 +131,7 @@ func verifyConfig(cfg *config.Config, repoPath string) error {
 	}
 
 	if len(orphaned) > 0 {
-		fmt.Printf("Not in configuration (%d):\n", len(orphaned))
+		fmt.Printf("%sNot in configuration:%s (%d)\n", colorLightPink, colorReset, len(orphaned))
 		for _, o := range orphaned {
 			fmt.Printf("  ? %s\n", o)
 		}
@@ -172,7 +172,7 @@ func scanAndRebuild(cfg *config.Config, repoPath string, force bool) error {
 		return nil
 	}
 
-	fmt.Printf("Found %d untracked file(s):\n", len(untracked))
+	fmt.Printf("%sFound untracked files:%s %d\n", colorLightPink, colorReset, len(untracked))
 	for _, u := range untracked {
 		fmt.Printf("  + %s\n", u)
 	}
