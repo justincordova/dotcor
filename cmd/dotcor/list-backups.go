@@ -96,7 +96,7 @@ func runListBackups(cmd *cobra.Command, args []string) error {
 		return backups[i].Timestamp.After(backups[j].Timestamp)
 	})
 
-	fmt.Printf("Found %d backup(s):\n\n", len(backups))
+	fmt.Printf("%sFound %d backup(s):%s\n\n", colorLightPink, len(backups), colorReset)
 
 	for _, backup := range backups {
 		age := time.Since(backup.Timestamp)
