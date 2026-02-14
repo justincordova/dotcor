@@ -378,3 +378,41 @@ func TestCreateSymlink_RelativePath_ComputedCorrectly(t *testing.T) {
 	require.NoError(t, err, "ReadSymlink() should not error")
 	assert.False(t, filepath.IsAbs(target), "CreateSymlink() should create relative symlink")
 }
+
+func TestSymlinkWithFlatPaths(t *testing.T) {
+	// Arrange
+	tempDir := t.TempDir()
+	homeDir := filepath.Join(tempDir, "home")
+	dotcorDir := filepath.Join(tempDir, "dotcor")
+	filesDir := filepath.Join(dotcorDir, "files")
+
+	if err := os.MkdirAll(filepath.Join(filesDir, ".config/nvim"), 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
+
+	homeDirAbs, err := filepath.Abs(homeDir)
+	if err != nil {
+		t.Fatalf("failed to get abs path: %v", err)
+	}
+
+	// Source file in files directory
+	repoFile := filepath.Join(filesDir, ".config/nvim/init.vim")
+	if err := os.WriteFile(repoFile, []byte("nvim config"), 0644); err != nil {
+		t.Fatalf("failed to create repo file: %v", err)
+	}
+
+	// Where symlink should be
+	symlinkPath := filepath.Join(homeDirAbs, ".config/nvim/init.vim")
+
+	// Act - Create symlink
+	cfg := &config.Config{Logger: slog.Default()}
+	err = CreateSymlink(repoFile, symlinkPath, cfg)
+
+	// Assert
+	assert.NoError(t, err, "CreateSymlink should succeed")
+
+	// Verify symlink points to correct target
+	linkTarget, err := os.Readlink(symlinkPath)
+	assert.NoError(t, err, "should be able to read symlink")
+	assert.Contains(t, linkTarget, "dotcor/files/.config/nvim/init.vim")
+}
