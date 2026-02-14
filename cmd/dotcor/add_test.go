@@ -485,6 +485,7 @@ func TestAdd_TransactionFails_RestoresBackup(t *testing.T) {
 	homeDir := filepath.Join(tempDir, "home")
 	sourceFile := filepath.Join(homeDir, ".zshrc")
 	backupFile := filepath.Join(backupsDir, ".zshrc")
+	repoFile := filepath.Join(filesDir, "shell", "zshrc")
 
 	// Create source file
 	if err := os.MkdirAll(homeDir, 0755); err != nil {
@@ -504,7 +505,6 @@ func TestAdd_TransactionFails_RestoresBackup(t *testing.T) {
 	}
 
 	// Simulate transaction start - move file
-	repoFile := filepath.Join(filesDir, "shell", "zshrc")
 	if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
 		t.Fatalf("failed to create repo dir: %v", err)
 	}
@@ -1068,6 +1068,73 @@ func TestAdd_FileWithSpecialCharacters_Success(t *testing.T) {
 	// Assert
 	AssertFileExists(t, repoFile)
 	AssertFileExists(t, sourceFile)
+}
+
+// ========== Path Collision Tests ==========
+
+func TestAdd_PathCollision(t *testing.T) {
+	// Arrange
+	tempDir := t.TempDir()
+	configDir := filepath.Join(tempDir, ".dotcor")
+	filesDir := filepath.Join(configDir, "files")
+	backupsDir := filepath.Join(configDir, "backups")
+
+	// Create directories
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
+	if err := os.MkdirAll(backupsDir, 0755); err != nil {
+		t.Fatalf("failed to create backups dir: %v", err)
+	}
+
+	// Create test file under home directory
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("failed to get home directory: %v", err)
+	}
+	homeTestFile := filepath.Join(home, ".zshrc_test")
+
+	// Clean up any existing test file from previous runs
+	os.Remove(homeTestFile)
+
+	// Create test file in home directory
+	if err := os.WriteFile(homeTestFile, []byte("zsh config"), 0644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+	defer os.Remove(homeTestFile)
+
+	// Create config with logger
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	cfg := &config.Config{
+		Logger:         logger,
+		RepoPath:       filesDir,
+		GitEnabled:     false,
+		IgnorePatterns: []string{},
+		ManagedFiles:   []config.ManagedFile{},
+	}
+
+	// Act - Add file first time
+	result1, repoPath1, err1 := processAddFile(cfg, "~/.zshrc_test", false, false, false)
+
+	// Assert - Should succeed
+	assert.NoError(t, err1, "first add should succeed")
+	assert.Equal(t, addResultSuccess, result1, "first add should return success")
+	assert.Equal(t, ".zshrc_test", repoPath1, "repo path should be correct")
+
+	// Update config to mark file as managed (simulating what processAddFile does)
+	cfg.ManagedFiles = append(cfg.ManagedFiles, config.ManagedFile{
+		SourcePath: "~/.zshrc_test",
+		RepoPath:   ".zshrc_test",
+		AddedAt:    time.Now(),
+	})
+
+	// Act - Try to add same file again
+	result2, repoPath2, err2 := processAddFile(cfg, "~/.zshrc_test", false, false, false)
+
+	// Assert - Should skip because file is already managed
+	assert.NoError(t, err2, "second add should not error, just skip")
+	assert.Equal(t, addResultSkipped, result2, "second add should return skipped")
+	assert.Empty(t, repoPath2, "repo path should be empty for skipped file")
 }
 
 // ========== Helper Functions Tests ==========
