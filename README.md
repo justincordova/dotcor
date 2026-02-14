@@ -186,7 +186,7 @@ Output:
 Managed dotfiles (1):
 
 SOURCE PATH          REPO PATH         ADDED AT
-~/.zshrc             shell/zshrc       Jan 04 10:30
+~/.zshrc             .zshrc            Jan 04 10:30
 ```
 
 ---
