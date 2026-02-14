@@ -68,7 +68,7 @@ func runBackupDiff(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		fmt.Printf("Changes since backup for %s:\n", mf.SourcePath)
+		fmt.Printf("%sChanges since backup for %s:%s\n", colorLightPink, mf.SourcePath, colorReset)
 		fmt.Printf("  Backup: %s (%s)\n", latestBackup.BackupPath, latestBackup.Timestamp.Format(utils.GitTimestampFormat))
 
 		if showStat {
