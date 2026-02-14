@@ -104,6 +104,10 @@ func init() {
 	rootCmd.PersistentFlags().String("log-file", "", "Write logs to file")
 	rootCmd.PersistentFlags().Bool("json", false, "Output logs in JSON format")
 
+	// Set custom help templates with colors
+	rootCmd.SetHelpTemplate(fmt.Sprintf(helpTemplate, colorLightPink, colorReset, colorLightPink, colorReset, colorLightPink, colorReset))
+	rootCmd.SetUsageTemplate(fmt.Sprintf(usageTemplate, colorLightPink, colorReset, colorLightPink, colorReset, colorLightPink, colorReset))
+
 	// Replace help command to add ? as an alias
 	rootCmd.SetHelpCommand(&cobra.Command{
 		Use:     "help [command]",
