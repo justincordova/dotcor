@@ -136,7 +136,7 @@ func restoreFromGit(repoRoot, repoPath, fullRepoPath, ref string, preview, force
 		// Show the commit info
 		commits, err := git.GetFileHistory(repoRoot, repoPath, 1)
 		if err == nil && len(commits) > 0 {
-			fmt.Printf("\nCurrent version:\n")
+			fmt.Printf("\n%sCurrent version:%s\n", colorLightPink, colorReset)
 			fmt.Printf("  %s %s - %s\n", commits[0].Hash[:7], commits[0].Date.Format("2006-01-02"), commits[0].Message)
 		}
 
@@ -220,7 +220,7 @@ func restoreFromBackup(sourcePath, repoPath string, preview, force bool, cfg *co
 	// Confirmation
 	if !force {
 		fmt.Printf("Restore %s from backup?\n", sourcePath)
-		fmt.Printf("Backup: %s (%s)\n", backup.BackupPath, backup.Timestamp.Format("2006-01-02 15:04:05"))
+		fmt.Printf("%sBackup:%s %s (%s)\n", colorLightPink, colorReset, backup.BackupPath, backup.Timestamp.Format("2006-01-02 15:04:05"))
 		fmt.Println("")
 
 		if !confirmRestore() {
