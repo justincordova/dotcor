@@ -1072,6 +1072,8 @@ func TestAdd_FileWithSpecialCharacters_Success(t *testing.T) {
 
 // ========== Path Collision Tests ==========
 
+// TestAdd_PathCollision verifies that adding an already-managed file
+// is skipped gracefully with appropriate user message
 func TestAdd_PathCollision(t *testing.T) {
 	// Arrange
 	tempDir := t.TempDir()
@@ -1129,10 +1131,11 @@ func TestAdd_PathCollision(t *testing.T) {
 	})
 
 	// Act - Try to add same file again
-	_, _, err2 := processAddFile(cfg, "~/.zshrc_test", false, false, false)
+	result2, _, err2 := processAddFile(cfg, "~/.zshrc_test", false, false, false)
 
-	// Assert - Should skip or fail
-	assert.Error(t, err2, "second add should fail because file is already managed")
+	// Assert - Should skip gracefully when file is already managed
+	assert.NoError(t, err2, "second add should skip gracefully when file is already managed")
+	assert.Equal(t, addResultSkipped, result2, "should return skipped result")
 }
 
 // ========== Helper Functions Tests ==========
