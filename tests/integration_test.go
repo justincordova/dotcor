@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/justincordova/dotcor/internal/config"
@@ -538,27 +537,29 @@ func TestIntegration_ValidatorRepoPath(t *testing.T) {
 func TestIntegration_GenerateRepoPath(t *testing.T) {
 	tests := []struct {
 		sourcePath string
-		customPath string
-		wantPrefix string
+		wantPath   string
 	}{
-		{"~/.zshrc", "", "shell/"},
-		{"~/.bashrc", "", "shell/"},
-		{"~/.gitconfig", "", "git/"},
-		{"~/.vimrc", "", "vim/"},
-		{"~/.custom", "custom/myfile", "custom/"},
-		{"~/.random", "", "misc/"},
+		{"~/.zshrc", ".zshrc"},
+		{"~/.bashrc", ".bashrc"},
+		{"~/.gitconfig", ".gitconfig"},
+		{"~/.vimrc", ".vimrc"},
+		{"~/.config/nvim/init.lua", ".config/nvim/init.lua"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.sourcePath, func(t *testing.T) {
-			result, err := config.GenerateRepoPath(tt.sourcePath, tt.customPath, nil)
+			logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+			cfg := &config.Config{
+				Logger: logger,
+			}
+			result, err := config.GenerateRepoPath(tt.sourcePath, cfg)
 			if err != nil {
 				t.Fatalf("GenerateRepoPath() error = %v", err)
 			}
 
 			normalizedResult := filepath.Clean(result)
-			if !strings.HasPrefix(normalizedResult, tt.wantPrefix) {
-				t.Errorf("GenerateRepoPath(%s) = %q, want prefix %q", tt.sourcePath, result, tt.wantPrefix)
+			if normalizedResult != tt.wantPath {
+				t.Errorf("GenerateRepoPath(%s) = %q, want %q", tt.sourcePath, normalizedResult, tt.wantPath)
 			}
 		})
 	}

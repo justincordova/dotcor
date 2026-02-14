@@ -173,27 +173,6 @@ func RemoveAll(path string, cfg *config.Config) error {
 	return nil
 }
 
-// GetFilesRecursive returns all files in directory recursively
-func GetFilesRecursive(dir string) ([]string, error) {
-	var files []string
-
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			files = append(files, path)
-		}
-		return nil
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("walking directory: %w", err)
-	}
-
-	return files, nil
-}
-
 // IsReadable checks if a file is readable
 func IsReadable(path string) bool {
 	file, err := os.Open(path)

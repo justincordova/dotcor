@@ -73,10 +73,10 @@ func ValidateSourceFile(path string, cfg *config.Config) error {
 		return fmt.Errorf("checking file: %w", err)
 	}
 
-	// Must be a regular file (not directory for single file add)
+	// Must be a regular file (not directory)
 	if info.IsDir() {
 		cfg.Logger.Warn("path is a directory", "path", path)
-		return fmt.Errorf("path is a directory, use --recursive flag: %s", path)
+		return fmt.Errorf("path is a directory: %s", path)
 	}
 
 	// Check if file is readable

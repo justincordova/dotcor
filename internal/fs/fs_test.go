@@ -336,34 +336,6 @@ func TestRemoveFile(t *testing.T) {
 	assert.False(t, PathExists(testFile), "RemoveFile() file should not exist")
 }
 
-func TestGetFilesRecursive(t *testing.T) {
-	// Arrange
-	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
-
-	files := []string{
-		filepath.Join(tempDir, "file1.txt"),
-		filepath.Join(tempDir, "subdir", "file2.txt"),
-		filepath.Join(tempDir, "subdir", "nested", "file3.txt"),
-	}
-
-	cfg := testConfig()
-	for _, f := range files {
-		err = EnsureDir(filepath.Dir(f), cfg)
-		require.NoError(t, err, "failed to create parent dir")
-		err = os.WriteFile(f, []byte("test"), 0644)
-		require.NoError(t, err, "failed to create file")
-	}
-
-	// Act
-	got, err := GetFilesRecursive(tempDir)
-
-	// Assert
-	require.NoError(t, err, "GetFilesRecursive()")
-	assert.Equal(t, len(files), len(got), "GetFilesRecursive() should return correct number of files")
-}
-
 func TestIsReadable(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
