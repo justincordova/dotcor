@@ -9,6 +9,7 @@ import (
 	"github.com/justincordova/dotcor/internal/git"
 	"github.com/justincordova/dotcor/internal/logger"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -122,11 +123,7 @@ func init() {
 	rootCmd.AddCommand(listBackupsCmd)
 	rootCmd.AddCommand(backupDiffCmd)
 
-	// Set custom help templates with colors
-	rootCmd.SetHelpTemplate(fmt.Sprintf(helpTemplate, colorLightPink, colorReset, colorLightPink, colorReset))
-	rootCmd.SetUsageTemplate(fmt.Sprintf(usageTemplate, colorLightPink, colorReset, colorLightPink, colorReset, colorLightPink, colorReset))
-
-	// Replace help command to add ? and h as aliases
+	// Replace help command to add ? and h as aliases with custom ordering
 	rootCmd.SetHelpCommand(&cobra.Command{
 		Use:     "help [command]",
 		Aliases: []string{"?", "h"},
@@ -134,13 +131,17 @@ func init() {
 		Long: `Help provides help for any command in the application.
 Simply type dotcor help [path to command] for full details.`,
 		Run: func(c *cobra.Command, args []string) {
-			cmd, _, e := c.Root().Find(args)
-			if cmd == nil || e != nil {
-				c.Printf("Unknown help topic %#q\n", args)
-				c.Root().Usage()
+			if len(args) == 0 {
+				printCustomHelp(c.Root())
 			} else {
-				cmd.InitDefaultHelpFlag()
-				cmd.Help()
+				cmd, _, e := c.Root().Find(args)
+				if cmd == nil || e != nil {
+					c.Printf("Unknown help topic %#q\n", args)
+					c.Root().Usage()
+				} else {
+					cmd.InitDefaultHelpFlag()
+					cmd.Help()
+				}
 			}
 		},
 	})
@@ -238,6 +239,44 @@ func showQuickStatus(cfg *config.Config) {
 	fmt.Println()
 	fmt.Printf("  %sCommands:%s  status · add · sync · --help\n", colorLightPink, colorReset)
 	fmt.Println()
+}
+
+func printCustomHelp(cmd *cobra.Command) {
+	fmt.Printf("Usage:\n  %s\n\n", cmd.UseLine())
+
+	fmt.Printf("%sMain Commands:%s\n", colorLightPink, colorReset)
+	printCmd(initCmd)
+	printCmd(addCmd)
+	printCmd(removeCmd)
+	printCmd(statusCmd)
+	printCmd(syncCmd)
+
+	fmt.Printf("\n%sAdditional Commands:%s\n", colorLightPink, colorReset)
+	printCmd(restoreCmd)
+	printCmd(historyCmd)
+	printCmd(diffCmd)
+	printCmd(adoptCmd)
+	printCmd(doctorCmd)
+	printCmd(rebuildCmd)
+	printCmd(rebuildLinksCmd)
+	printCmd(cloneCmd)
+	printCmd(cleanupCmd)
+	printCmd(listBackupsCmd)
+	printCmd(backupDiffCmd)
+
+	fmt.Printf("\n%sFlags:%s", colorLightPink, colorReset)
+	cmd.PersistentFlags().VisitAll(func(flag *pflag.Flag) {
+		fmt.Printf("  --%-20s %s\n", flag.Name, flag.Usage)
+	})
+
+	fmt.Println()
+	fmt.Printf("Use \"%s [command] --help\" for more information about a command.\n", cmd.CommandPath())
+}
+
+func printCmd(cmd *cobra.Command) {
+	if cmd.IsAvailableCommand() {
+		fmt.Printf("  %s%-20s%s %s\n", colorGreen, cmd.Name(), colorReset, cmd.Short)
+	}
 }
 
 func main() {
