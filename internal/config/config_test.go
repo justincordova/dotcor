@@ -334,3 +334,37 @@ func TestRemoveManagedFile_BySourcePath_Deletes(t *testing.T) {
 	err = cfg.RemoveManagedFile("~/.nonexistent")
 	assert.Error(t, err, "RemoveManagedFile() should error for non-existent file")
 }
+
+func TestLoadConfigFromPath_LoadsCustomPath(t *testing.T) {
+	// Arrange
+	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
+	assert.NoError(t, err, "failed to create temp dir")
+	defer os.RemoveAll(tempDir)
+
+	customConfigPath := filepath.Join(tempDir, "custom-config.yaml")
+	customConfigContent := "version: 1.0\nrepo_path: /custom/files\ngit_enabled: true\nmanaged_files:\n  - source_path: ~/.zshrc\n"
+	err = os.WriteFile(customConfigPath, []byte(customConfigContent), 0644)
+	assert.NoError(t, err, "failed to write custom config")
+
+	// Act
+	cfg, err := LoadConfigFromPath(customConfigPath)
+
+	// Assert
+	assert.NoError(t, err, "LoadConfigFromPath() should not error")
+	assert.NotNil(t, cfg, "LoadConfigFromPath() should return config")
+	assert.Equal(t, "/custom/files", cfg.RepoPath, "LoadConfigFromPath() should load correct repo_path")
+	assert.True(t, cfg.GitEnabled, "LoadConfigFromPath() should load git_enabled")
+	assert.Len(t, cfg.ManagedFiles, 1, "LoadConfigFromPath() should load managed files")
+}
+
+func TestLoadConfigFromPath_NonExistentPath_ReturnsError(t *testing.T) {
+	// Arrange
+	nonExistentPath := "/tmp/nonexistent-config-12345.yaml"
+
+	// Act
+	_, err := LoadConfigFromPath(nonExistentPath)
+
+	// Assert
+	assert.Error(t, err, "LoadConfigFromPath() should error for non-existent file")
+	assert.Contains(t, err.Error(), "reading config file", "Error should indicate file reading failure")
+}

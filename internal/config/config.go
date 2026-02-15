@@ -117,6 +117,23 @@ func LoadConfig() (*Config, error) {
 	return &cfg, nil
 }
 
+// LoadConfigFromPath loads config from a specific path
+// Does not handle migrations or return defaults if file doesn't exist
+func LoadConfigFromPath(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading config file: %w", err)
+	}
+
+	// Parse YAML
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("parsing config file: %w", err)
+	}
+
+	return &cfg, nil
+}
+
 // NewDefaultConfig creates a new config with sensible defaults
 func NewDefaultConfig() (*Config, error) {
 	configDir, err := GetConfigDir()

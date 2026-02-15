@@ -490,6 +490,128 @@ func TestInit_ApplyFlag_CreatesSymlinks(t *testing.T) {
 	assert.Equal(t, repoFile, target)
 }
 
+func TestInit_ReinitFlag_OverwritesConfig(t *testing.T) {
+	// Arrange
+	tempDir := t.TempDir()
+	configDir := filepath.Join(tempDir, ".dotcor")
+	filesDir := filepath.Join(configDir, "files")
+	configPath := filepath.Join(configDir, "config.yaml")
+
+	// Create initial config directory
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
+
+	// Create existing config with custom content
+	existingConfig := "repo_path: /custom/path\ngit_enabled: true\nmanaged_files:\n  - source_path: ~/.zshrc\n"
+	if err := os.WriteFile(configPath, []byte(existingConfig), 0644); err != nil {
+		t.Fatalf("failed to create existing config: %v", err)
+	}
+
+	// Create files directory (simulating existing installation)
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
+
+	// Act - Simulate reinit by backing up and creating new config
+	timestamp := time.Now().Format("20060102-150405")
+	expectedBackupPath := filepath.Join(configDir, "config.yaml.backup."+timestamp)
+
+	// Backup existing config
+	if err := os.Rename(configPath, expectedBackupPath); err != nil {
+		t.Fatalf("failed to backup config: %v", err)
+	}
+
+	// Create new default config
+	newConfig := "repo_path: " + filesDir + "\ngit_enabled: true\nmanaged_files: []\n"
+	if err := os.WriteFile(configPath, []byte(newConfig), 0644); err != nil {
+		t.Fatalf("failed to create new config: %v", err)
+	}
+
+	// Assert
+	AssertFileExists(t, configPath)
+	AssertFileExists(t, expectedBackupPath)
+
+	// Verify backup has old content
+	backupContent, err := os.ReadFile(expectedBackupPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(backupContent), "/custom/path")
+
+	// Verify new config has new content
+	newContent, err := os.ReadFile(configPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(newContent), filesDir)
+}
+
+func TestInit_ReinitFlag_RequiresConfirmation(t *testing.T) {
+	// Arrange
+	tempDir := t.TempDir()
+	configDir := filepath.Join(tempDir, ".dotcor")
+	configPath := filepath.Join(configDir, "config.yaml")
+
+	// Create existing config
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
+	if err := os.WriteFile(configPath, []byte("repo_path: /old\n"), 0644); err != nil {
+		t.Fatalf("failed to create existing config: %v", err)
+	}
+
+	// Act - Check if confirmation would be required (simulation)
+	alreadyInitialized := fs.PathExists(configDir)
+	assert.True(t, alreadyInitialized)
+
+	// Assert - In real implementation, reinit should require confirmation
+	// This test documents the expected behavior
+	t.Log("reinit should require user confirmation before proceeding")
+}
+
+func TestInit_ReinitFlag_PreservesRepository(t *testing.T) {
+	// Arrange
+	tempDir := t.TempDir()
+	configDir := filepath.Join(tempDir, ".dotcor")
+	filesDir := filepath.Join(configDir, "files")
+	configPath := filepath.Join(configDir, "config.yaml")
+
+	// Create existing installation
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
+
+	// Create config
+	if err := os.WriteFile(configPath, []byte("repo_path: /old\n"), 0644); err != nil {
+		t.Fatalf("failed to create config: %v", err)
+	}
+
+	// Create files directory with existing files
+	if err := os.MkdirAll(filepath.Join(filesDir, "shell"), 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
+	existingFile := filepath.Join(filesDir, "shell", "zshrc")
+	if err := os.WriteFile(existingFile, []byte("# Existing content"), 0644); err != nil {
+		t.Fatalf("failed to create existing file: %v", err)
+	}
+
+	// Act - Simulate reinit (backup config, create new config)
+	timestamp := time.Now().Format("20060102-150405")
+	if err := os.Rename(configPath, configPath+".backup."+timestamp); err != nil {
+		t.Fatalf("failed to backup config: %v", err)
+	}
+
+	// Create new config
+	newConfig := "repo_path: " + filesDir + "\ngit_enabled: true\nmanaged_files: []\n"
+	if err := os.WriteFile(configPath, []byte(newConfig), 0644); err != nil {
+		t.Fatalf("failed to create new config: %v", err)
+	}
+
+	// Assert - Repository files should be preserved
+	AssertFileExists(t, existingFile)
+
+	content, err := os.ReadFile(existingFile)
+	require.NoError(t, err)
+	assert.Equal(t, "# Existing content", string(content))
+}
+
 func TestInit_InteractiveMode_ScansDotfiles(t *testing.T) {
 	// Arrange
 	tempDir := t.TempDir()

@@ -41,18 +41,21 @@ var initCmd = &cobra.Command{
 Examples:
   dotcor init                    # Basic initialization
   dotcor init --interactive      # Scan for dotfiles and select which to add
-  dotcor init --apply            # Create symlinks from existing config (new machine)`,
+  dotcor init --apply            # Create symlinks from existing config (new machine)
+  dotcor init --reinit           # Reinitialize and overwrite existing config`,
 	RunE: runInit,
 }
 
 func init() {
 	initCmd.Flags().Bool("apply", false, "Create symlinks from existing config (for new machine setup)")
 	initCmd.Flags().Bool("interactive", false, "Interactively select existing dotfiles to add")
+	initCmd.Flags().Bool("reinit", false, "Reinitialize and overwrite existing config (destructive)")
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
 	applyFlag, _ := cmd.Flags().GetBool("apply")
-	interactiveFlag, _ := cmd.Flags().GetBool("interactive")
+	interactiveFlag, _ := cmd.Flags().GetBool("reinit")
+	reinitFlag, _ := cmd.Flags().GetBool("reinit")
 
 	// Configure logger early
 	defaultCfg, err := config.NewDefaultConfig()
@@ -68,11 +71,19 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check if already initialized
-	if fs.PathExists(configDir) && !applyFlag {
-		fmt.Printf("DotCor is already initialized at %s\n", configDir)
-		fmt.Println("Use 'dotcor status' to check current state.")
-		fmt.Println("Use 'dotcor init --apply' to create symlinks from existing config.")
+	configPath := filepath.Join(configDir, "config.yaml")
+	if fs.PathExists(configDir) && fs.PathExists(configPath) && !applyFlag && !reinitFlag {
+		fmt.Printf("DotCor is already initialized at %s\n\n", configDir)
+		fmt.Printf("To reinitialize:\n")
+		fmt.Printf("  dotcor init --reinit        # Overwrite config (destructive)\n")
+		fmt.Printf("  dotcor init --apply         # Create symlinks from existing config (new machine)\n")
+		fmt.Printf("  dotcor status               # Check current state\n")
 		return nil
+	}
+
+	// Handle --reinit flag
+	if reinitFlag {
+		return handleReinit(configDir, configPath, defaultCfg)
 	}
 
 	// Acquire lock
@@ -158,6 +169,60 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Printf("%sNext steps:%s\n", colorLightPink, colorReset)
 	fmt.Println("  dotcor add              # Add a dotfile")
 	fmt.Println("  dotcor status           # List managed files and status")
+
+	return nil
+}
+
+func handleReinit(configDir, configPath string, cfg *config.Config) error {
+	// Require confirmation
+	fmt.Printf("%sThis will overwrite your configuration. Proceed? [y/N]: %s", colorYellow, colorReset)
+	reader := bufio.NewReader(os.Stdin)
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(strings.ToLower(input))
+
+	if input != "y" && input != "yes" {
+		fmt.Println("Cancelled.")
+		return nil
+	}
+
+	fmt.Printf("\n%sReinitializing DotCor...%s\n", colorLightPink, colorReset)
+
+	// Backup existing config
+	timestamp := time.Now().Format("20060102-150405")
+	backupPath := configPath + ".backup." + timestamp
+
+	if err := os.Rename(configPath, backupPath); err != nil {
+		return fmt.Errorf("backing up config: %w", err)
+	}
+	fmt.Printf("%s[OK]%s Backed up config to %s\n", colorGreen, colorReset, filepath.Base(backupPath))
+
+	// Create new default config
+	newCfg, err := config.NewDefaultConfig()
+	if err != nil {
+		return fmt.Errorf("creating default config: %w", err)
+	}
+
+	// Preserve existing managed files if they exist
+	if fs.PathExists(backupPath) {
+		oldCfg, err := config.LoadConfigFromPath(backupPath)
+		if err == nil && len(oldCfg.ManagedFiles) > 0 {
+			newCfg.ManagedFiles = oldCfg.ManagedFiles
+			fmt.Printf("%s[OK]%s Preserved %d managed files\n", colorGreen, colorReset, len(oldCfg.ManagedFiles))
+		}
+	}
+
+	// Save new config
+	if err := newCfg.SaveConfig(); err != nil {
+		return fmt.Errorf("saving config: %w", err)
+	}
+	fmt.Printf("%s[OK]%s Created new config.yaml\n", colorGreen, colorReset)
+
+	fmt.Println("")
+	fmt.Printf("%sDotCor reinitialized successfully!%s\n", colorLightPink, colorReset)
+	fmt.Println("")
+	fmt.Printf("%sNext steps:%s\n", colorLightPink, colorReset)
+	fmt.Println("  dotcor status           # Check current state")
+	fmt.Println("  dotcor add              # Add a dotfile")
 
 	return nil
 }
