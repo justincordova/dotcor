@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/justincordova/dotcor/internal/config"
 	"github.com/justincordova/dotcor/internal/core"
+	"github.com/justincordova/dotcor/internal/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -61,6 +61,10 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 		// Auto is dry-run by default unless --execute is provided
 		if !execute {
 			dryRun = true
+		}
+
+		// When --execute is used, skip confirmation
+		if execute {
 			force = true
 		}
 	}
@@ -73,7 +77,7 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 	configureLogger(cmd, cfg)
 
 	// Parse duration
-	duration, err := parseDuration(olderThan)
+	duration, err := utils.ParseDuration(olderThan)
 	if err != nil {
 		return fmt.Errorf("invalid duration: %w", err)
 	}
@@ -99,7 +103,7 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Printf("%sCurrent backups:%s %d files, %s\n", colorLightPink, colorReset, backupCount, formatSize(totalSize))
+	fmt.Printf("%sCurrent backups:%s %d files, %s\n", colorLightPink, colorReset, backupCount, utils.FormatSize(totalSize))
 	fmt.Println("")
 
 	// Preview what would be deleted (doesn't actually delete)
@@ -117,7 +121,7 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 	if dryRun {
 		fmt.Println("Dry run - no changes will be made:")
 		fmt.Println("")
-		fmt.Printf("Would delete %d backup set(s), freeing %s\n", len(candidates), formatSize(freedSpace))
+		fmt.Printf("Would delete %d backup set(s), freeing %s\n", len(candidates), utils.FormatSize(freedSpace))
 		if auto && !execute {
 			fmt.Println("")
 			fmt.Printf("Run 'dotcor cleanup-backups --auto --execute' to proceed.\n")
@@ -127,7 +131,7 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 
 	// Confirmation
 	if !force {
-		fmt.Printf("Delete %d backup set(s), freeing %s? [y/N]: ", len(candidates), formatSize(freedSpace))
+		fmt.Printf("Delete %d backup set(s), freeing %s? [y/N]: ", len(candidates), utils.FormatSize(freedSpace))
 
 		reader := bufio.NewReader(os.Stdin)
 		input, _ := reader.ReadString('\n')
@@ -144,95 +148,19 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		// Report partial success if some deletions worked
 		if deleted > 0 {
-			fmt.Printf("%s[!]%s Removed %d backup set(s), freed %s\n", colorYellow, colorReset, deleted, formatSize(freedSpace))
+			fmt.Printf("%s[!]%s Removed %d backup set(s), freed %s\n", colorYellow, colorReset, deleted, utils.FormatSize(freedSpace))
 			fmt.Printf("  Failed to remove %d backup set(s): %v\n", failed, err)
 		} else {
 			return fmt.Errorf("cleaning backups: %w", err)
 		}
 	} else {
-		fmt.Printf("%s[OK]%s Removed %d backup set(s), freed %s\n", colorGreen, colorReset, deleted, formatSize(freedSpace))
+		fmt.Printf("%s[OK]%s Removed %d backup set(s), freed %s\n", colorGreen, colorReset, deleted, utils.FormatSize(freedSpace))
 	}
 
 	// Show new stats
 	newCount, _ := core.GetBackupCount(cfg)
 	newSize, _ := core.GetTotalBackupSize(cfg)
-	fmt.Printf("%sRemaining:%s %d files, %s\n", colorLightPink, colorReset, newCount, formatSize(newSize))
+	fmt.Printf("%sRemaining:%s %d files, %s\n", colorLightPink, colorReset, newCount, utils.FormatSize(newSize))
 
 	return nil
-}
-
-// parseDuration parses a human-friendly duration string
-func parseDuration(s string) (time.Duration, error) {
-	s = strings.TrimSpace(strings.ToLower(s))
-
-	if s == "" {
-		return 30 * 24 * time.Hour, nil // Default: 30 days
-	}
-
-	// Handle common formats
-	var multiplier time.Duration
-	var value int
-
-	if strings.HasSuffix(s, "d") {
-		multiplier = 24 * time.Hour
-		_, err := fmt.Sscanf(s, "%dd", &value)
-		if err != nil {
-			return 0, fmt.Errorf("invalid format: %s", s)
-		}
-		if value <= 0 {
-			return 0, fmt.Errorf("duration must be positive")
-		}
-	} else if strings.HasSuffix(s, "w") {
-		multiplier = 7 * 24 * time.Hour
-		_, err := fmt.Sscanf(s, "%dw", &value)
-		if err != nil {
-			return 0, fmt.Errorf("invalid format: %s", s)
-		}
-		if value <= 0 {
-			return 0, fmt.Errorf("duration must be positive")
-		}
-	} else if strings.HasSuffix(s, "m") {
-		multiplier = 30 * 24 * time.Hour // Approximate month
-		_, err := fmt.Sscanf(s, "%dm", &value)
-		if err != nil {
-			return 0, fmt.Errorf("invalid format: %s", s)
-		}
-		if value <= 0 {
-			return 0, fmt.Errorf("duration must be positive")
-		}
-	} else if strings.HasSuffix(s, "h") {
-		multiplier = time.Hour
-		_, err := fmt.Sscanf(s, "%dh", &value)
-		if err != nil {
-			return 0, fmt.Errorf("invalid format: %s", s)
-		}
-		if value <= 0 {
-			return 0, fmt.Errorf("duration must be positive")
-		}
-	} else {
-		// Try standard Go duration
-		return time.ParseDuration(s)
-	}
-
-	return time.Duration(value) * multiplier, nil
-}
-
-// formatSize formats bytes as human-readable size
-func formatSize(bytes int64) string {
-	const (
-		KB = 1024
-		MB = KB * 1024
-		GB = MB * 1024
-	)
-
-	switch {
-	case bytes >= GB:
-		return fmt.Sprintf("%.1f GB", float64(bytes)/float64(GB))
-	case bytes >= MB:
-		return fmt.Sprintf("%.1f MB", float64(bytes)/float64(MB))
-	case bytes >= KB:
-		return fmt.Sprintf("%.1f KB", float64(bytes)/float64(KB))
-	default:
-		return fmt.Sprintf("%d bytes", bytes)
-	}
 }

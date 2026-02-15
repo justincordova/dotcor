@@ -12,6 +12,7 @@ import (
 	"github.com/justincordova/dotcor/internal/core"
 	"github.com/justincordova/dotcor/internal/fs"
 	"github.com/justincordova/dotcor/internal/git"
+	"github.com/justincordova/dotcor/internal/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -154,7 +155,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 
 		fmt.Printf("  %sSummary:%s\n", colorLightPink, colorReset)
 		fmt.Printf("  Files to add: %d\n", len(files))
-		fmt.Printf("  Total size: %s\n", formatSize(totalSize))
+		fmt.Printf("  Total size: %s\n", utils.FormatSize(totalSize))
 		fmt.Println("")
 		fmt.Print("Proceed? [Y/n]: ")
 

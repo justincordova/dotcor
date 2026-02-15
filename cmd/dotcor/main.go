@@ -112,6 +112,7 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(addCmd)
 	rootCmd.AddCommand(removeCmd)
+	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(syncCmd)
 	rootCmd.AddCommand(restoreCmd)
@@ -251,6 +252,7 @@ func printCustomHelp(cmd *cobra.Command) {
 	printCmd(initCmd)
 	printCmd(addCmd)
 	printCmd(removeCmd)
+	printCmd(listCmd)
 	printCmd(statusCmd)
 	printCmd(syncCmd)
 

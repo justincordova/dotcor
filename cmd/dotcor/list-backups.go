@@ -80,29 +80,88 @@ func runListBackups(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("reading backup directory: %w", err)
 	}
 
-	if len(args) > 0 {
-		var filtered []BackupEntry
-		for _, backup := range backups {
+	fileFilter, _ := cmd.Flags().GetString("file")
+	olderThanStr, _ := cmd.Flags().GetString("older-than")
+	newerThanStr, _ := cmd.Flags().GetString("newer-than")
+	pattern, _ := cmd.Flags().GetString("pattern")
+
+	var olderThan, newerThan time.Duration
+	if olderThanStr != "" {
+		olderThan, err = utils.ParseDuration(olderThanStr)
+		if err != nil {
+			return fmt.Errorf("invalid older-than duration: %w", err)
+		}
+	}
+	if newerThanStr != "" {
+		newerThan, err = utils.ParseDuration(newerThanStr)
+		if err != nil {
+			return fmt.Errorf("invalid newer-than duration: %w", err)
+		}
+	}
+
+	var filtered []BackupEntry
+	now := time.Now()
+
+	for _, backup := range backups {
+		if fileFilter != "" && backup.SourcePath != fileFilter {
+			continue
+		}
+
+		if len(args) > 0 {
+			matched := false
 			for _, arg := range args {
 				if backup.SourcePath == arg {
-					filtered = append(filtered, backup)
+					matched = true
 					break
 				}
 			}
+			if !matched {
+				continue
+			}
 		}
-		backups = filtered
+
+		if pattern != "" {
+			matched := core.MatchesPattern(backup.SourcePath, pattern)
+			if !matched {
+				continue
+			}
+		}
+
+		if olderThan > 0 {
+			cutoff := now.Add(-olderThan)
+			if backup.Timestamp.After(cutoff) {
+				continue
+			}
+		}
+
+		if newerThan > 0 {
+			cutoff := now.Add(-newerThan)
+			if backup.Timestamp.Before(cutoff) {
+				continue
+			}
+		}
+
+		filtered = append(filtered, backup)
 	}
+
+	backups = filtered
 
 	if len(backups) == 0 {
 		fmt.Println("No backups found.")
 		return nil
 	}
 
+	filterActive := fileFilter != "" || olderThanStr != "" || newerThanStr != "" || pattern != "" || len(args) > 0
+
 	sort.Slice(backups, func(i, j int) bool {
 		return backups[i].Timestamp.After(backups[j].Timestamp)
 	})
 
-	fmt.Printf("%sFound %d backup(s):%s\n\n", colorLightPink, len(backups), colorReset)
+	if filterActive {
+		fmt.Printf("%sFilter applied: %d result(s)%s\n\n", colorLightPink, len(backups), colorReset)
+	} else {
+		fmt.Printf("%sFound %d backup(s):%s\n\n", colorLightPink, len(backups), colorReset)
+	}
 
 	for _, backup := range backups {
 		age := time.Since(backup.Timestamp)

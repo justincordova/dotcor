@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -55,4 +56,60 @@ func pluralize(n int) string {
 		return ""
 	}
 	return "s"
+}
+
+// ParseDuration parses a human-friendly duration string
+func ParseDuration(s string) (time.Duration, error) {
+	s = strings.TrimSpace(strings.ToLower(s))
+
+	if s == "" {
+		return 30 * 24 * time.Hour, nil // Default: 30 days
+	}
+
+	// Handle common formats
+	var multiplier time.Duration
+	var value int
+
+	if strings.HasSuffix(s, "d") {
+		multiplier = 24 * time.Hour
+		_, err := fmt.Sscanf(s, "%dd", &value)
+		if err != nil {
+			return 0, fmt.Errorf("invalid format: %s", s)
+		}
+		if value <= 0 {
+			return 0, fmt.Errorf("duration must be positive")
+		}
+	} else if strings.HasSuffix(s, "w") {
+		multiplier = 7 * 24 * time.Hour
+		_, err := fmt.Sscanf(s, "%dw", &value)
+		if err != nil {
+			return 0, fmt.Errorf("invalid format: %s", s)
+		}
+		if value <= 0 {
+			return 0, fmt.Errorf("duration must be positive")
+		}
+	} else if strings.HasSuffix(s, "m") {
+		multiplier = 30 * 24 * time.Hour // Approximate month
+		_, err := fmt.Sscanf(s, "%dm", &value)
+		if err != nil {
+			return 0, fmt.Errorf("invalid format: %s", s)
+		}
+		if value <= 0 {
+			return 0, fmt.Errorf("duration must be positive")
+		}
+	} else if strings.HasSuffix(s, "h") {
+		multiplier = time.Hour
+		_, err := fmt.Sscanf(s, "%dh", &value)
+		if err != nil {
+			return 0, fmt.Errorf("invalid format: %s", s)
+		}
+		if value <= 0 {
+			return 0, fmt.Errorf("duration must be positive")
+		}
+	} else {
+		// Try standard Go duration
+		return time.ParseDuration(s)
+	}
+
+	return time.Duration(value) * multiplier, nil
 }

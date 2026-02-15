@@ -298,6 +298,21 @@ func TestCleanup_AutoFlag_UsesSmartDefaults(t *testing.T) {
 			t.Fatalf("failed to create files dir: %v", err)
 		}
 
+		// Create 15 old backup directories (35+ days old)
+		now := time.Now()
+		for i := 0; i < 15; i++ {
+			backupTime := now.Add(-time.Duration(35+i) * 24 * time.Hour)
+			timestampDir := backupTime.Format("2006-01-02_15-04-05")
+			backupPath := filepath.Join(backupsDir, timestampDir)
+			if err := os.MkdirAll(backupPath, 0755); err != nil {
+				t.Fatalf("failed to create backup dir: %v", err)
+			}
+			testFile := filepath.Join(backupPath, "test.txt")
+			if err := os.WriteFile(testFile, []byte("test content"), 0644); err != nil {
+				t.Fatalf("failed to create test file: %v", err)
+			}
+		}
+
 		// Create config
 		configPath := filepath.Join(configDir, "config.yaml")
 		configContent := fmt.Sprintf(`version: "1.0"
