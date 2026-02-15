@@ -425,20 +425,59 @@ func outputStatusPrompt(status StatusReport, args []string) error {
 	}
 
 	syncedCount := 0
-	issuesCount := 0
+	brokenSymlinks := 0
+	missingFiles := 0
+	modifiedFiles := 0
+	otherIssues := 0
 
 	for _, f := range files {
-		if f.Status == "ok" {
+		switch f.Status {
+		case "ok":
 			syncedCount++
-		} else {
-			issuesCount++
+		case "broken":
+			brokenSymlinks++
+		case "missing-source", "missing-repo":
+			missingFiles++
+		case "modified":
+			modifiedFiles++
+		default:
+			otherIssues++
 		}
 	}
 
-	if issuesCount == 0 {
+	if issuesCount := brokenSymlinks + missingFiles + modifiedFiles + otherIssues; issuesCount == 0 {
 		fmt.Printf("✓ %d synced\n", syncedCount)
 	} else {
-		fmt.Printf("⚠ %d synced, %d issues\n", syncedCount, issuesCount)
+		var issueDesc string
+		var suggestion string
+
+		if brokenSymlinks > 0 {
+			issueDesc = fmt.Sprintf("%d broken symlink", brokenSymlinks)
+			if brokenSymlinks > 1 {
+				issueDesc += "s"
+			}
+			suggestion = "run 'dotcor doctor --fix'"
+		} else if missingFiles > 0 {
+			issueDesc = fmt.Sprintf("%d missing file", missingFiles)
+			if missingFiles > 1 {
+				issueDesc += "s"
+			}
+			suggestion = "run 'dotcor doctor'"
+		} else if modifiedFiles > 0 {
+			issueDesc = fmt.Sprintf("%d uncommitted", modifiedFiles)
+			suggestion = "run 'dotcor sync'"
+		} else if status.GitStatus.BehindBy > 0 {
+			issueDesc = fmt.Sprintf("%d commit(s) behind", status.GitStatus.BehindBy)
+			suggestion = "run 'dotcor sync'"
+		} else {
+			issueDesc = fmt.Sprintf("%d issue", otherIssues)
+			if otherIssues > 1 {
+				issueDesc += "s"
+			}
+			suggestion = "run 'dotcor doctor'"
+		}
+
+		fmt.Printf("✓ %d synced, ⚠ %s (%s)\n", syncedCount, issueDesc, suggestion)
 	}
 
 	return nil
