@@ -36,7 +36,7 @@ func TestRestore_Head_RestoresLatest(t *testing.T) {
 	require.NoError(t, err, "failed to create working tree change")
 
 	// Act
-	err = restoreFromGit(cfg.RepoPath, "test.txt", repoFile, "HEAD", false, true, cfg)
+	err = restoreFromGit(cfg.RepoPath, "test.txt", repoFile, "HEAD", false, false, true, cfg)
 	require.NoError(t, err, "restore should succeed")
 
 	// Assert
@@ -71,7 +71,7 @@ func TestRestore_SpecificCommit_RestoresCorrectVersion(t *testing.T) {
 	require.NoError(t, err, "failed to create working tree change")
 
 	// Act - restore to first commit
-	err = restoreFromGit(cfg.RepoPath, "test.txt", repoFile, firstCommitHash, false, true, cfg)
+	err = restoreFromGit(cfg.RepoPath, "test.txt", repoFile, firstCommitHash, false, false, true, cfg)
 	require.NoError(t, err, "restore should succeed")
 
 	// Assert
@@ -100,7 +100,7 @@ func TestRestore_PreviewFlag_ShowsDiff(t *testing.T) {
 	require.NoError(t, err, "failed to modify file")
 
 	// Act - preview mode
-	err = restoreFromGit(cfg.RepoPath, "test.txt", repoFile, "HEAD", true, true, cfg)
+	err = restoreFromGit(cfg.RepoPath, "test.txt", repoFile, "HEAD", true, false, true, cfg)
 	require.NoError(t, err, "preview should succeed")
 
 	// Assert - file should not be changed in preview mode
@@ -116,7 +116,7 @@ func TestRestore_NonexistentFile_ReturnsError(t *testing.T) {
 	repoFile := filepath.Join(cfg.RepoPath, "test.txt")
 
 	// Act
-	err := restoreFromGit(cfg.RepoPath, "test.txt", repoFile, "HEAD", false, true, cfg)
+	err := restoreFromGit(cfg.RepoPath, "test.txt", repoFile, "HEAD", false, false, true, cfg)
 
 	// Assert
 	assert.Error(t, err, "should return error for nonexistent file")
@@ -143,7 +143,7 @@ func TestRestore_BackupCreated_RestorePointAvailable(t *testing.T) {
 	require.NoError(t, err, "failed to modify file")
 
 	// Act - restore from HEAD (non-preview mode)
-	err = restoreFromGit(cfg.RepoPath, "test.txt", repoFile, "HEAD", false, true, cfg)
+	err = restoreFromGit(cfg.RepoPath, "test.txt", repoFile, "HEAD", false, false, true, cfg)
 	require.NoError(t, err, "restore should succeed")
 
 	// Assert - backup should be created

@@ -8,6 +8,7 @@ import (
 
 	"github.com/justincordova/dotcor/internal/config"
 	"github.com/justincordova/dotcor/internal/core"
+	"github.com/justincordova/dotcor/internal/fs"
 	"github.com/justincordova/dotcor/internal/git"
 	"github.com/spf13/cobra"
 )
@@ -36,6 +37,7 @@ func init() {
 	restoreCmd.Flags().Bool("list-backups", false, "List available backups")
 	restoreCmd.Flags().Bool("preview", false, "Show what would be restored without making changes")
 	restoreCmd.Flags().Bool("dry-run", false, "Alias for --preview")
+	restoreCmd.Flags().Bool("diff", false, "Show diff between current and target version")
 	restoreCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompts")
 }
 
@@ -45,6 +47,7 @@ func runRestore(cmd *cobra.Command, args []string) error {
 	listBackups, _ := cmd.Flags().GetBool("list-backups")
 	preview, _ := cmd.Flags().GetBool("preview")
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
+	showDiff, _ := cmd.Flags().GetBool("diff")
 	force, _ := cmd.Flags().GetBool("force")
 
 	// Treat --dry-run as --preview
@@ -78,7 +81,7 @@ func runRestore(cmd *cobra.Command, args []string) error {
 	// Restore each file
 	successCount := 0
 	for _, sourcePath := range args {
-		err := restoreSingleFile(sourcePath, toRef, fromBackup, preview, force, cfg)
+		err := restoreSingleFile(sourcePath, toRef, fromBackup, preview, showDiff, force, cfg)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s[!]%s %s: %v\n", colorYellow, colorReset, sourcePath, err)
 		} else {
@@ -94,7 +97,7 @@ func runRestore(cmd *cobra.Command, args []string) error {
 }
 
 // restoreSingleFile restores a single file
-func restoreSingleFile(sourcePath, toRef string, fromBackup, preview, force bool, cfg *config.Config) error {
+func restoreSingleFile(sourcePath, toRef string, fromBackup, preview, showDiff, force bool, cfg *config.Config) error {
 	// Get managed file info
 	mf, err := cfg.GetManagedFile(sourcePath)
 	if err != nil {
@@ -114,15 +117,15 @@ func restoreSingleFile(sourcePath, toRef string, fromBackup, preview, force bool
 
 	// Handle backup restore
 	if fromBackup {
-		return restoreFromBackup(mf.SourcePath, repoPath, preview, force, cfg)
+		return restoreFromBackup(mf.SourcePath, repoPath, preview, showDiff, force, cfg)
 	}
 
 	// Git restore
-	return restoreFromGit(repoRoot, mf.RepoPath, repoPath, toRef, preview, force, cfg)
+	return restoreFromGit(repoRoot, mf.RepoPath, repoPath, toRef, preview, showDiff, force, cfg)
 }
 
 // restoreFromGit restores a file from Git history
-func restoreFromGit(repoRoot, repoPath, fullRepoPath, ref string, preview, force bool, cfg *config.Config) error {
+func restoreFromGit(repoRoot, repoPath, fullRepoPath, ref string, preview, showDiff, force bool, cfg *config.Config) error {
 	// Check if it's a git repo
 	if !git.IsRepo(repoRoot) {
 		return fmt.Errorf("repository is not a git repository")
@@ -137,6 +140,19 @@ func restoreFromGit(repoRoot, repoPath, fullRepoPath, ref string, preview, force
 		if err == nil && len(commits) > 0 {
 			fmt.Printf("\n%sCurrent version:%s\n", colorLightPink, colorReset)
 			fmt.Printf("  %s %s - %s\n", commits[0].Hash[:7], commits[0].Date.Format("2006-01-02"), commits[0].Message)
+		}
+
+		// Show diff if requested
+		if showDiff {
+			fmt.Printf("\n%sDiff:%s\n", colorLightPink, colorReset)
+			diffOutput, err := git.GetFileDiffFromRef(repoRoot, repoPath, ref)
+			if err != nil {
+				fmt.Printf("%s[!]%s Could not generate diff: %v\n", colorYellow, colorReset, err)
+			} else if diffOutput == "" {
+				fmt.Println("  No differences found.")
+			} else {
+				fmt.Println(diffOutput)
+			}
 		}
 
 		return nil
@@ -190,7 +206,7 @@ func restoreFromGit(repoRoot, repoPath, fullRepoPath, ref string, preview, force
 }
 
 // restoreFromBackup restores a file from backup
-func restoreFromBackup(sourcePath, repoPath string, preview, force bool, cfg *config.Config) error {
+func restoreFromBackup(sourcePath, repoPath string, preview, showDiff, force bool, cfg *config.Config) error {
 	// Normalize source path for backup lookup
 	normalized, err := config.NormalizePath(sourcePath)
 	if err != nil {
@@ -213,6 +229,46 @@ func restoreFromBackup(sourcePath, repoPath string, preview, force bool, cfg *co
 	if preview {
 		fmt.Printf("Would restore %s from backup:\n", sourcePath)
 		fmt.Printf("  %s (%s)\n", backup.BackupPath, backup.Timestamp.Format("2006-01-02 15:04:05"))
+
+		// Show diff if requested
+		if showDiff {
+			fmt.Printf("\n%sDiff:%s\n", colorLightPink, colorReset)
+
+			// Expand paths for diff
+			expandedBackup, err := config.ExpandPath(backup.BackupPath, cfg)
+			if err != nil {
+				fmt.Printf("%s[!]%s Could not expand backup path: %v\n", colorYellow, colorReset, err)
+				return nil
+			}
+
+			expandedRepo, err := config.ExpandPath(repoPath, cfg)
+			if err != nil {
+				fmt.Printf("%s[!]%s Could not expand repo path: %v\n", colorYellow, colorReset, err)
+				return nil
+			}
+
+			// Check if files exist
+			if !fs.PathExists(expandedBackup) {
+				fmt.Println("  Backup file does not exist.")
+				return nil
+			}
+
+			if !fs.PathExists(expandedRepo) {
+				fmt.Printf("  Current file does not exist. Would create from backup.\n")
+				return nil
+			}
+
+			// Generate diff
+			diffOutput, err := git.GetDiffBetweenFiles(expandedRepo, expandedBackup)
+			if err != nil {
+				fmt.Printf("%s[!]%s Could not generate diff: %v\n", colorYellow, colorReset, err)
+			} else if diffOutput == "" {
+				fmt.Println("  No differences found.")
+			} else {
+				fmt.Println(diffOutput)
+			}
+		}
+
 		return nil
 	}
 

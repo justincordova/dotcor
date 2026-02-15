@@ -528,3 +528,45 @@ func SetConfig(repoPath, key, value string) error {
 	}
 	return nil
 }
+
+// GetFileDiffFromRef returns diff between working tree file and specific ref
+func GetFileDiffFromRef(repoPath, filePath, ref string) (string, error) {
+	if ref == "" {
+		ref = "HEAD"
+	}
+	cmd := exec.Command("git", "diff", ref, "--", filePath)
+	cmd.Dir = repoPath
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		if len(output) == 0 {
+			return "", nil
+		}
+		return "", fmt.Errorf("git diff failed: %w", err)
+	}
+	return string(output), nil
+}
+
+// GetFileContentAtRef returns file content at specific ref
+func GetFileContentAtRef(repoPath, filePath, ref string) (string, error) {
+	if ref == "" {
+		ref = "HEAD"
+	}
+	cmd := exec.Command("git", "show", fmt.Sprintf("%s:%s", ref, filePath))
+	cmd.Dir = repoPath
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("git show failed: %w", err)
+	}
+	return string(output), nil
+}
+
+// GetDiffBetweenFiles returns diff between two arbitrary files
+func GetDiffBetweenFiles(file1, file2 string) (string, error) {
+	cmd := exec.Command("git", "diff", "--no-index", "--", file1, file2)
+	output, err := cmd.CombinedOutput()
+	// git diff --no-index always returns exit code 1 if files differ, ignore that
+	if err != nil && !strings.Contains(string(output), "+++ b/") && !strings.Contains(string(output), "--- a/") {
+		return "", fmt.Errorf("git diff --no-index failed: %w", err)
+	}
+	return string(output), nil
+}
