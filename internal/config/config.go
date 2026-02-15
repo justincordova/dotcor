@@ -15,13 +15,14 @@ const CurrentConfigVersion = "1.0"
 
 // Config represents the DotCor configuration
 type Config struct {
-	Logger         *slog.Logger  `yaml:"-"`               // Structured logger for system logging (not persisted)
-	Version        string        `yaml:"version"`         // Schema version for migrations
-	RepoPath       string        `yaml:"repo_path"`       // ~/.dotcor/files
-	GitEnabled     bool          `yaml:"git_enabled"`     // Whether Git integration is enabled
-	GitRemote      string        `yaml:"git_remote"`      // Optional remote URL
-	IgnorePatterns []string      `yaml:"ignore_patterns"` // Files/patterns to never add
-	ManagedFiles   []ManagedFile `yaml:"managed_files"`   // List of managed dotfiles
+	Logger             *slog.Logger  `yaml:"-"`                    // Structured logger for system logging (not persisted)
+	Version            string        `yaml:"version"`              // Schema version for migrations
+	RepoPath           string        `yaml:"repo_path"`            // ~/.dotcor/files
+	GitEnabled         bool          `yaml:"git_enabled"`          // Whether Git integration is enabled
+	GitRemote          string        `yaml:"git_remote"`           // Optional remote URL
+	IgnorePatterns     []string      `yaml:"ignore_patterns"`      // Files/patterns to never add
+	ManagedFiles       []ManagedFile `yaml:"managed_files"`        // List of managed dotfiles
+	LargeFileThreshold int           `yaml:"large_file_threshold"` // Max file size warning (bytes, 0 = disabled)
 }
 
 // ManagedFile represents a single managed dotfile
@@ -142,12 +143,13 @@ func NewDefaultConfig() (*Config, error) {
 	}
 
 	return &Config{
-		Logger:         nil,
-		Version:        CurrentConfigVersion,
-		RepoPath:       filepath.Join(configDir, "files"),
-		GitEnabled:     true,
-		IgnorePatterns: GetDefaultIgnorePatterns(),
-		ManagedFiles:   []ManagedFile{},
+		Logger:             nil,
+		Version:            CurrentConfigVersion,
+		RepoPath:           filepath.Join(configDir, "files"),
+		GitEnabled:         true,
+		IgnorePatterns:     GetDefaultIgnorePatterns(),
+		ManagedFiles:       []ManagedFile{},
+		LargeFileThreshold: 100 * 1024 * 1024, // 100MB default
 	}, nil
 }
 

@@ -34,6 +34,8 @@ func init() {
 	cleanupCmd.Flags().Bool("all", false, "Remove all backups")
 	cleanupCmd.Flags().Bool("dry-run", false, "Show what would be removed without making changes")
 	cleanupCmd.Flags().BoolP("force", "f", false, "Skip confirmation")
+	cleanupCmd.Flags().Bool("auto", false, "Use smart defaults: keep last 10 backups, delete older than 30 days (dry-run by default)")
+	cleanupCmd.Flags().Bool("execute", false, "Execute cleanup (required with --auto to actually delete)")
 }
 
 func runCleanup(cmd *cobra.Command, args []string) error {
@@ -42,6 +44,26 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 	all, _ := cmd.Flags().GetBool("all")
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
 	force, _ := cmd.Flags().GetBool("force")
+	auto, _ := cmd.Flags().GetBool("auto")
+	execute, _ := cmd.Flags().GetBool("execute")
+
+	// Handle --auto flag with smart defaults
+	if auto {
+		fmt.Printf("%sAuto cleanup with defaults:%s\n", colorLightPink, colorReset)
+		fmt.Println("  - Keep: last 10 backups")
+		fmt.Println("  - Delete: backups older than 30 days")
+		fmt.Println("")
+
+		// Apply smart defaults
+		keep = 10
+		olderThan = "30d"
+
+		// Auto is dry-run by default unless --execute is provided
+		if !execute {
+			dryRun = true
+			force = true
+		}
+	}
 
 	// Load config
 	cfg, err := config.LoadConfig()
@@ -96,6 +118,10 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 		fmt.Println("Dry run - no changes will be made:")
 		fmt.Println("")
 		fmt.Printf("Would delete %d backup set(s), freeing %s\n", len(candidates), formatSize(freedSpace))
+		if auto && !execute {
+			fmt.Println("")
+			fmt.Printf("Run 'dotcor cleanup-backups --auto --execute' to proceed.\n")
+		}
 		return nil
 	}
 

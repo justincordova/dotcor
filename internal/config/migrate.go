@@ -167,6 +167,10 @@ func MigrateFromEmpty(config *Config) error {
 		config.IgnorePatterns = GetDefaultIgnorePatterns()
 	}
 
+	if config.LargeFileThreshold == 0 {
+		config.LargeFileThreshold = 100 * 1024 * 1024 // 100MB default
+	}
+
 	return nil
 }
 

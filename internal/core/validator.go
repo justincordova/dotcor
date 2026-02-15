@@ -48,8 +48,8 @@ var secretPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)credentials\s*[:=]\s*['"]?[^\s'";]{10,}['"]?`),
 }
 
-// Large file warning threshold (100MB)
-const LargeFileThreshold = 100 * 1024 * 1024
+// DefaultLargeFileThreshold is the fallback large file warning threshold (100MB)
+const DefaultLargeFileThreshold = 100 * 1024 * 1024
 
 // ValidateSourceFile checks if source file is valid for adding
 func ValidateSourceFile(path string, cfg *config.Config) error {
@@ -168,9 +168,16 @@ func ValidateNotInDotcorDir(path string, cfg *config.Config) error {
 	return nil
 }
 
-// ValidateFileSize checks file isn't unreasonably large (>100MB warning)
+// ValidateFileSize checks file isn't unreasonably large (configurable threshold)
 func ValidateFileSize(path string, cfg *config.Config) error {
 	cfg.Logger.Debug("validating file size", "file", path)
+
+	// Check if size validation is disabled (0 or negative)
+	threshold := cfg.LargeFileThreshold
+	if threshold <= 0 {
+		cfg.Logger.Debug("file size validation disabled", "file", path)
+		return nil
+	}
 
 	expanded, err := config.ExpandPath(path, cfg)
 	if err != nil {
@@ -185,9 +192,9 @@ func ValidateFileSize(path string, cfg *config.Config) error {
 	}
 
 	size := info.Size()
-	cfg.Logger.Debug("file size check", "file", path, "size", size, "threshold", LargeFileThreshold)
+	cfg.Logger.Debug("file size check", "file", path, "size", size, "threshold", threshold)
 
-	if size > LargeFileThreshold {
+	if size > int64(threshold) {
 		sizeMB := float64(size) / (1024 * 1024)
 		cfg.Logger.Warn("file is very large", "file", path, "size_mb", sizeMB)
 		return fmt.Errorf("file is very large (%.1fMB), consider excluding: %s", sizeMB, path)

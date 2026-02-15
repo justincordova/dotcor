@@ -15,20 +15,27 @@ import (
 )
 
 var listBackupsCmd = &cobra.Command{
-	Use:   "list-backups [file]",
+	Use:   "list-backups",
 	Short: "List all backups",
 	Long: `List all backup files for managed dotfiles.
 
 Shows timestamped backups with their age and size.
-Can list all backups or filter by specific file.
+Can list all backups or filter by various criteria.
 
 Examples:
-  dotcor list-backups                 # List all backups
-  dotcor list-backups ~/.zshrc          # List backups for specific file`,
+  dotcor list-backups                           # List all backups
+  dotcor list-backups --file ~/.zshrc          # List backups for specific file
+  dotcor list-backups --older-than 7d          # List backups older than 7 days
+  dotcor list-backups --newer-than 1d          # List backups newer than 1 day
+  dotcor list-backups --pattern "config/*"     # List backups matching pattern`,
 	RunE: runListBackups,
 }
 
 func init() {
+	listBackupsCmd.Flags().String("file", "", "Filter by specific file path")
+	listBackupsCmd.Flags().String("older-than", "", "Show backups older than X (e.g., \"7d\", \"30d\", \"1m\")")
+	listBackupsCmd.Flags().String("newer-than", "", "Show backups newer than X (e.g., \"7d\", \"30d\", \"1m\")")
+	listBackupsCmd.Flags().String("pattern", "", "Filter by file pattern (e.g., \"config/*\")")
 }
 
 func runListBackups(cmd *cobra.Command, args []string) error {
