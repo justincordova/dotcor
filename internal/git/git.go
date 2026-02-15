@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -461,16 +460,25 @@ func GetChangedFiles(repoPath string) ([]string, error) {
 
 	var files []string
 	lines := strings.Split(string(output), "\n")
-	// Match pattern: XY filename (where XY is status codes)
-	re := regexp.MustCompile(`^.{2}\s+(.+)$`)
 
 	for _, line := range lines {
+		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		matches := re.FindStringSubmatch(line)
-		if len(matches) >= 2 {
-			files = append(files, matches[1])
+
+		// Git status --porcelain format: XY filename
+		// X and Y are single characters for staged and unstaged status
+		// They can be spaces if no change
+		if len(line) < 4 {
+			continue
+		}
+
+		// Extract filename (everything after first 3 characters: X, Y, and space)
+		// Examples: "M .zshrc" or "M  filename" or "MM filename"
+		filename := strings.TrimSpace(line[3:])
+		if filename != "" {
+			files = append(files, filename)
 		}
 	}
 
