@@ -166,10 +166,21 @@ func showQuickStatus(cfg *config.Config) {
 	files := cfg.ManagedFiles
 	totalFiles := len(files)
 
+	// Get changed files from git
+	var changedFiles []string
+	var gitStatus git.StatusInfo
+	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
+	if err == nil && git.IsGitInstalled() && git.IsRepo(repoPath) {
+		gitStatus, err = git.GetStatus(repoPath)
+		if err == nil {
+			changedFiles = gitStatus.ChangedFiles
+		}
+	}
+
 	// Count problems
 	problemCount := 0
 	for _, f := range files {
-		fs := CheckFileStatus(cfg, f)
+		fs := CheckFileStatus(cfg, f, changedFiles)
 		if fs.Status != "ok" {
 			problemCount++
 		}
@@ -191,24 +202,18 @@ func showQuickStatus(cfg *config.Config) {
 	}
 
 	// Git status
-	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
-	if err == nil && git.IsGitInstalled() && git.IsRepo(repoPath) {
-		gitStatus, err := git.GetStatus(repoPath)
-		if err == nil {
-			if gitStatus.HasUncommitted {
-				fmt.Printf("  %s %s uncommitted changes\n", colorYellow, colorReset)
-			} else {
-				fmt.Printf("  %s*%s clean %s[OK]%s\n", colorGreen, colorReset, colorGreen, colorReset)
-			}
+	if len(changedFiles) > 0 || gitStatus.HasUncommitted {
+		fmt.Printf("  %s %s uncommitted changes\n", colorYellow, colorReset)
+	} else if git.IsGitInstalled() && git.IsRepo(repoPath) {
+		fmt.Printf("  %s*%s clean %s[OK]%s\n", colorGreen, colorReset, colorGreen, colorReset)
+	}
 
-			if gitStatus.RemoteExists {
-				if gitStatus.AheadBy > 0 {
-					fmt.Printf("  %s↑%s %d to push\n", colorCyan, colorReset, gitStatus.AheadBy)
-				}
-				if gitStatus.BehindBy > 0 {
-					fmt.Printf("  %s↓%s %d to pull\n", colorCyan, colorReset, gitStatus.BehindBy)
-				}
-			}
+	if gitStatus.RemoteExists {
+		if gitStatus.AheadBy > 0 {
+			fmt.Printf("  %s↑%s %d to push\n", colorCyan, colorReset, gitStatus.AheadBy)
+		}
+		if gitStatus.BehindBy > 0 {
+			fmt.Printf("  %s↓%s %d to pull\n", colorCyan, colorReset, gitStatus.BehindBy)
 		}
 	}
 

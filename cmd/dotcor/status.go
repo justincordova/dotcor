@@ -151,20 +151,9 @@ func collectStatus(cfg *config.Config, fileArgs []string) StatusReport {
 	}
 	report.Statistics.TotalFiles = len(files)
 
-	// Check each file
-	for _, f := range files {
-		fs := CheckFileStatus(cfg, f)
-		report.Files = append(report.Files, fs)
-
-		if fs.Status == "ok" {
-			report.Statistics.HealthyFiles++
-		} else {
-			report.Statistics.ProblematicFiles++
-		}
-	}
-
-	// Get git status
+	// Get git status first to have changed files available
 	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
+	var changedFiles []string
 	if err == nil && git.IsGitInstalled() && git.IsRepo(repoPath) {
 		gitStatus, _ := git.GetStatus(repoPath)
 		report.GitStatus = GitStatusInfo{
@@ -176,16 +165,38 @@ func collectStatus(cfg *config.Config, fileArgs []string) StatusReport {
 			BehindBy:       gitStatus.BehindBy,
 			RemoteExists:   gitStatus.RemoteExists,
 		}
+		changedFiles = gitStatus.ChangedFiles
+	}
+
+	// Check each file
+	for _, f := range files {
+		fs := CheckFileStatus(cfg, f, changedFiles)
+		report.Files = append(report.Files, fs)
+
+		if fs.Status == "ok" {
+			report.Statistics.HealthyFiles++
+		} else {
+			report.Statistics.ProblematicFiles++
+		}
 	}
 
 	return report
 }
 
 // CheckFileStatus checks the status of a single managed file
-func CheckFileStatus(cfg *config.Config, mf config.ManagedFile) FileStatus {
+func CheckFileStatus(cfg *config.Config, mf config.ManagedFile, changedFiles []string) FileStatus {
 	status := FileStatus{
 		SourcePath: mf.SourcePath,
 		RepoPath:   mf.RepoPath,
+	}
+
+	// Check if file has uncommitted changes
+	for _, cf := range changedFiles {
+		if cf == mf.RepoPath {
+			status.Status = "modified"
+			status.Problem = "uncommitted changes"
+			return status
+		}
 	}
 
 	// Expand paths
@@ -292,6 +303,8 @@ func outputStatusFull(status StatusReport, problemsOnly bool, cfg *config.Config
 			icon := getStatusIcon(f.Status)
 			if f.Status == "ok" {
 				fmt.Fprintf(w, "  %s %s\tok\n", icon, f.SourcePath)
+			} else if f.Status == "modified" {
+				fmt.Fprintf(w, "  %s %s\t~\n", icon, f.SourcePath)
 			} else {
 				fmt.Fprintf(w, "  %s %s\t%s\n", icon, f.SourcePath, f.Problem)
 				hasProblems = true
@@ -500,6 +513,8 @@ func getStatusIcon(status string) string {
 	switch status {
 	case "ok":
 		return colorGreen + "[OK]" + colorReset
+	case "modified":
+		return colorYellow + "[!]" + colorReset
 	case "missing-repo", "missing-source", "broken", "not-symlink", "wrong-target":
 		return colorRed + "[X]" + colorReset
 	default:
