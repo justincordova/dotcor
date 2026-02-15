@@ -36,7 +36,6 @@ Examples:
 func init() {
 	adoptCmd.Flags().Bool("scan", false, "Scan home directory for symlinks pointing to dotcor repo")
 	adoptCmd.Flags().Bool("dry-run", false, "Show what would be adopted without making changes")
-	rootCmd.AddCommand(adoptCmd)
 }
 
 func runAdopt(cmd *cobra.Command, args []string) error {

@@ -53,7 +53,6 @@ Examples:
 func init() {
 	cloneCmd.Flags().Bool("apply", false, "Create symlinks after cloning")
 	cloneCmd.Flags().BoolP("force", "f", false, "Overwrite existing dotcor directory")
-	rootCmd.AddCommand(cloneCmd)
 }
 
 func runClone(cmd *cobra.Command, args []string) error {

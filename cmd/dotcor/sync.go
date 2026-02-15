@@ -39,7 +39,6 @@ func init() {
 	syncCmd.Flags().Bool("dry-run", false, "Alias for --preview")
 	syncCmd.Flags().BoolP("force", "f", false, "Sync without confirmation")
 	syncCmd.Flags().StringP("message", "m", "", "Custom commit message")
-	rootCmd.AddCommand(syncCmd)
 }
 
 func runSync(cmd *cobra.Command, args []string) error {

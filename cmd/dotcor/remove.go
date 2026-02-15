@@ -35,7 +35,6 @@ func init() {
 	removeCmd.Flags().Bool("all", false, "Remove all files from management")
 	removeCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompts")
 	removeCmd.Flags().Bool("dry-run", false, "Show what would be done without making changes")
-	rootCmd.AddCommand(removeCmd)
 }
 
 func runRemove(cmd *cobra.Command, args []string) error {

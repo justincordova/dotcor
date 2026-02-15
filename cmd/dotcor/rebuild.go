@@ -39,7 +39,6 @@ func init() {
 	rebuildCmd.Flags().Bool("scan", false, "Scan repository for files and add to config")
 	rebuildCmd.Flags().Bool("verify", false, "Verify config matches repository")
 	rebuildCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompts")
-	rootCmd.AddCommand(rebuildCmd)
 }
 
 func runRebuild(cmd *cobra.Command, args []string) error {

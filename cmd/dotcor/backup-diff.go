@@ -28,7 +28,6 @@ Examples:
 
 func init() {
 	backupDiffCmd.Flags().BoolP("stat", "s", false, "Show summary of changes")
-	rootCmd.AddCommand(backupDiffCmd)
 }
 
 func runBackupDiff(cmd *cobra.Command, args []string) error {

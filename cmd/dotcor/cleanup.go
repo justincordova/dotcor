@@ -34,7 +34,6 @@ func init() {
 	cleanupCmd.Flags().Bool("all", false, "Remove all backups")
 	cleanupCmd.Flags().Bool("dry-run", false, "Show what would be removed without making changes")
 	cleanupCmd.Flags().BoolP("force", "f", false, "Skip confirmation")
-	rootCmd.AddCommand(cleanupCmd)
 }
 
 func runCleanup(cmd *cobra.Command, args []string) error {

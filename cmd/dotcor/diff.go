@@ -31,7 +31,6 @@ func init() {
 	diffCmd.Flags().Bool("stat", false, "Show diffstat (summary of changes)")
 	diffCmd.Flags().Bool("name-only", false, "Show only names of changed files")
 	diffCmd.Flags().Bool("staged", false, "Show staged changes only")
-	rootCmd.AddCommand(diffCmd)
 }
 
 func runDiff(cmd *cobra.Command, args []string) error {

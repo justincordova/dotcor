@@ -37,7 +37,6 @@ func init() {
 	restoreCmd.Flags().Bool("preview", false, "Show what would be restored without making changes")
 	restoreCmd.Flags().Bool("dry-run", false, "Alias for --preview")
 	restoreCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompts")
-	rootCmd.AddCommand(restoreCmd)
 }
 
 func runRestore(cmd *cobra.Command, args []string) error {

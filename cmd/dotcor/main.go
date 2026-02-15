@@ -104,8 +104,26 @@ func init() {
 	rootCmd.PersistentFlags().String("log-file", "", "Write logs to file")
 	rootCmd.PersistentFlags().Bool("json", false, "Output logs in JSON format")
 
+	// Add commands in order of importance (most common first)
+	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(addCmd)
+	rootCmd.AddCommand(removeCmd)
+	rootCmd.AddCommand(statusCmd)
+	rootCmd.AddCommand(syncCmd)
+	rootCmd.AddCommand(restoreCmd)
+	rootCmd.AddCommand(historyCmd)
+	rootCmd.AddCommand(diffCmd)
+	rootCmd.AddCommand(adoptCmd)
+	rootCmd.AddCommand(doctorCmd)
+	rootCmd.AddCommand(rebuildCmd)
+	rootCmd.AddCommand(rebuildLinksCmd)
+	rootCmd.AddCommand(cloneCmd)
+	rootCmd.AddCommand(cleanupCmd)
+	rootCmd.AddCommand(listBackupsCmd)
+	rootCmd.AddCommand(backupDiffCmd)
+
 	// Set custom help templates with colors
-	rootCmd.SetHelpTemplate(fmt.Sprintf(helpTemplate, colorLightPink, colorReset, colorLightPink, colorReset, colorLightPink, colorReset))
+	rootCmd.SetHelpTemplate(fmt.Sprintf(helpTemplate, colorLightPink, colorReset, colorLightPink, colorReset))
 	rootCmd.SetUsageTemplate(fmt.Sprintf(usageTemplate, colorLightPink, colorReset, colorLightPink, colorReset, colorLightPink, colorReset))
 
 	// Replace help command to add ? as an alias

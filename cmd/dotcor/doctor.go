@@ -31,7 +31,6 @@ Examples:
 
 func init() {
 	doctorCmd.Flags().Bool("fix", false, "Attempt to fix found issues")
-	rootCmd.AddCommand(doctorCmd)
 }
 
 func runDoctor(cmd *cobra.Command, args []string) error {

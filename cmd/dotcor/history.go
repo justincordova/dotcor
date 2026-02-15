@@ -31,7 +31,6 @@ func init() {
 	historyCmd.Flags().IntP("number", "n", 10, "Number of commits to show")
 	historyCmd.Flags().Bool("oneline", false, "Show compact one-line format")
 	historyCmd.Flags().Bool("json", false, "Output as JSON")
-	rootCmd.AddCommand(historyCmd)
 }
 
 func runHistory(cmd *cobra.Command, args []string) error {

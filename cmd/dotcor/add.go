@@ -37,7 +37,6 @@ func init() {
 	addCmd.Flags().BoolP("force", "f", false, "Force add, ignoring warnings (not errors)")
 	addCmd.Flags().Bool("template", false, "Treat file as template (adds .template extension)")
 	addCmd.Flags().Bool("dry-run", false, "Show what would be done without making changes")
-	rootCmd.AddCommand(addCmd)
 }
 
 func runAdd(cmd *cobra.Command, args []string) error {

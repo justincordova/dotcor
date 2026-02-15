@@ -37,7 +37,6 @@ func init() {
 	statusCmd.Flags().Bool("problems", false, "Show only files with problems")
 	statusCmd.Flags().Bool("json", false, "Output as JSON")
 	statusCmd.Flags().Bool("prompt", false, "Output minimal for shell prompts")
-	rootCmd.AddCommand(statusCmd)
 }
 
 func runStatus(cmd *cobra.Command, args []string) error {

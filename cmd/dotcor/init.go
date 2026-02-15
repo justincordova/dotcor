@@ -48,7 +48,6 @@ Examples:
 func init() {
 	initCmd.Flags().Bool("apply", false, "Create symlinks from existing config (for new machine setup)")
 	initCmd.Flags().Bool("interactive", false, "Interactively select existing dotfiles to add")
-	rootCmd.AddCommand(initCmd)
 }
 
 func runInit(cmd *cobra.Command, args []string) error {

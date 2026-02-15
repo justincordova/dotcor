@@ -29,7 +29,6 @@ Examples:
 }
 
 func init() {
-	rootCmd.AddCommand(listBackupsCmd)
 }
 
 func runListBackups(cmd *cobra.Command, args []string) error {

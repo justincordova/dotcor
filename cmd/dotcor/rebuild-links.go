@@ -44,7 +44,6 @@ Examples:
 
 func init() {
 	rebuildLinksCmd.Flags().Bool("dry-run", false, "Show what would be done without making changes")
-	rootCmd.AddCommand(rebuildLinksCmd)
 }
 
 func runRebuildLinks(cmd *cobra.Command, args []string) error {
