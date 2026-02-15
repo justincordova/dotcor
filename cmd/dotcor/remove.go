@@ -20,25 +20,26 @@ var removeCmd = &cobra.Command{
 	Aliases: []string{"rm"},
 	Long: `Remove dotfiles from DotCor management.
 
-By default, the file is copied back to its original location and removed
-from the repository. Use --keep-repo to leave the file in the repository.
+By default, the file is removed from management but kept in the repository.
+The symlink at the original location is deleted. Use --delete-repo to also
+remove the file from the repository (copies it back to source location).
 
 Examples:
-  dotcor remove ~/.zshrc              # Remove file, copy back to original location
-  dotcor remove ~/.zshrc --keep-repo  # Remove from management but keep in repo
+  dotcor remove ~/.zshrc              # Remove from management, keep in repo (default)
+  dotcor remove ~/.zshrc --delete-repo  # Remove from management and delete from repo
   dotcor remove --all                 # Remove all files from management`,
 	RunE: runRemove,
 }
 
 func init() {
-	removeCmd.Flags().Bool("keep-repo", false, "Keep file in repository after removing")
+	removeCmd.Flags().Bool("delete-repo", false, "Delete file from repository (copies back to source location)")
 	removeCmd.Flags().Bool("all", false, "Remove all files from management")
 	removeCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompts")
 	removeCmd.Flags().Bool("dry-run", false, "Show what would be done without making changes")
 }
 
 func runRemove(cmd *cobra.Command, args []string) error {
-	keepRepo, _ := cmd.Flags().GetBool("keep-repo")
+	deleteRepo, _ := cmd.Flags().GetBool("delete-repo")
 	removeAll, _ := cmd.Flags().GetBool("all")
 	force, _ := cmd.Flags().GetBool("force")
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
@@ -130,7 +131,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 	removed := 0
 
 	for _, mf := range filesToRemove {
-		err := processRemoveFile(cfg, mf, keepRepo, dryRun)
+		err := processRemoveFile(cfg, mf, !deleteRepo, dryRun)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  %s[X]%s %s: %v\n", colorRed, colorReset, mf.SourcePath, err)
 			continue
@@ -148,7 +149,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Removed %d file(s) from management\n", removed)
 
 	// Git commit
-	if git.IsGitInstalled() && removed > 0 && !keepRepo {
+	if git.IsGitInstalled() && removed > 0 && deleteRepo {
 		repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
 		if err != nil {
 			fmt.Printf("%s[!]%s Git commit skipped: invalid repo path: %v\n", colorYellow, colorReset, err)
@@ -180,6 +181,9 @@ func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool,
 	if dryRun {
 		fmt.Printf("  - %s\n", mf.SourcePath)
 		if !keepRepo {
+			fmt.Printf("    → Remove symlink from %s\n", sourcePath)
+			fmt.Printf("    → Keep in repo: %s\n", mf.RepoPath)
+		} else {
 			fmt.Printf("    → Copy to %s\n", sourcePath)
 			fmt.Printf("    → Remove from repo: %s\n", mf.RepoPath)
 		}
@@ -262,7 +266,11 @@ func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool,
 		fmt.Printf("  %s[!]%s Post-remove hook warning: %v\n", colorYellow, colorReset, err)
 	}
 
-	fmt.Printf("  %s[OK]%s %s\n", colorGreen, colorReset, mf.SourcePath)
+	if keepRepo {
+		fmt.Printf("  %s[OK]%s %s (removed from management, kept in repo)\n", colorGreen, colorReset, mf.SourcePath)
+	} else {
+		fmt.Printf("  %s[OK]%s %s (removed from management and repo)\n", colorGreen, colorReset, mf.SourcePath)
+	}
 	return nil
 }
 
