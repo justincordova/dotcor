@@ -38,6 +38,9 @@ const (
 	colorPink      = "\033[38;5;205m"
 	colorLightPink = "\033[38;5;218m"
 	colorLime      = "\033[38;5;118m"
+	colorCritical  = "\033[38;5;196m"
+	colorWarnLabel = "\033[38;5;226m"
+	colorInfoLabel = "\033[38;5;39m"
 )
 
 // Success prints success message in green
