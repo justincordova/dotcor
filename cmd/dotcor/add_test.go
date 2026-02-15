@@ -1116,7 +1116,7 @@ func TestAdd_PathCollision(t *testing.T) {
 	}
 
 	// Act - Add file first time
-	result1, repoPath1, err1 := processAddFile(cfg, "~/.zshrc_test", false, false, false)
+	result1, repoPath1, err1 := processAddFile(cfg, "~/.zshrc_test", false, false, false, false)
 
 	// Assert - Should succeed
 	assert.NoError(t, err1, "first add should succeed")
@@ -1131,7 +1131,7 @@ func TestAdd_PathCollision(t *testing.T) {
 	})
 
 	// Act - Try to add same file again
-	result2, _, err2 := processAddFile(cfg, "~/.zshrc_test", false, false, false)
+	result2, _, err2 := processAddFile(cfg, "~/.zshrc_test", false, false, false, false)
 
 	// Assert - Should skip gracefully when file is already managed
 	assert.NoError(t, err2, "second add should skip gracefully when file is already managed")

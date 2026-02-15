@@ -36,6 +36,7 @@ func init() {
 	removeCmd.Flags().Bool("all", false, "Remove all files from management")
 	removeCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompts")
 	removeCmd.Flags().Bool("dry-run", false, "Show what would be done without making changes")
+	removeCmd.Flags().Bool("batch", false, "Batch mode: confirm once for all files, show progress")
 }
 
 func runRemove(cmd *cobra.Command, args []string) error {
@@ -43,6 +44,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 	removeAll, _ := cmd.Flags().GetBool("all")
 	force, _ := cmd.Flags().GetBool("force")
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
+	batch, _ := cmd.Flags().GetBool("batch")
 
 	if !removeAll && len(args) == 0 {
 		return fmt.Errorf("specify files to remove or use --all")
@@ -101,7 +103,14 @@ func runRemove(cmd *cobra.Command, args []string) error {
 	}
 
 	// Confirmation
-	if !force && !dryRun {
+	if batch && !force && !dryRun {
+		if err := confirmBatchOperation(len(filesToRemove), "remove", force); err != nil {
+			return err
+		}
+		fmt.Println("")
+	}
+
+	if !batch && !force && !dryRun {
 		fmt.Printf("%sSummary:%s\n", colorLightPink, colorReset)
 		fmt.Printf("  Files to remove: %d\n", len(filesToRemove))
 		fmt.Println("  Backups will be preserved")
@@ -127,16 +136,33 @@ func runRemove(cmd *cobra.Command, args []string) error {
 		fmt.Println("")
 	}
 
+	useProgress := shouldUseProgress(len(filesToRemove), batch)
+
 	// Process each file
 	removed := 0
 
+	var progress *Progress
+	if useProgress {
+		progress = NewProgress(len(filesToRemove), 20)
+	}
+
 	for _, mf := range filesToRemove {
-		err := processRemoveFile(cfg, mf, !deleteRepo, dryRun)
+		if useProgress && progress != nil {
+			progress.Update()
+		}
+		err := processRemoveFile(cfg, mf, !deleteRepo, dryRun, useProgress)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  %s[X]%s %s: %v\n", colorRed, colorReset, mf.SourcePath, err)
+			if !useProgress {
+				fmt.Fprintf(os.Stderr, "  %s[X]%s %s: %v\n", colorRed, colorReset, mf.SourcePath, err)
+			}
 			continue
 		}
 		removed++
+	}
+
+	if useProgress && progress != nil {
+		progress.Done()
+		fmt.Println("")
 	}
 
 	// Summary
@@ -167,7 +193,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 }
 
 // processRemoveFile handles removing a single file
-func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool, dryRun bool) error {
+func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool, dryRun bool, quiet bool) error {
 	sourcePath, err := config.ExpandPath(mf.SourcePath, cfg)
 	if err != nil {
 		return fmt.Errorf("invalid source path: %w", err)
@@ -191,7 +217,9 @@ func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool,
 	}
 
 	if err := core.RunHook(core.HookContext{HookType: "pre-remove", FilePath: mf.SourcePath}, cfg); err != nil {
-		fmt.Printf("  %s[!]%s Pre-remove hook warning: %v\n", colorYellow, colorReset, err)
+		if !quiet {
+			fmt.Printf("  %s[!]%s Pre-remove hook warning: %v\n", colorYellow, colorReset, err)
+		}
 	}
 
 	// Check if source is a symlink
@@ -214,10 +242,14 @@ func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool,
 		}
 
 		if err := core.RunHook(core.HookContext{HookType: "post-remove", FilePath: mf.SourcePath}, cfg); err != nil {
-			fmt.Printf("  %s[!]%s Post-remove hook warning: %v\n", colorYellow, colorReset, err)
+			if !quiet {
+				fmt.Printf("  %s[!]%s Post-remove hook warning: %v\n", colorYellow, colorReset, err)
+			}
 		}
 
-		fmt.Printf("  %s[OK]%s %s (removed from management, kept in repo)\n", colorGreen, colorReset, mf.SourcePath)
+		if !quiet {
+			fmt.Printf("  %s[OK]%s %s (removed from management, kept in repo)\n", colorGreen, colorReset, mf.SourcePath)
+		}
 		return nil
 	}
 
@@ -226,7 +258,9 @@ func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool,
 	// First, create backup of repo file
 	if fs.PathExists(repoPath) {
 		if _, err := core.CreateBackup(repoPath, cfg); err != nil {
-			fmt.Printf("  %s[!]%s Backup failed for %s: %v\n", colorYellow, colorReset, mf.RepoPath, err)
+			if !quiet {
+				fmt.Printf("  %s[!]%s Backup failed for %s: %v\n", colorYellow, colorReset, mf.RepoPath, err)
+			}
 		}
 	}
 
@@ -263,13 +297,17 @@ func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool,
 	}
 
 	if err := core.RunHook(core.HookContext{HookType: "post-remove", FilePath: mf.SourcePath}, cfg); err != nil {
-		fmt.Printf("  %s[!]%s Post-remove hook warning: %v\n", colorYellow, colorReset, err)
+		if !quiet {
+			fmt.Printf("  %s[!]%s Post-remove hook warning: %v\n", colorYellow, colorReset, err)
+		}
 	}
 
-	if keepRepo {
-		fmt.Printf("  %s[OK]%s %s (removed from management, kept in repo)\n", colorGreen, colorReset, mf.SourcePath)
-	} else {
-		fmt.Printf("  %s[OK]%s %s (removed from management and repo)\n", colorGreen, colorReset, mf.SourcePath)
+	if !quiet {
+		if keepRepo {
+			fmt.Printf("  %s[OK]%s %s (removed from management, kept in repo)\n", colorGreen, colorReset, mf.SourcePath)
+		} else {
+			fmt.Printf("  %s[OK]%s %s (removed from management and repo)\n", colorGreen, colorReset, mf.SourcePath)
+		}
 	}
 	return nil
 }

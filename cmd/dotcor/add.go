@@ -70,12 +70,14 @@ func init() {
 	addCmd.Flags().BoolP("force", "f", false, "Force add, ignoring warnings (not errors)")
 	addCmd.Flags().Bool("template", false, "Treat file as template (adds .template extension)")
 	addCmd.Flags().Bool("dry-run", false, "Show what would be done without making changes")
+	addCmd.Flags().Bool("batch", false, "Batch mode: confirm once for all files, show progress")
 }
 
 func runAdd(cmd *cobra.Command, args []string) error {
 	force, _ := cmd.Flags().GetBool("force")
 	isTemplate, _ := cmd.Flags().GetBool("template")
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
+	batch, _ := cmd.Flags().GetBool("batch")
 
 	// Load config
 	cfg, err := config.LoadConfig()
@@ -128,8 +130,17 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		fmt.Println("")
 	}
 
+	useProgress := shouldUseProgress(len(files), batch)
+
 	// Show summary and ask for confirmation
-	if !force && !dryRun {
+	if batch && !force && !dryRun {
+		if err := confirmBatchOperation(len(files), "add", force); err != nil {
+			return err
+		}
+		fmt.Println("")
+	}
+
+	if !batch && !force && !dryRun {
 		// Calculate total size
 		var totalSize int64
 		for _, file := range files {
@@ -161,19 +172,33 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	added := 0
 	skipped := 0
 
+	var progress *Progress
+	if useProgress {
+		progress = NewProgress(len(files), 20)
+	}
+
 	for _, file := range files {
-		result, _, err := processAddFile(cfg, file, force, isTemplate, dryRun)
+		if useProgress && progress != nil {
+			progress.Update()
+		}
+
+		result, _, err := processAddFile(cfg, file, force, isTemplate, dryRun, useProgress)
 		switch result {
 		case addResultSuccess:
 			added++
 		case addResultSkipped:
 			skipped++
 		case addResultError:
-			if err != nil {
+			if err != nil && !useProgress {
 				fmt.Fprintf(os.Stderr, "  %s[X]%s %s: %v\n", colorRed, colorReset, file, err)
 			}
 			skipped++
 		}
+	}
+
+	if useProgress && progress != nil {
+		progress.Done()
+		fmt.Println("")
 	}
 
 	// Summary
@@ -215,7 +240,7 @@ const (
 )
 
 // processAddFile handles adding a single file
-func processAddFile(cfg *config.Config, sourcePath string, force bool, isTemplate bool, dryRun bool) (addResult, string, error) {
+func processAddFile(cfg *config.Config, sourcePath string, force bool, isTemplate bool, dryRun bool, quiet bool) (addResult, string, error) {
 	// Expand source path
 	expanded, err := config.ExpandPath(sourcePath, cfg)
 	if err != nil {
@@ -235,14 +260,18 @@ func processAddFile(cfg *config.Config, sourcePath string, force bool, isTemplat
 
 	// Check if already managed
 	if cfg.IsManaged(sourcePath) {
-		fmt.Printf("  - %s (already managed)\n", normalized)
+		if !quiet {
+			fmt.Printf("  - %s (already managed)\n", normalized)
+		}
 		return addResultSkipped, "", nil
 	}
 
 	// Check ignore patterns
 	shouldIgnore, pattern := core.ShouldIgnore(expanded, cfg.IgnorePatterns)
 	if shouldIgnore {
-		fmt.Printf("  - %s (ignored - matches %s)\n", normalized, pattern)
+		if !quiet {
+			fmt.Printf("  - %s (ignored - matches %s)\n", normalized, pattern)
+		}
 		return addResultSkipped, "", nil
 	}
 
@@ -250,7 +279,9 @@ func processAddFile(cfg *config.Config, sourcePath string, force bool, isTemplat
 	if err := core.ValidateSourceFile(expanded, cfg); err != nil {
 		// Check if it's a warning vs error
 		if isWarning(err) && force {
-			fmt.Printf("  %s[!]%s %s: %v (forced)\n", colorYellow, colorReset, normalized, err)
+			if !quiet {
+				fmt.Printf("  %s[!]%s %s: %v (forced)\n", colorYellow, colorReset, normalized, err)
+			}
 		} else {
 			return addResultError, "", err
 		}
@@ -262,7 +293,9 @@ func processAddFile(cfg *config.Config, sourcePath string, force bool, isTemplat
 		if !force {
 			return addResultError, "", fmt.Errorf("potential secrets detected: %v\nUse --force to add anyway", secrets)
 		}
-		fmt.Printf("  %s[!]%s %s: potential secrets detected (forced)\n", colorYellow, colorReset, normalized)
+		if !quiet {
+			fmt.Printf("  %s[!]%s %s: potential secrets detected (forced)\n", colorYellow, colorReset, normalized)
+		}
 	}
 
 	// Generate repo path
@@ -287,7 +320,9 @@ func processAddFile(cfg *config.Config, sourcePath string, force bool, isTemplat
 	}
 
 	if err := core.RunHook(core.HookContext{HookType: "pre-add", FilePath: sourcePath}, cfg); err != nil {
-		fmt.Printf("  %s[!]%s Pre-add hook warning: %v\n", colorYellow, colorReset, err)
+		if !quiet {
+			fmt.Printf("  %s[!]%s Pre-add hook warning: %v\n", colorYellow, colorReset, err)
+		}
 	}
 
 	// Create backup
@@ -321,17 +356,23 @@ func processAddFile(cfg *config.Config, sourcePath string, force bool, isTemplat
 		// Try to restore from backup if we have one
 		if backupPath != "" {
 			if restoreErr := core.RestoreBackup(backupPath, expanded, cfg); restoreErr != nil {
-				fmt.Fprintf(os.Stderr, "  %s[!]%s Failed to restore backup: %v\n", colorYellow, colorReset, restoreErr)
+				if !quiet {
+					fmt.Fprintf(os.Stderr, "  %s[!]%s Failed to restore backup: %v\n", colorYellow, colorReset, restoreErr)
+				}
 			}
 		}
 		return addResultError, "", err
 	}
 
 	tx.Commit()
-	fmt.Printf("  %s[OK]%s %s\n", colorGreen, colorReset, normalized)
+	if !quiet {
+		fmt.Printf("  %s[OK]%s %s\n", colorGreen, colorReset, normalized)
+	}
 
 	if err := core.RunHook(core.HookContext{HookType: "post-add", FilePath: sourcePath, RepoPath: repoPath}, cfg); err != nil {
-		fmt.Printf("  %s[!]%s Post-add hook warning: %v\n", colorYellow, colorReset, err)
+		if !quiet {
+			fmt.Printf("  %s[!]%s Post-add hook warning: %v\n", colorYellow, colorReset, err)
+		}
 	}
 
 	// Return relative repoPath (consistent with dry-run return)
