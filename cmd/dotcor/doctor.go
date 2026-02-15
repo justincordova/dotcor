@@ -36,11 +36,13 @@ Examples:
 }
 
 func init() {
-	doctorCmd.Flags().Bool("fix", false, "Attempt to fix found issues")
+	doctorCmd.Flags().Bool("fix", false, "Attempt to fix CRITICAL issues (requires explicit consent)")
+	doctorCmd.Flags().Bool("fix-all", false, "Attempt to fix WARNING and INFO issues automatically")
 }
 
 func runDoctor(cmd *cobra.Command, args []string) error {
 	fix, _ := cmd.Flags().GetBool("fix")
+	fixAll, _ := cmd.Flags().GetBool("fix-all")
 
 	fmt.Printf("\n  %sDotCor Doctor%s\n", colorLightPink, colorReset)
 	fmt.Println("")
@@ -51,63 +53,63 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 
 	// Check 1: Configuration
 	fmt.Println("Checking configuration...")
-	configIssues, configCritical, configFixed := checkConfiguration(fix, cmd)
+	configIssues, configCritical, configFixed := checkConfiguration(fix, fixAll, cmd)
 	issues += configIssues
 	critical += configCritical
 	fixed += configFixed
 
 	// Check 2: Lock file
 	fmt.Println("Checking lock file...")
-	lockIssues, lockCritical, lockFixed := checkLockFile(fix, cmd)
+	lockIssues, lockCritical, lockFixed := checkLockFile(fix, fixAll, cmd)
 	issues += lockIssues
 	critical += lockCritical
 	fixed += lockFixed
 
 	// Check 3: Repository
 	fmt.Println("Checking repository...")
-	repoIssues, repoCritical, repoFixed := checkRepository(fix, cmd)
+	repoIssues, repoCritical, repoFixed := checkRepository(fix, fixAll, cmd)
 	issues += repoIssues
 	critical += repoCritical
 	fixed += repoFixed
 
 	// Check 4: Symlinks
 	fmt.Println("Checking symlinks...")
-	symlinkIssues, symlinkCritical, symlinkFixed := checkSymlinks(fix, cmd)
+	symlinkIssues, symlinkCritical, symlinkFixed := checkSymlinks(fix, fixAll, cmd)
 	issues += symlinkIssues
 	critical += symlinkCritical
 	fixed += symlinkFixed
 
 	// Check 5: Orphaned files
 	fmt.Println("Checking for orphaned files...")
-	orphanIssues, orphanCritical, orphanFixed := checkOrphanedFiles(fix, cmd)
+	orphanIssues, orphanCritical, orphanFixed := checkOrphanedFiles(fix, fixAll, cmd)
 	issues += orphanIssues
 	critical += orphanCritical
 	fixed += orphanFixed
 
 	// Check 6: Permissions
 	fmt.Println("Checking permissions...")
-	permIssues, permCritical, permFixed := checkPermissions(fix, cmd)
+	permIssues, permCritical, permFixed := checkPermissions(fix, fixAll, cmd)
 	issues += permIssues
 	critical += permCritical
 	fixed += permFixed
 
 	// Check 7: Git config
 	fmt.Println("Checking git configuration...")
-	gitConfigIssues, gitConfigCritical, gitConfigFixed := checkGitConfig(fix, cmd)
+	gitConfigIssues, gitConfigCritical, gitConfigFixed := checkGitConfig(fix, fixAll, cmd)
 	issues += gitConfigIssues
 	critical += gitConfigCritical
 	fixed += gitConfigFixed
 
 	// Check 8: Git remote
 	fmt.Println("Checking git remote...")
-	gitRemoteIssues, gitRemoteCritical, gitRemoteFixed := checkGitRemote(fix, cmd)
+	gitRemoteIssues, gitRemoteCritical, gitRemoteFixed := checkGitRemote(fix, fixAll, cmd)
 	issues += gitRemoteIssues
 	critical += gitRemoteCritical
 	fixed += gitRemoteFixed
 
 	// Check 9: Hook permissions
 	fmt.Println("Checking hook permissions...")
-	hookPermIssues, hookPermCritical, hookPermFixed := checkHookPermissions(fix, cmd)
+	hookPermIssues, hookPermCritical, hookPermFixed := checkHookPermissions(fix, fixAll, cmd)
 	issues += hookPermIssues
 	critical += hookPermCritical
 	fixed += hookPermFixed
@@ -128,29 +130,41 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 			fmt.Println("")
 		} else {
 			fmt.Printf("Found %d issue(s)", issues)
-			if fix && fixed > 0 {
+			if (fix || fixAll) && fixed > 0 {
 				fmt.Printf(", fixed %d", fixed)
 			}
 			fmt.Println("")
 		}
 
-		if !fix && issues > fixed {
+		if !fix && !fixAll && issues > fixed {
 			fmt.Println("\nRun 'dotcor doctor --fix' to attempt repairs.")
+			fmt.Println("Run 'dotcor doctor --fix-all' to auto-fix non-critical issues.")
 		}
 	}
 
 	return nil
 }
 
+// shouldFix determines if an issue should be fixed based on severity and flags
+func shouldFix(severity string, fixCritical, fixNonCritical bool) bool {
+	if severity == severityCritical {
+		return fixCritical
+	}
+	if severity == severityWarning || severity == severityInfo {
+		return fixNonCritical
+	}
+	return false
+}
+
 // checkConfiguration validates the config file
-func checkConfiguration(fix bool, cmd *cobra.Command) (issues, critical, fixed int) {
+func checkConfiguration(fix, fixAll bool, cmd *cobra.Command) (issues, critical, fixed int) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		fmt.Printf("  %s[%s]%s Config error: %v\n", colorCritical, severityCritical, colorReset, err)
 		issues++
 		critical++
 
-		if fix {
+		if shouldFix(severityCritical, fix, fixAll) {
 			// Try to create default config
 			newCfg, err := config.NewDefaultConfig()
 			if err == nil {
@@ -178,7 +192,7 @@ func checkConfiguration(fix bool, cmd *cobra.Command) (issues, critical, fixed i
 		issues++
 		critical++
 
-		if fix {
+		if shouldFix(severityCritical, fix, fixAll) {
 			cfg, err := config.LoadConfig()
 			if err == nil {
 				configureLogger(cmd, cfg)
@@ -195,7 +209,7 @@ func checkConfiguration(fix bool, cmd *cobra.Command) (issues, critical, fixed i
 }
 
 // checkLockFile checks for stale locks
-func checkLockFile(fix bool, cmd *cobra.Command) (issues, critical, fixed int) {
+func checkLockFile(fix, fixAll bool, cmd *cobra.Command) (issues, critical, fixed int) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		fmt.Printf("  %s[%s]%s Config error: %v\n", colorCritical, severityCritical, colorReset, err)
@@ -237,20 +251,22 @@ func checkLockFile(fix bool, cmd *cobra.Command) (issues, critical, fixed int) {
 	fmt.Printf("  %s[%s]%s Stale lock from PID %d (process dead)\n", colorWarnLabel, severityWarning, colorReset, info.PID)
 	issues++
 
-	if fix {
+	if shouldFix(severityWarning, fix, fixAll) {
 		if err := core.ForceReleaseLock(cfg); err == nil {
 			fmt.Printf("  %s[OK]%s Removed stale lock\n", colorGreen, colorReset)
 			fixed++
 		} else {
 			fmt.Printf("  %s[X]%s Could not remove lock: %v\n", colorRed, colorReset, err)
 		}
+	} else {
+		fmt.Printf("  %s[Suggested]%s Remove stale lock file: %s\n", colorInfoLabel, colorReset, lockPath)
 	}
 
 	return
 }
 
 // checkRepository checks the Git repository
-func checkRepository(fix bool, cmd *cobra.Command) (issues, critical, fixed int) {
+func checkRepository(fix, fixAll bool, cmd *cobra.Command) (issues, critical, fixed int) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return
@@ -274,7 +290,7 @@ func checkRepository(fix bool, cmd *cobra.Command) (issues, critical, fixed int)
 		issues++
 		critical++
 
-		if fix {
+		if shouldFix(severityCritical, fix, fixAll) {
 			if err := git.InitRepo(repoPath); err == nil {
 				fmt.Printf("  %s[OK]%s Initialized Git repository\n", colorGreen, colorReset)
 				fixed++
@@ -289,7 +305,7 @@ func checkRepository(fix bool, cmd *cobra.Command) (issues, critical, fixed int)
 	hasChanges, _ := git.HasChanges(repoPath)
 	if hasChanges {
 		fmt.Printf("  %s[%s]%s Uncommitted changes in repository\n", colorWarnLabel, severityWarning, colorReset)
-		fmt.Println("    Run 'dotcor sync' to commit changes")
+		fmt.Printf("    %s[Suggested]%s Run: dotcor sync\n", colorInfoLabel, colorReset)
 	} else {
 		fmt.Printf("  %s[OK]%s Git repository healthy\n", colorGreen, colorReset)
 	}
@@ -298,7 +314,7 @@ func checkRepository(fix bool, cmd *cobra.Command) (issues, critical, fixed int)
 }
 
 // checkSymlinks validates all managed symlinks
-func checkSymlinks(fix bool, cmd *cobra.Command) (issues, critical, fixed int) {
+func checkSymlinks(fix, fixAll bool, cmd *cobra.Command) (issues, critical, fixed int) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return
@@ -327,7 +343,7 @@ func checkSymlinks(fix bool, cmd *cobra.Command) (issues, critical, fixed int) {
 			fmt.Printf("  %s[%s]%s Missing symlink: %s\n", colorWarnLabel, severityWarning, colorReset, mf.SourcePath)
 			issues++
 
-			if fix && fs.PathExists(repoPath) {
+			if shouldFix(severityWarning, fix, fixAll) && fs.PathExists(repoPath) {
 				if err := fs.CreateSymlink(repoPath, sourcePath, cfg); err == nil {
 					fmt.Printf("  %s[OK]%s Recreated symlink: %s\n", colorGreen, colorReset, mf.SourcePath)
 					fixed++
@@ -350,7 +366,7 @@ func checkSymlinks(fix bool, cmd *cobra.Command) (issues, critical, fixed int) {
 			fmt.Printf("  %s[%s]%s Broken symlink: %s\n", colorWarnLabel, severityWarning, colorReset, mf.SourcePath)
 			issues++
 
-			if fix && fs.PathExists(repoPath) {
+			if shouldFix(severityWarning, fix, fixAll) && fs.PathExists(repoPath) {
 				// Remove broken symlink and recreate
 				os.Remove(sourcePath)
 				if err := fs.CreateSymlink(repoPath, sourcePath, cfg); err == nil {
@@ -377,7 +393,7 @@ func checkSymlinks(fix bool, cmd *cobra.Command) (issues, critical, fixed int) {
 }
 
 // checkOrphanedFiles finds files in repo not tracked in config
-func checkOrphanedFiles(fix bool, cmd *cobra.Command) (issues, critical, fixed int) {
+func checkOrphanedFiles(fix, fixAll bool, cmd *cobra.Command) (issues, critical, fixed int) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return
@@ -410,7 +426,7 @@ func checkOrphanedFiles(fix bool, cmd *cobra.Command) (issues, critical, fixed i
 	issues += len(orphans)
 
 	// Note: We don't auto-fix orphaned files as they might be intentional
-	fmt.Println("    Run 'dotcor rebuild-config --scan' to add them to config")
+	fmt.Printf("    %s[Suggested]%s Run: dotcor rebuild-config --scan\n", colorInfoLabel, colorReset)
 
 	return
 }
@@ -437,7 +453,7 @@ func findOrphanedFilesTopLevel(repoPath string, tracked map[string]bool) []strin
 }
 
 // checkPermissions verifies file and directory permissions
-func checkPermissions(fix bool, cmd *cobra.Command) (int, int, int) {
+func checkPermissions(fix, fixAll bool, cmd *cobra.Command) (int, int, int) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return 0, 0, 0
@@ -484,7 +500,7 @@ func checkPermissions(fix bool, cmd *cobra.Command) (int, int, int) {
 			issues++
 			critical++
 
-			if fix {
+			if shouldFix(severityCritical, fix, fixAll) {
 				// Remove world-writable permission
 				newMode := mode.Perm() &^ 0002
 				if err := os.Chmod(sourcePath, newMode); err == nil {
@@ -499,7 +515,7 @@ func checkPermissions(fix bool, cmd *cobra.Command) (int, int, int) {
 			fmt.Printf("  %s[%s]%s Not readable: %s\n", colorWarnLabel, severityWarning, colorReset, mf.RepoPath)
 			issues++
 
-			if fix {
+			if shouldFix(severityWarning, fix, fixAll) {
 				if err := os.Chmod(repoPath, repoInfo.Mode()|0400); err == nil {
 					fmt.Printf("  %s[OK]%s Made readable: %s\n", colorGreen, colorReset, mf.RepoPath)
 					fixed++
@@ -516,7 +532,7 @@ func checkPermissions(fix bool, cmd *cobra.Command) (int, int, int) {
 }
 
 // checkGitConfig verifies git user configuration
-func checkGitConfig(fix bool, cmd *cobra.Command) (int, int, int) {
+func checkGitConfig(fix, fixAll bool, cmd *cobra.Command) (int, int, int) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return 0, 0, 0
@@ -542,7 +558,7 @@ func checkGitConfig(fix bool, cmd *cobra.Command) (int, int, int) {
 		fmt.Printf("  %s[%s]%s Git user.name not configured\n", colorWarnLabel, severityWarning, colorReset)
 		issues++
 
-		if fix {
+		if shouldFix(severityWarning, fix, fixAll) {
 			// Get current username as default
 			currentUser := os.Getenv("USER")
 			if currentUser == "" {
@@ -554,6 +570,8 @@ func checkGitConfig(fix bool, cmd *cobra.Command) (int, int, int) {
 					fixed++
 				}
 			}
+		} else {
+			fmt.Printf("    %s[Suggested]%s Run: git config --global user.name \"Your Name\"\n", colorInfoLabel, colorReset)
 		}
 	}
 
@@ -563,10 +581,11 @@ func checkGitConfig(fix bool, cmd *cobra.Command) (int, int, int) {
 		fmt.Printf("  %s[%s]%s Git user.email not configured\n", colorWarnLabel, severityWarning, colorReset)
 		issues++
 
-		if fix {
-			// Suggest setting email
-			fmt.Printf("  %s[%s]%s Run: git config --global user.email 'your-email@example.com'\n", colorInfoLabel, severityInfo, colorReset)
+		if shouldFix(severityWarning, fix, fixAll) {
+			// We cannot auto-generate a sensible email, so just show suggestion
+			fmt.Printf("  %s[INFO]%s Cannot auto-fix - please set manually\n", colorInfoLabel, colorReset)
 		}
+		fmt.Printf("    %s[Suggested]%s Run: git config --global user.email \"you@example.com\"\n", colorInfoLabel, colorReset)
 	}
 
 	if issues == 0 {
@@ -577,7 +596,7 @@ func checkGitConfig(fix bool, cmd *cobra.Command) (int, int, int) {
 }
 
 // checkGitRemote checks if git remote is configured
-func checkGitRemote(fix bool, cmd *cobra.Command) (int, int, int) {
+func checkGitRemote(fix, fixAll bool, cmd *cobra.Command) (int, int, int) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return 0, 0, 0
@@ -606,10 +625,12 @@ func checkGitRemote(fix bool, cmd *cobra.Command) (int, int, int) {
 		fmt.Printf("  %s[%s]%s No git remote configured\n", colorWarnLabel, severityWarning, colorReset)
 		issues++
 
-		if fix {
-			fmt.Printf("  %s[%s]%s Run: git remote add origin <url>\n", colorInfoLabel, severityInfo, colorReset)
-			fmt.Printf("  %s[%s]%s Or create a new repository on GitHub/GitLab/Bitbucket\n", colorInfoLabel, severityInfo, colorReset)
+		if shouldFix(severityWarning, fix, fixAll) {
+			// We cannot auto-generate a remote URL
+			fmt.Printf("  %s[INFO]%s Cannot auto-fix - please set manually\n", colorInfoLabel, colorReset)
 		}
+		fmt.Printf("    %s[Suggested]%s Run: git remote add origin <url>\n", colorInfoLabel, colorReset)
+		fmt.Printf("    %s[Suggested]%s Create a repository on GitHub/GitLab/Bitbucket first\n", colorInfoLabel, colorReset)
 	} else {
 		fmt.Printf("  %s[OK]%s Git remote configured: %s\n", colorGreen, colorReset, remoteURL)
 	}
@@ -618,7 +639,7 @@ func checkGitRemote(fix bool, cmd *cobra.Command) (int, int, int) {
 }
 
 // checkHookPermissions verifies hooks are executable
-func checkHookPermissions(fix bool, cmd *cobra.Command) (int, int, int) {
+func checkHookPermissions(fix, fixAll bool, cmd *cobra.Command) (int, int, int) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return 0, 0, 0
@@ -672,7 +693,7 @@ func checkHookPermissions(fix bool, cmd *cobra.Command) (int, int, int) {
 			fmt.Printf("  %s[%s]%s Hook not executable: %s\n", colorWarnLabel, severityWarning, colorReset, hookName)
 			issues++
 
-			if fix {
+			if shouldFix(severityWarning, fix, fixAll) {
 				if err := os.Chmod(hookPath, 0755); err == nil {
 					fmt.Printf("  %s[OK]%s Made executable: %s\n", colorGreen, colorReset, hookName)
 					fixed++
