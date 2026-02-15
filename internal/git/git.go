@@ -13,6 +13,7 @@ import (
 // StatusInfo represents Git repository status
 type StatusInfo struct {
 	HasUncommitted bool
+	ChangedFiles   []string
 	AheadBy        int
 	BehindBy       int
 	Branch         string
@@ -259,6 +260,12 @@ func GetStatus(repoPath string) (StatusInfo, error) {
 	hasChanges, err := HasChanges(repoPath)
 	if err == nil {
 		status.HasUncommitted = hasChanges
+		if hasChanges {
+			changedFiles, err := GetChangedFiles(repoPath)
+			if err == nil {
+				status.ChangedFiles = changedFiles
+			}
+		}
 	}
 
 	// Check if remote exists

@@ -78,7 +78,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return outputStatusQuick(status)
 	}
 
-	err = outputStatusFull(status, problemsOnly)
+	err = outputStatusFull(status, problemsOnly, cfg)
 	if err != nil {
 		return err
 	}
@@ -117,6 +117,7 @@ type FileStatus struct {
 type GitStatusInfo struct {
 	IsRepo         bool
 	HasUncommitted bool
+	ChangedFiles   []string
 	Branch         string
 	AheadBy        int
 	BehindBy       int
@@ -169,6 +170,7 @@ func collectStatus(cfg *config.Config, fileArgs []string) StatusReport {
 		report.GitStatus = GitStatusInfo{
 			IsRepo:         true,
 			HasUncommitted: gitStatus.HasUncommitted,
+			ChangedFiles:   gitStatus.ChangedFiles,
 			Branch:         gitStatus.Branch,
 			AheadBy:        gitStatus.AheadBy,
 			BehindBy:       gitStatus.BehindBy,
@@ -270,7 +272,7 @@ func CheckFileStatus(cfg *config.Config, mf config.ManagedFile) FileStatus {
 }
 
 // outputStatusFull outputs detailed status
-func outputStatusFull(status StatusReport, problemsOnly bool) error {
+func outputStatusFull(status StatusReport, problemsOnly bool, cfg *config.Config) error {
 	// Header
 	fmt.Printf("\n  %sDotCor Status%s\n", colorLightPink, colorReset)
 	fmt.Println("")
@@ -315,6 +317,16 @@ func outputStatusFull(status StatusReport, problemsOnly bool) error {
 
 		if status.GitStatus.HasUncommitted {
 			fmt.Printf("  %s[!]%s Uncommitted changes\n", colorYellow, colorReset)
+			if len(status.GitStatus.ChangedFiles) > 0 {
+				for _, changedFile := range status.GitStatus.ChangedFiles {
+					sourcePath := mapRepoToSourcePath(changedFile, cfg)
+					if sourcePath != "" {
+						fmt.Printf("    - %s\n", sourcePath)
+					} else {
+						fmt.Printf("    - %s\n", changedFile)
+					}
+				}
+			}
 		} else {
 			fmt.Printf("  %s[OK]%s Working tree clean\n", colorGreen, colorReset)
 		}
@@ -528,6 +540,16 @@ func getDir(path string) string {
 		}
 	}
 	return "."
+}
+
+// mapRepoToSourcePath maps a repo file path to its corresponding source path
+func mapRepoToSourcePath(repoFilePath string, cfg *config.Config) string {
+	for _, mf := range cfg.ManagedFiles {
+		if mf.RepoPath == repoFilePath {
+			return mf.SourcePath
+		}
+	}
+	return ""
 }
 
 // resolvePath resolves a potentially relative path against a base directory
