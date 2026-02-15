@@ -458,6 +458,8 @@ func GetChangedFiles(repoPath string) ([]string, error) {
 		return nil, fmt.Errorf("git status failed: %w", err)
 	}
 
+	fmt.Fprintf(os.Stderr, "DEBUG GIT: raw git status output: %s\n", string(output))
+
 	var files []string
 	lines := strings.Split(string(output), "\n")
 
