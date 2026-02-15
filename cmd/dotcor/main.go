@@ -111,7 +111,7 @@ func init() {
 	// Replace help command to add ? as an alias
 	rootCmd.SetHelpCommand(&cobra.Command{
 		Use:     "help [command]",
-		Aliases: []string{"?", "dc"},
+		Aliases: []string{"?"},
 		Short:   "Help about any command",
 		Long: `Help provides help for any command in the application.
 Simply type dotcor help [path to command] for full details.`,
