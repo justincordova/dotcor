@@ -18,7 +18,7 @@ func init() {
 }
 
 var (
-	version = "0.7.3"
+	version = "1.0.0"
 )
 
 // ANSI color codes
