@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/justincordova/dotcor/internal/config"
@@ -519,4 +520,32 @@ func getLockPathForCheck() (string, error) {
 	return configDir + "/.lock", nil
 }
 
-// Note: getDir and resolvePath are defined in list.go
+// getDir returns the directory part of a path
+func getDir(path string) string {
+	for i := len(path) - 1; i >= 0; i-- {
+		if path[i] == '/' || path[i] == '\\' {
+			return path[:i]
+		}
+	}
+	return "."
+}
+
+// resolvePath resolves a potentially relative path against a base directory
+func resolvePath(baseDir, path string) string {
+	if len(path) > 0 && (path[0] == '/' || (len(path) > 1 && path[1] == ':')) {
+		return path
+	}
+	// Simple path resolution - join and clean
+	result := baseDir + "/" + path
+	// Clean up .. references
+	parts := strings.Split(result, "/")
+	var clean []string
+	for _, part := range parts {
+		if part == ".." && len(clean) > 0 {
+			clean = clean[:len(clean)-1]
+		} else if part != "." && part != "" {
+			clean = append(clean, part)
+		}
+	}
+	return "/" + strings.Join(clean, "/")
+}
