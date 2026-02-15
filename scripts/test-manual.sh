@@ -297,6 +297,7 @@ EOF
 
 # Interactive test mode
 test_interactive() {
+    check_binary
     # Clear test directory and create sample files
     info "Setting up test environment at $TEST_HOME"
     rm -rf "$TEST_HOME"
