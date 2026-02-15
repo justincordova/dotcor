@@ -80,7 +80,14 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(files) == 0 {
-		return fmt.Errorf("no files found matching the provided patterns")
+		var patternList strings.Builder
+		for i, arg := range args {
+			if i > 0 {
+				patternList.WriteString(", ")
+			}
+			patternList.WriteString(arg)
+		}
+		return fmt.Errorf("no files found matching patterns: %s\n\nCommon issues:\n  - Check that file paths are correct\n  - Use ~ for home directory (e.g., ~/.zshrc)\n  - Verify files exist before adding\n  - Use --dry-run to preview what would be added", patternList.String())
 	}
 
 	if dryRun {
