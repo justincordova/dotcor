@@ -164,9 +164,9 @@ func runSync(cmd *cobra.Command, args []string) error {
 		commitMsg := message
 		if commitMsg == "" {
 			if len(filesToSync) > 0 {
-				commitMsg = fmt.Sprintf("Sync %d file(s) - %s", len(filesToSync), time.Now().Format("2006-01-02 15:04"))
+				commitMsg = fmt.Sprintf("Update %d file(s) - %s", len(filesToSync), time.Now().Format("2006-01-02 15:04"))
 			} else {
-				commitMsg = fmt.Sprintf("Sync dotfiles - %s", time.Now().Format("2006-01-02 15:04"))
+				commitMsg = fmt.Sprintf("Update dotfiles - %s", time.Now().Format("2006-01-02 15:04"))
 			}
 		}
 
