@@ -156,6 +156,7 @@ func collectStatus(cfg *config.Config, fileArgs []string) StatusReport {
 	var changedFiles []string
 	if err == nil && git.IsGitInstalled() && git.IsRepo(repoPath) {
 		gitStatus, _ := git.GetStatus(repoPath)
+		fmt.Fprintf(os.Stderr, "DEBUG: ChangedFiles=%v\n", gitStatus.ChangedFiles)
 		report.GitStatus = GitStatusInfo{
 			IsRepo:         true,
 			HasUncommitted: gitStatus.HasUncommitted,
@@ -192,6 +193,7 @@ func CheckFileStatus(cfg *config.Config, mf config.ManagedFile, changedFiles []s
 
 	// Check if file has uncommitted changes
 	for _, cf := range changedFiles {
+		fmt.Fprintf(os.Stderr, "DEBUG: Comparing %q == %q -> %v\n", cf, mf.RepoPath, cf == mf.RepoPath)
 		if cf == mf.RepoPath {
 			status.Status = "modified"
 			status.Problem = "uncommitted changes"

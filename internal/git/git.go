@@ -462,7 +462,6 @@ func GetChangedFiles(repoPath string) ([]string, error) {
 	lines := strings.Split(string(output), "\n")
 
 	for _, line := range lines {
-		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
@@ -470,13 +469,15 @@ func GetChangedFiles(repoPath string) ([]string, error) {
 		// Git status --porcelain format: XY filename
 		// X and Y are single characters for staged and unstaged status
 		// They can be spaces if no change
-		if len(line) < 3 {
+		if len(line) < 4 {
 			continue
 		}
 
 		// Extract filename (everything after first 3 characters: X, Y, and space)
 		// Examples: "M .zshrc" or "M  filename" or "MM filename"
-		filename := strings.TrimSpace(line[3:])
+		// Do NOT trim whitespace here - the dot needs to be preserved
+		filename := line[3:]
+		filename = strings.TrimSpace(filename)
 		if filename != "" {
 			files = append(files, filename)
 		}
