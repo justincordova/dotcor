@@ -70,7 +70,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	if jsonFormat {
-		return outputStatusJSON(status)
+		return outputStatusJSON(status, cfg)
 	}
 
 	if quick {
@@ -449,6 +449,9 @@ type statusJSONOutput struct {
 	TotalFiles       int              `json:"total_files"`
 	HealthyFiles     int              `json:"healthy_files"`
 	ProblematicFiles int              `json:"problematic_files"`
+	BackupCount      int              `json:"backup_count"`
+	LockStatus       string           `json:"lock_status"`
+	ConfigIssues     []string         `json:"config_issues"`
 	Git              *gitJSONOutput   `json:"git,omitempty"`
 	Files            []fileJSONOutput `json:"files"`
 }
@@ -468,11 +471,18 @@ type fileJSONOutput struct {
 }
 
 // outputStatusJSON outputs status as JSON
-func outputStatusJSON(status StatusReport) error {
+func outputStatusJSON(status StatusReport, cfg *config.Config) error {
+	backupCount, _ := core.GetBackupCount(cfg)
+	lockStatus := getLockStatusString()
+	configIssues := collectConfigIssues(cfg)
+
 	output := statusJSONOutput{
 		TotalFiles:       status.Statistics.TotalFiles,
 		HealthyFiles:     status.Statistics.HealthyFiles,
 		ProblematicFiles: status.Statistics.ProblematicFiles,
+		BackupCount:      backupCount,
+		LockStatus:       lockStatus,
+		ConfigIssues:     configIssues,
 		Files:            make([]fileJSONOutput, 0, len(status.Files)),
 	}
 
@@ -559,6 +569,78 @@ func getLockPathForCheck() (string, error) {
 		return "", err
 	}
 	return configDir + "/.lock", nil
+}
+
+// getLockStatusString returns the current lock status as a string
+func getLockStatusString() string {
+	info, err := core.GetLockInfo()
+	if err != nil {
+		return "error"
+	}
+
+	if info == nil {
+		return "none"
+	}
+
+	// Check if it's our own lock
+	if info.PID == os.Getpid() {
+		return "none"
+	}
+
+	// Check if it's stale
+	lockPath, _ := getLockPathForCheck()
+	if lockPath != "" {
+		cfg, err := config.LoadConfig()
+		if err == nil {
+			stale, _ := core.IsStale(lockPath, cfg)
+			if stale {
+				return "stale"
+			}
+		}
+	}
+
+	return "active"
+}
+
+// collectConfigIssues returns a list of configuration issues
+func collectConfigIssues(cfg *config.Config) []string {
+	issues := []string{}
+
+	if len(cfg.ManagedFiles) == 0 {
+		issues = append(issues, "no managed files")
+	}
+
+	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
+	if err != nil {
+		issues = append(issues, "invalid repo path")
+	} else if !fs.PathExists(repoPath) {
+		issues = append(issues, "repo path does not exist")
+	}
+
+	if cfg.GitEnabled {
+		if !git.IsGitInstalled() {
+			issues = append(issues, "git enabled but git not installed")
+		} else if !git.IsRepo(repoPath) {
+			issues = append(issues, "git enabled but repo not initialized")
+		}
+	}
+
+	for _, mf := range cfg.ManagedFiles {
+		_, err := config.ExpandPath(mf.SourcePath, cfg)
+		if err != nil {
+			issues = append(issues, fmt.Sprintf("invalid source path: %s", mf.SourcePath))
+			continue
+		}
+		repoFilePath, err := config.GetRepoFilePath(cfg, mf.RepoPath)
+		if err != nil {
+			issues = append(issues, fmt.Sprintf("invalid repo path: %s", mf.RepoPath))
+		}
+		if !fs.PathExists(repoFilePath) {
+			issues = append(issues, fmt.Sprintf("repo file missing: %s", mf.SourcePath))
+		}
+	}
+
+	return issues
 }
 
 // getDir returns the directory part of a path

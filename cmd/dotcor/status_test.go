@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -517,5 +518,113 @@ managed_files:
 		outputStr := stdout.String()
 		assert.Contains(t, outputStr, ".test", "output should contain file")
 		assert.Contains(t, outputStr, "files managed", "should show file count")
+	})
+}
+
+func TestStatus_JSONOutput_IncludesBackupLockConfig(t *testing.T) {
+	t.Run("JSON output includes backup_count, lock_status, config_issues", func(t *testing.T) {
+		// Arrange
+		tempDir := t.TempDir()
+		configDir := filepath.Join(tempDir, ".dotcor")
+		filesDir := filepath.Join(configDir, "files")
+		homeDir := filepath.Join(tempDir, "home")
+		sourcePath := filepath.Join(homeDir, ".zshrc")
+		repoFile := filepath.Join(filesDir, "shell", "zshrc")
+		backupDir := filepath.Join(configDir, "backups")
+
+		// Create directories
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		if err := os.MkdirAll(homeDir, 0755); err != nil {
+			t.Fatalf("failed to create home dir: %v", err)
+		}
+		if err := os.MkdirAll(backupDir, 0755); err != nil {
+			t.Fatalf("failed to create backup dir: %v", err)
+		}
+
+		// Create a backup file
+		timestampDir := filepath.Join(backupDir, "2024-01-15_10-30-00")
+		if err := os.MkdirAll(timestampDir, 0755); err != nil {
+			t.Fatalf("failed to create timestamp dir: %v", err)
+		}
+		backupFile := filepath.Join(timestampDir, "zshrc")
+		if err := os.WriteFile(backupFile, []byte("backup content"), 0644); err != nil {
+			t.Fatalf("failed to create backup file: %v", err)
+		}
+
+		// Create repo file
+		CreateTestFile(t, repoFile, "test content")
+
+		// Create valid symlink
+		relPath, _ := filepath.Rel(filepath.Dir(sourcePath), repoFile)
+		if err := os.Symlink(relPath, sourcePath); err != nil {
+			t.Fatalf("failed to create symlink: %v", err)
+		}
+
+		// Create config file
+		configPath := filepath.Join(configDir, "config.yaml")
+		configContent := fmt.Sprintf(`version: "1.0"
+repo_path: %s
+git_enabled: false
+managed_files:
+  - source_path: %s
+    repo_path: shell/zshrc
+    added_at: "%s"
+`, filesDir, sourcePath, time.Now().Format(time.RFC3339))
+		err := os.WriteFile(configPath, []byte(configContent), 0644)
+		require.NoError(t, err)
+
+		// Build dotcor binary
+		buildPath := filepath.Join(tempDir, "dotcor-test")
+		buildCmd := exec.Command("go", "build", "-o", buildPath, "github.com/justincordova/dotcor/cmd/dotcor")
+		output, err := buildCmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("building test binary failed: %v\noutput: %s", err, string(output))
+		}
+
+		// Act - Run status command with --json flag
+		var stdout, stderr bytes.Buffer
+		cmd := exec.Command(buildPath, "status", "--json")
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		cmd.Env = append(os.Environ(), fmt.Sprintf("HOME=%s", tempDir))
+		err = cmd.Run()
+
+		// Assert
+		if err != nil {
+			t.Logf("stderr: %s", stderr.String())
+		}
+		require.NoError(t, err, "status --json command should succeed")
+		jsonOutput := stdout.String()
+		t.Logf("JSON output: %s", jsonOutput)
+
+		// Verify JSON contains backup_count
+		assert.Contains(t, jsonOutput, `"backup_count"`, "JSON should include backup_count field")
+		assert.Contains(t, jsonOutput, `"backup_count": 1`, "JSON should show 1 backup")
+
+		// Verify JSON contains lock_status
+		assert.Contains(t, jsonOutput, `"lock_status"`, "JSON should include lock_status field")
+
+		// Verify JSON contains config_issues
+		assert.Contains(t, jsonOutput, `"config_issues"`, "JSON should include config_issues field")
+
+		// Verify JSON is valid
+		var parsed map[string]interface{}
+		err = json.Unmarshal([]byte(jsonOutput), &parsed)
+		require.NoError(t, err, "JSON output should be valid")
+
+		// Verify backup_count is present
+		assert.Contains(t, parsed, "backup_count", "parsed JSON should have backup_count")
+
+		// Verify lock_status is present and is "none", "active", or "stale"
+		assert.Contains(t, parsed, "lock_status", "parsed JSON should have lock_status")
+		lockStatus := parsed["lock_status"].(string)
+		assert.Contains(t, []string{"none", "active", "stale"}, lockStatus, "lock_status should be valid")
+
+		// Verify config_issues is present and is an array
+		assert.Contains(t, parsed, "config_issues", "parsed JSON should have config_issues")
+		configIssues := parsed["config_issues"]
+		assert.IsType(t, []interface{}{}, configIssues, "config_issues should be an array")
 	})
 }
