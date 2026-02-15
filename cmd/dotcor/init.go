@@ -157,7 +157,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Printf("%sDotCor initialized successfully!%s\n", colorLightPink, colorReset)
 	fmt.Println("")
 	fmt.Printf("%sNext steps:%s\n", colorLightPink, colorReset)
-	fmt.Println("  dotcor add ~/.zshrc     # Add a dotfile")
+	fmt.Println("  dotcor add              # Add a dotfile")
 	fmt.Println("  dotcor status           # List managed files and status")
 
 	return nil
