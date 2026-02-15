@@ -126,10 +126,10 @@ func init() {
 	rootCmd.SetHelpTemplate(fmt.Sprintf(helpTemplate, colorLightPink, colorReset, colorLightPink, colorReset))
 	rootCmd.SetUsageTemplate(fmt.Sprintf(usageTemplate, colorLightPink, colorReset, colorLightPink, colorReset, colorLightPink, colorReset))
 
-	// Replace help command to add ? as an alias
+	// Replace help command to add ? and h as aliases
 	rootCmd.SetHelpCommand(&cobra.Command{
 		Use:     "help [command]",
-		Aliases: []string{"?"},
+		Aliases: []string{"?", "h"},
 		Short:   "Help about any command",
 		Long: `Help provides help for any command in the application.
 Simply type dotcor help [path to command] for full details.`,
