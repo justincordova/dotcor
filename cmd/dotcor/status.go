@@ -326,6 +326,21 @@ func outputStatusFull(status StatusReport, problemsOnly bool, cfg *config.Config
 						fmt.Printf("    - %s\n", changedFile)
 					}
 				}
+			} else {
+				repoPath, _ := config.ExpandPath(cfg.RepoPath, cfg)
+				if git.IsGitInstalled() && git.IsRepo(repoPath) {
+					changedFiles, err := git.GetChangedFiles(repoPath)
+					if err == nil && len(changedFiles) > 0 {
+						for _, changedFile := range changedFiles {
+							sourcePath := mapRepoToSourcePath(changedFile, cfg)
+							if sourcePath != "" {
+								fmt.Printf("    - %s\n", sourcePath)
+							} else {
+								fmt.Printf("    - %s\n", changedFile)
+							}
+						}
+					}
+				}
 			}
 		} else {
 			fmt.Printf("  %s[OK]%s Working tree clean\n", colorGreen, colorReset)
