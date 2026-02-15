@@ -458,8 +458,6 @@ func GetChangedFiles(repoPath string) ([]string, error) {
 		return nil, fmt.Errorf("git status failed: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "DEBUG GIT: raw git status output: %s\n", string(output))
-
 	var files []string
 	lines := strings.Split(string(output), "\n")
 
@@ -472,7 +470,7 @@ func GetChangedFiles(repoPath string) ([]string, error) {
 		// Git status --porcelain format: XY filename
 		// X and Y are single characters for staged and unstaged status
 		// They can be spaces if no change
-		if len(line) < 4 {
+		if len(line) < 3 {
 			continue
 		}
 
