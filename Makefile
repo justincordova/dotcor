@@ -65,7 +65,7 @@ deps:
 
 # Build the binary
 binary:
-	go build -o bin/dotcor cmd/dotcor/main.go
+	go build -C bin/ ../cmd/dotcor
 
 # Install to GOPATH/bin
 install:
