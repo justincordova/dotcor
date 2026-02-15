@@ -23,12 +23,45 @@ var addCmd = &cobra.Command{
 Files are moved to the repository and replaced with symlinks.
 Supports glob patterns for batch operations.
 
+Templates:
+  The --template flag allows you to create template files that get
+  rendered with machine-specific variables when symlinks are created.
+  This is useful for dotfiles that need different values on different machines.
+
+  Available template variables:
+    {{ .Hostname }}  - Machine hostname
+    {{ .User }}      - Current username
+    {{ .Home }}      - User's home directory
+
+  Template files are stored with a .template extension in the repository.
+  When you run 'dotcor rebuild-links', templates are rendered and symlinks
+  are created with the substituted values.
+
+  Use templates when:
+    - Hostnames differ between machines (e.g., work laptop vs personal desktop)
+    - Usernames vary across systems
+    - Paths need to be dynamic (though ~ expansion is usually preferred)
+
+  Use regular files when:
+    - Configuration is the same across all machines
+    - Values don't depend on the specific system
+    - You want the same file everywhere
+
   Examples:
   dotcor add ~/.zshrc                    # Add single file
   dotcor add ~/.zshrc ~/.bashrc          # Add multiple files
   dotcor add ~/.config/nvim/*            # Add with glob pattern
   dotcor add ~/.zshrc --template         # Add as template file
-  dotcor add ~/.zshrc --force            # Skip validation warnings`,
+  dotcor add ~/.zshrc --force            # Skip validation warnings
+
+  Template example (SSH config with hostname):
+    Host {{ .Hostname }}
+      HostName {{ .Hostname }}.local
+      User {{ .User }}
+
+  After adding templates, run 'dotcor rebuild-links' to render them:
+    dotcor add ~/.ssh/config.template --template
+    dotcor rebuild-links`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: runAdd,
 }
