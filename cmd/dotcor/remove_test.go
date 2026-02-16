@@ -789,6 +789,52 @@ func TestRemove_CleansUpEmptyDirectories(t *testing.T) {
 
 // ========== Edge Cases ==========
 
+func TestRemove_WithBackupValidation_SucceedsWhenBackupValid(t *testing.T) {
+	// Arrange
+	tempDir := t.TempDir()
+	configDir := filepath.Join(tempDir, ".dotcor")
+	filesDir := filepath.Join(configDir, "files")
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
+
+	sourceFile := filepath.Join(tempDir, ".zshrc")
+	repoFile := filepath.Join(filesDir, "shell", "zshrc")
+
+	cfg := CreateTestConfig(t)
+	cfg.RepoPath = filesDir
+	// Use absolute path instead of ~ for testing
+	cfg.ManagedFiles = []config.ManagedFile{
+		{SourcePath: sourceFile, RepoPath: "shell/zshrc"},
+	}
+	mf := cfg.ManagedFiles[0]
+
+	// Create repo file and symlink
+	if err := os.MkdirAll(filepath.Dir(repoFile), 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
+	repoContent := "# Test zshrc content"
+	if err := os.WriteFile(repoFile, []byte(repoContent), 0644); err != nil {
+		t.Fatalf("failed to create repo file: %v", err)
+	}
+	if err := os.Symlink(repoFile, sourceFile); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	// Act - Remove with delete-repo (which creates backup)
+	err := processRemoveFile(cfg, mf, false, false, false)
+
+	// Assert - Should succeed when backup path is valid
+	require.NoError(t, err, "should succeed when backup path is valid")
+
+	// Verify repo file was removed and source file exists with repo content
+	AssertFileNotExists(t, repoFile)
+	AssertFileExists(t, sourceFile)
+	content, err := os.ReadFile(sourceFile)
+	require.NoError(t, err)
+	assert.Equal(t, repoContent, string(content), "source file should have repo content")
+}
+
 func TestRemove_EmptyConfig_NothingToRemove(t *testing.T) {
 	// Arrange
 	cfg := &config.Config{

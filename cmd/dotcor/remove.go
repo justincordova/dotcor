@@ -257,10 +257,14 @@ func processRemoveFile(cfg *config.Config, mf config.ManagedFile, keepRepo bool,
 
 	// First, create backup of repo file
 	if fs.PathExists(repoPath) {
-		if _, err := core.CreateBackup(repoPath, cfg); err != nil {
+		backupPath, err := core.CreateBackup(repoPath, cfg)
+		if err != nil {
 			if !quiet {
 				fmt.Printf("  %s[!]%s Backup failed for %s: %v\n", colorYellow, colorReset, mf.RepoPath, err)
 			}
+		}
+		if backupPath == "" {
+			return fmt.Errorf("backup creation failed - no backup path returned for %s", mf.SourcePath)
 		}
 	}
 
