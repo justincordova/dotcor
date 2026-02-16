@@ -55,6 +55,12 @@ func IsRepo(repoPath string) bool {
 	return info.IsDir()
 }
 
+// isNothingToCommitError checks if git output indicates no changes
+func isNothingToCommitError(output string) bool {
+	return strings.Contains(output, "nothing to commit") ||
+		strings.Contains(output, "nothing added to commit")
+}
+
 // AutoCommit stages all changes and commits with message
 // Returns nil if no changes to commit
 func AutoCommit(repoPath, message string) error {
