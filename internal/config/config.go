@@ -175,7 +175,7 @@ func (c *Config) SaveConfig() error {
 
 	// Write to temp file first for atomicity
 	tempPath := configPath + ".tmp"
-	if err := os.WriteFile(tempPath, data, 0644); err != nil {
+	if err := os.WriteFile(tempPath, data, 0600); err != nil {
 		return fmt.Errorf("writing temp config file: %w", err)
 	}
 
