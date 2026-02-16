@@ -59,7 +59,7 @@ func ValidateSourceFile(path string, cfg *config.Config) error {
 	expanded, err := config.ExpandPath(path, cfg)
 	if err != nil {
 		cfg.Logger.Debug("failed to expand path", "file", path, "error", err)
-		return fmt.Errorf("invalid path: %w", err)
+		return fmt.Errorf("validation failed for %s: %w", path, err)
 	}
 
 	// Check if file exists

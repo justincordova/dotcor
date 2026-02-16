@@ -41,7 +41,7 @@ func CreateBackup(sourcePath string, cfg *config.Config) (string, error) {
 	expanded, err := config.ExpandPath(sourcePath, cfg)
 	if err != nil {
 		cfg.Logger.Error("failed to expand path", "file", sourcePath, "error", err)
-		return "", fmt.Errorf("expanding source path: %w", err)
+		return "", fmt.Errorf("backup failed for %s: %w", sourcePath, err)
 	}
 
 	if !fs.PathExists(expanded) {

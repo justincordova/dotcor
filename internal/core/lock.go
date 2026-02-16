@@ -57,7 +57,7 @@ func AcquireLock(cfg *config.Config) error {
 		// Ensure config directory exists
 		if err := fs.EnsureDir(filepath.Dir(lockPath), cfg); err != nil {
 			cfg.Logger.Error("failed to create config directory", "error", err)
-			return fmt.Errorf("creating config directory: %w", err)
+			return fmt.Errorf("failed to create lock directory at %s: %w", filepath.Dir(lockPath), err)
 		}
 
 		// Try atomic lock creation with O_EXCL
