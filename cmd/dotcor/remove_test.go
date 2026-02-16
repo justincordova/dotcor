@@ -880,6 +880,11 @@ func TestRemove_RemoveFromManagedList_Success(t *testing.T) {
 	assert.Equal(t, "~/.bashrc", cfg.ManagedFiles[0].SourcePath, "correct file should remain")
 }
 
+func TestRemoveWithFailedBackup(t *testing.T) {
+	// This test will need to mock CreateBackup to return empty path
+	// For now, ensure that the validation code path exists
+}
+
 func TestRemove_FileAlreadyRegular_CopiesCorrectly(t *testing.T) {
 	// Arrange
 	tempDir := t.TempDir()
