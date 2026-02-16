@@ -52,7 +52,7 @@ func init() {
 	initCmd.Flags().Bool("reinit", false, "Reinitialize and overwrite existing config (destructive)")
 }
 
-func NewInitCmd() *cobra.Command {
+func NewInitCmd(cfg *config.Config) *cobra.Command {
 	return initCmd
 }
 

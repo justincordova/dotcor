@@ -645,13 +645,16 @@ func TestInit_InteractiveMode_ScansDotfiles(t *testing.T) {
 }
 
 func TestInitInteractiveFlag(t *testing.T) {
-	cmd := NewInitCmd()
-	err := cmd.Flags().Set("interactive", "true")
-	require.NoError(t, err)
+	cfg, _ := config.NewDefaultConfig()
+	cfg.SaveConfig()
+	defer os.RemoveAll(cfg.RepoPath)
 
-	interactiveFlag, err := cmd.Flags().GetBool("interactive")
-	require.NoError(t, err)
-	assert.True(t, interactiveFlag, "interactive flag should be set to true")
+	cmd := NewInitCmd(cfg)
+	cmd.SetArgs([]string{"--interactive"})
+
+	// This should not error
+	err := cmd.Execute()
+	assert.NoError(t, err)
 }
 
 // ========== Structured Logging Tests ==========
