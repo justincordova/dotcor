@@ -54,7 +54,7 @@ func init() {
 
 func runInit(cmd *cobra.Command, args []string) error {
 	applyFlag, _ := cmd.Flags().GetBool("apply")
-	interactiveFlag, _ := cmd.Flags().GetBool("reinit")
+	interactiveFlag, _ := cmd.Flags().GetBool("interactive")
 	reinitFlag, _ := cmd.Flags().GetBool("reinit")
 
 	// Configure logger early
