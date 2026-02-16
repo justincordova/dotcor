@@ -230,6 +230,10 @@ func showSyncPreview(repoPath string, hasChanges bool, gitStatus git.StatusInfo,
 		}
 		fmt.Println("")
 
+		// Show warning about uncommitted changes
+		fmt.Printf("%s[!]%s Warning: You have uncommitted changes. These will be committed during sync.\n", colorYellow, colorReset)
+		fmt.Println("")
+
 		// Show diff stat
 		diffStat, _ := git.GetDiffStat(repoPath)
 		if diffStat != "" {

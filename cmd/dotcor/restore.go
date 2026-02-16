@@ -131,6 +131,15 @@ func restoreFromGit(repoRoot, repoPath, fullRepoPath, ref string, preview, showD
 		return fmt.Errorf("repository is not a git repository")
 	}
 
+	// Validate that the ref exists
+	refExists, err := git.RefExists(repoRoot, ref)
+	if err != nil {
+		return fmt.Errorf("validating git ref %s: %w", ref, err)
+	}
+	if !refExists {
+		return fmt.Errorf("git ref %s does not exist", ref)
+	}
+
 	// Show preview of what will be restored
 	if preview {
 		fmt.Printf("Would restore %s from %s\n", repoPath, ref)

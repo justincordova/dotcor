@@ -177,6 +177,24 @@ func TestRestore_BackupCreated_RestorePointAvailable(t *testing.T) {
 	assert.Equal(t, currentContent, string(backupContent), "backup should contain original content")
 }
 
+func TestRestoreWithInvalidRef(t *testing.T) {
+	// Arrange
+	tempDir := t.TempDir()
+	cfg := CreateTestConfigWithFileHistory(t, tempDir)
+
+	repoFile := filepath.Join(cfg.RepoPath, "test.txt")
+	nonExistentRef := "nonexistent-ref-abc123"
+
+	// Act - Try to restore with a ref that doesn't exist
+	err := restoreFromGit(cfg.RepoPath, "test.txt", repoFile, nonExistentRef, false, false, true, cfg)
+
+	// Assert - Should return error about invalid ref
+	assert.Error(t, err, "should return error for invalid ref")
+	errMsg := err.Error()
+	assert.Contains(t, errMsg, nonExistentRef, "error should mention the invalid ref")
+	assert.Contains(t, errMsg, "git cat-file failed", "error should indicate validation failure")
+}
+
 // CreateTestConfigWithFileHistory creates a test config with git repo and file history
 func CreateTestConfigWithFileHistory(t *testing.T, dir string) *config.Config {
 	t.Helper()

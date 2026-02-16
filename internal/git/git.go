@@ -605,3 +605,25 @@ func GetDiffBetweenFiles(file1, file2 string) (string, error) {
 	}
 	return outputStr, nil
 }
+
+// RefExists checks if a git reference exists in the repository
+func RefExists(repoPath, ref string) (bool, error) {
+	if ref == "" {
+		return false, fmt.Errorf("ref is empty")
+	}
+
+	cmd := exec.Command("git", "cat-file", "-e", ref)
+	cmd.Dir = repoPath
+	err := cmd.Run()
+
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			if exitErr.ExitCode() == 1 {
+				return false, nil
+			}
+		}
+		return false, fmt.Errorf("git cat-file failed for ref %s: %w", ref, err)
+	}
+
+	return true, nil
+}

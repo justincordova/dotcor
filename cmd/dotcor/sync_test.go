@@ -547,3 +547,72 @@ managed_files: []
 		assert.Empty(t, string(output), "all changes should be committed")
 	})
 }
+
+func TestSyncPreviewWithUncommittedChanges(t *testing.T) {
+	t.Run("sync preview shows warning about uncommitted changes", func(t *testing.T) {
+		// Arrange
+		tempDir := t.TempDir()
+		configDir := filepath.Join(tempDir, ".dotcor")
+		filesDir := filepath.Join(configDir, "files")
+		if err := os.MkdirAll(filesDir, 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+
+		runGit(t, filesDir, "init")
+		runGit(t, filesDir, "config", "user.email", "test@example.com")
+		runGit(t, filesDir, "config", "user.name", "Test User")
+		runGit(t, filesDir, "checkout", "-b", "main")
+
+		// Create initial commit
+		testFile := filepath.Join(filesDir, "test.txt")
+		CreateTestFile(t, testFile, "initial")
+		runGit(t, filesDir, "add", "test.txt")
+		runGit(t, filesDir, "commit", "-m", "Initial")
+
+		// Modify file to create uncommitted changes
+		CreateTestFile(t, testFile, "modified content")
+
+		// Create config
+		configPath := filepath.Join(configDir, "config.yaml")
+		configContent := `version: "1.0"
+repo_path: ` + filesDir + `
+git_enabled: true
+managed_files: []
+`
+		err := os.WriteFile(configPath, []byte(configContent), 0644)
+		require.NoError(t, err)
+
+		originalHome := os.Getenv("HOME")
+		os.Setenv("HOME", tempDir)
+		defer os.Setenv("HOME", originalHome)
+
+		// Create a fresh command to avoid global state issues
+		testCmd := &cobra.Command{
+			Use:  "sync",
+			RunE: runSync,
+		}
+		testCmd.Flags().Bool("no-push", false, "")
+		testCmd.Flags().Bool("preview", false, "")
+		testCmd.Flags().Bool("dry-run", false, "")
+		testCmd.Flags().Bool("force", false, "")
+		testCmd.Flags().String("message", "", "")
+
+		// Parse the flags
+		testCmd.SetArgs([]string{"--preview"})
+		if err := testCmd.ParseFlags([]string{"--preview"}); err != nil {
+			t.Fatalf("failed to parse flags: %v", err)
+		}
+
+		// Act - Run sync with preview flag (should show warning about uncommitted changes)
+		err = runSync(testCmd, []string{})
+
+		// Assert - Should return without error and file should not be committed
+		require.NoError(t, err, "preview should not commit changes")
+
+		// Verify file is still modified (uncommitted)
+		statusCmd := exec.Command("git", "status", "--porcelain")
+		statusCmd.Dir = filesDir
+		statusOutput, _ := statusCmd.CombinedOutput()
+		assert.Contains(t, string(statusOutput), "test.txt", "file should show as modified")
+	})
+}
