@@ -92,7 +92,7 @@ func LoadConfig() (*Config, error) {
 	// Read config file
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("reading config file: %w", err)
+		return nil, fmt.Errorf("reading config file from %s: %w", configPath, err)
 	}
 
 	// Parse YAML
