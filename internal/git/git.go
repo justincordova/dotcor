@@ -587,9 +587,11 @@ func GetFileContentAtRef(repoPath, filePath, ref string) (string, error) {
 func GetDiffBetweenFiles(file1, file2 string) (string, error) {
 	cmd := exec.Command("git", "diff", "--no-index", "--", file1, file2)
 	output, err := cmd.CombinedOutput()
-	// git diff --no-index always returns exit code 1 if files differ, ignore that
-	if err != nil && !strings.Contains(string(output), "+++ b/") && !strings.Contains(string(output), "--- a/") {
+	outputStr := string(output)
+	hasDiff := strings.Contains(outputStr, "+++ b/") && strings.Contains(outputStr, "--- a/")
+
+	if err != nil && !hasDiff {
 		return "", fmt.Errorf("git diff --no-index failed: %w", err)
 	}
-	return string(output), nil
+	return outputStr, nil
 }
