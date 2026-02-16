@@ -832,3 +832,184 @@ func TestGetChangedFilesWithRenames(t *testing.T) {
 	assert.NoError(t, err, "GetChangedFiles() should not error")
 	assert.Contains(t, files, "renamed.txt", "GetChangedFiles() should include renamed file")
 }
+
+func TestGetChangedFilesWithSpaces(t *testing.T) {
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
+
+	repo := t.TempDir()
+
+	err := InitRepo(repo)
+	require.NoError(t, err, "InitRepo() should not error")
+
+	file1 := filepath.Join(repo, "file with spaces.txt")
+	err = os.WriteFile(file1, []byte("content"), 0644)
+	require.NoError(t, err, "failed to create file with spaces")
+
+	file2 := filepath.Join(repo, "another spaced file.txt")
+	err = os.WriteFile(file2, []byte("content"), 0644)
+	require.NoError(t, err, "failed to create another file with spaces")
+
+	files, err := GetChangedFiles(repo)
+
+	assert.NoError(t, err, "GetChangedFiles() should not error")
+	assert.Contains(t, files, "file with spaces.txt", "GetChangedFiles() should include file with spaces")
+	assert.Contains(t, files, "another spaced file.txt", "GetChangedFiles() should include another file with spaces")
+}
+
+func TestGetChangedFilesWithUntracked(t *testing.T) {
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
+
+	repo := t.TempDir()
+
+	err := InitRepo(repo)
+	require.NoError(t, err, "InitRepo() should not error")
+
+	untracked1 := filepath.Join(repo, "untracked1.txt")
+	err = os.WriteFile(untracked1, []byte("content"), 0644)
+	require.NoError(t, err, "failed to create untracked file")
+
+	untracked2 := filepath.Join(repo, "untracked2.txt")
+	err = os.WriteFile(untracked2, []byte("content"), 0644)
+	require.NoError(t, err, "failed to create another untracked file")
+
+	files, err := GetChangedFiles(repo)
+
+	assert.NoError(t, err, "GetChangedFiles() should not error")
+	assert.Contains(t, files, "untracked1.txt", "GetChangedFiles() should include untracked file")
+	assert.Contains(t, files, "untracked2.txt", "GetChangedFiles() should include another untracked file")
+}
+
+func TestGetChangedFilesWithMerged(t *testing.T) {
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
+
+	repo := t.TempDir()
+
+	cmd := exec.Command("git", "init", "--initial-branch=main")
+	cmd.Dir = repo
+	err := cmd.Run()
+	require.NoError(t, err, "git init failed")
+
+	configureGitUser(t, repo)
+
+	initialFile := filepath.Join(repo, "initial.txt")
+	err = os.WriteFile(initialFile, []byte("initial"), 0644)
+	require.NoError(t, err, "failed to create initial file")
+
+	cmd = exec.Command("git", "add", "initial.txt")
+	cmd.Dir = repo
+	err = cmd.Run()
+	require.NoError(t, err, "git add initial.txt failed")
+
+	cmd = exec.Command("git", "commit", "-m", "initial commit")
+	cmd.Dir = repo
+	err = cmd.Run()
+	require.NoError(t, err, "git commit failed")
+
+	cmd = exec.Command("git", "checkout", "-b", "feature")
+	cmd.Dir = repo
+	err = cmd.Run()
+	require.NoError(t, err, "git checkout -b failed")
+
+	featureFile := filepath.Join(repo, "feature.txt")
+	err = os.WriteFile(featureFile, []byte("feature content"), 0644)
+	require.NoError(t, err, "failed to create feature file")
+
+	cmd = exec.Command("git", "add", "feature.txt")
+	cmd.Dir = repo
+	err = cmd.Run()
+	require.NoError(t, err, "git add feature.txt failed")
+
+	cmd = exec.Command("git", "commit", "-m", "add feature file")
+	cmd.Dir = repo
+	err = cmd.Run()
+	require.NoError(t, err, "git commit failed")
+
+	cmd = exec.Command("git", "checkout", "main")
+	cmd.Dir = repo
+	err = cmd.Run()
+	require.NoError(t, err, "git checkout main failed")
+
+	mainFile := filepath.Join(repo, "main.txt")
+	err = os.WriteFile(mainFile, []byte("main content"), 0644)
+	require.NoError(t, err, "failed to create main file")
+
+	cmd = exec.Command("git", "add", "main.txt")
+	cmd.Dir = repo
+	err = cmd.Run()
+	require.NoError(t, err, "git add main.txt failed")
+
+	cmd = exec.Command("git", "commit", "-m", "add main file")
+	cmd.Dir = repo
+	err = cmd.Run()
+	require.NoError(t, err, "git commit failed")
+
+	cmd = exec.Command("git", "merge", "feature", "--no-commit")
+	cmd.Dir = repo
+	err = cmd.Run()
+	require.NoError(t, err, "git merge failed")
+
+	files, err := GetChangedFiles(repo)
+
+	assert.NoError(t, err, "GetChangedFiles() should not error")
+	assert.NotEmpty(t, files, "GetChangedFiles() should return files from merge")
+	assert.Contains(t, files, "feature.txt", "GetChangedFiles() should include merged feature file")
+}
+
+func TestAutoCommitWithNoChanges(t *testing.T) {
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
+
+	repo := t.TempDir()
+
+	err := InitRepo(repo)
+	require.NoError(t, err, "InitRepo() should not error")
+
+	configureGitUser(t, repo)
+
+	err = AutoCommit(repo, "test commit", slog.Default())
+
+	assert.NoError(t, err, "AutoCommit() should not error when there are no changes")
+
+	hasChanges, err := HasChanges(repo)
+	assert.NoError(t, err, "HasChanges() should not error")
+	assert.False(t, hasChanges, "AutoCommit() should not create changes when there are none")
+}
+
+func TestAutoCommitFilesWithNoChanges(t *testing.T) {
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
+
+	repo := t.TempDir()
+
+	err := InitRepo(repo)
+	require.NoError(t, err, "InitRepo() should not error")
+
+	configureGitUser(t, repo)
+
+	err = AutoCommitFiles(repo, nil, "test commit")
+
+	assert.NoError(t, err, "AutoCommitFiles() should not error when there are no changes")
+
+	hasChanges, err := HasChanges(repo)
+	assert.NoError(t, err, "HasChanges() should not error")
+	assert.False(t, hasChanges, "AutoCommitFiles() should not create changes when there are none")
+}
+
+func TestGetDiffBetweenFilesWithDifferentFiles(t *testing.T) {
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
+
+	tempDir := t.TempDir()
+
+	file1 := filepath.Join(tempDir, "file1.txt")
+	err := os.WriteFile(file1, []byte("content 1"), 0644)
+	require.NoError(t, err, "failed to create file1")
+
+	file2 := filepath.Join(tempDir, "file2.txt")
+	err = os.WriteFile(file2, []byte("content 2"), 0644)
+	require.NoError(t, err, "failed to create file2")
+
+	diff, err := GetDiffBetweenFiles(file1, file2)
+
+	require.NoError(t, err, "GetDiffBetweenFiles() should not error for different files")
+	assert.NotEmpty(t, diff, "GetDiffBetweenFiles() should return diff for different files")
+	assert.Contains(t, diff, "+++ b/", "diff should contain +++ b/ marker")
+	assert.Contains(t, diff, "--- a/", "diff should contain --- a/ marker")
+}

@@ -463,14 +463,14 @@ func parseGitStatusLine(line string) string {
 
 	// Handle untracked files (?? prefix)
 	if strings.HasPrefix(line, "?? ") {
-		return strings.TrimSpace(line[2:])
+		return stripQuotes(strings.TrimSpace(line[2:]))
 	}
 
 	// Handle renamed files (R  old -> new)
 	if strings.HasPrefix(line, "R ") || strings.HasPrefix(line, "RR ") {
 		parts := strings.SplitN(line, " -> ", 2)
 		if len(parts) == 2 {
-			return strings.TrimSpace(parts[1])
+			return stripQuotes(strings.TrimSpace(parts[1]))
 		}
 		// Malformed rename line, don't fall through
 		return ""
@@ -478,10 +478,20 @@ func parseGitStatusLine(line string) string {
 
 	// Standard case: XY filename (minimum 3 chars: X, Y, space)
 	if len(line) >= 3 {
-		return strings.TrimSpace(line[3:])
+		return stripQuotes(strings.TrimSpace(line[3:]))
 	}
 
 	return ""
+}
+
+func stripQuotes(filename string) string {
+	if len(filename) >= 2 {
+		if (filename[0] == '"' && filename[len(filename)-1] == '"') ||
+			(filename[0] == '\'' && filename[len(filename)-1] == '\'') {
+			return filename[1 : len(filename)-1]
+		}
+	}
+	return filename
 }
 
 // GetChangedFiles returns list of changed files
