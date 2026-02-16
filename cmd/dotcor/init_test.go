@@ -644,6 +644,18 @@ func TestInit_InteractiveMode_ScansDotfiles(t *testing.T) {
 	assert.Contains(t, foundFiles, ".bashrc")
 }
 
+func TestInitInteractiveFlag(t *testing.T) {
+	cfg, _ := config.NewDefaultConfig()
+	cfg.SaveConfig()
+	defer os.RemoveAll(cfg.RepoPath)
+
+	cmd := NewInitCmd(cfg)
+	cmd.SetArgs([]string{"--interactive"})
+
+	err := cmd.Execute()
+	assert.NoError(t, err)
+}
+
 // ========== Structured Logging Tests ==========
 
 func TestInit_EmitsCorrectLogs(t *testing.T) {

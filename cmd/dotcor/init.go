@@ -52,6 +52,10 @@ func init() {
 	initCmd.Flags().Bool("reinit", false, "Reinitialize and overwrite existing config (destructive)")
 }
 
+func NewInitCmd(cfg *config.Config) *cobra.Command {
+	return initCmd
+}
+
 func runInit(cmd *cobra.Command, args []string) error {
 	applyFlag, _ := cmd.Flags().GetBool("apply")
 	interactiveFlag, _ := cmd.Flags().GetBool("interactive")
