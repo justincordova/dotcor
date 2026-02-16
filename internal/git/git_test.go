@@ -724,3 +724,111 @@ func TestParseGitStatusLine_EdgeCases(t *testing.T) {
 		})
 	}
 }
+
+func TestGetDiffBetweenFiles_DifferentFiles(t *testing.T) {
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
+
+	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
+	require.NoError(t, err, "failed to create temp dir")
+	defer os.RemoveAll(tempDir)
+
+	file1 := filepath.Join(tempDir, "file1.txt")
+	file2 := filepath.Join(tempDir, "file2.txt")
+
+	err = os.WriteFile(file1, []byte("content 1"), 0644)
+	require.NoError(t, err, "failed to create file1")
+
+	err = os.WriteFile(file2, []byte("content 2"), 0644)
+	require.NoError(t, err, "failed to create file2")
+
+	diff, err := GetDiffBetweenFiles(file1, file2)
+
+	require.NoError(t, err, "GetDiffBetweenFiles() should not error for different files")
+	assert.NotEmpty(t, diff, "GetDiffBetweenFiles() should return diff for different files")
+	assert.Contains(t, diff, "+++ b/", "diff should contain +++ b/ marker")
+	assert.Contains(t, diff, "--- a/", "diff should contain --- a/ marker")
+}
+
+func TestGetDiffBetweenFiles_IdenticalFiles(t *testing.T) {
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
+
+	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
+	require.NoError(t, err, "failed to create temp dir")
+	defer os.RemoveAll(tempDir)
+
+	file1 := filepath.Join(tempDir, "file1.txt")
+	file2 := filepath.Join(tempDir, "file2.txt")
+
+	content := []byte("same content")
+	err = os.WriteFile(file1, content, 0644)
+	require.NoError(t, err, "failed to create file1")
+
+	err = os.WriteFile(file2, content, 0644)
+	require.NoError(t, err, "failed to create file2")
+
+	diff, err := GetDiffBetweenFiles(file1, file2)
+
+	require.NoError(t, err, "GetDiffBetweenFiles() should not error for identical files")
+	assert.Empty(t, diff, "GetDiffBetweenFiles() should return empty diff for identical files")
+}
+
+func TestGetDiffBetweenFiles_MissingFile(t *testing.T) {
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
+
+	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
+	require.NoError(t, err, "failed to create temp dir")
+	defer os.RemoveAll(tempDir)
+
+	file1 := filepath.Join(tempDir, "file1.txt")
+	file2 := filepath.Join(tempDir, "nonexistent.txt")
+
+	err = os.WriteFile(file1, []byte("content"), 0644)
+	require.NoError(t, err, "failed to create file1")
+
+	diff, err := GetDiffBetweenFiles(file1, file2)
+
+	assert.Error(t, err, "GetDiffBetweenFiles() should error when file doesn't exist")
+	assert.Empty(t, diff, "GetDiffBetweenFiles() should return empty string on error")
+}
+
+func TestGetChangedFilesWithRenames(t *testing.T) {
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
+
+	repo := t.TempDir()
+
+	cmd := exec.Command("git", "init", "--initial-branch=main")
+	cmd.Dir = repo
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git init failed: %v", err)
+	}
+
+	configureGitUser(t, repo)
+
+	testFile := filepath.Join(repo, "test.txt")
+	if err := os.WriteFile(testFile, []byte("original"), 0644); err != nil {
+		t.Fatalf("write test.txt failed: %v", err)
+	}
+
+	cmd = exec.Command("git", "add", "test.txt")
+	cmd.Dir = repo
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git add test.txt failed: %v", err)
+	}
+
+	cmd = exec.Command("git", "commit", "-m", "initial commit")
+	cmd.Dir = repo
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git commit failed: %v", err)
+	}
+
+	cmd = exec.Command("git", "mv", "test.txt", "renamed.txt")
+	cmd.Dir = repo
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git mv failed: %v", err)
+	}
+
+	files, err := GetChangedFiles(repo)
+
+	assert.NoError(t, err, "GetChangedFiles() should not error")
+	assert.Contains(t, files, "renamed.txt", "GetChangedFiles() should include renamed file")
+}
