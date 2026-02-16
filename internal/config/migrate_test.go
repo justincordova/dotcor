@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -91,6 +92,9 @@ func TestGetMigrationPath(t *testing.T) {
 
 func TestMigrateFromEmpty(t *testing.T) {
 	// Arrange
+	if os.Getenv("HOME") == "" {
+		t.Setenv("HOME", "/tmp/testuser")
+	}
 	cfg := &Config{
 		Version:        "",
 		RepoPath:       "",

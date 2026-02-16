@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func testConfig() *Config {
@@ -24,8 +23,11 @@ func testConfig() *Config {
 
 func TestExpandPath(t *testing.T) {
 	// Arrange
-	home, err := os.UserHomeDir()
-	require.NoError(t, err, "failed to get home dir")
+	home := os.Getenv("HOME")
+	if home == "" {
+		t.Setenv("HOME", "/tmp/testuser")
+		home = "/tmp/testuser"
+	}
 
 	tests := []struct {
 		name    string
@@ -83,8 +85,11 @@ func TestExpandPath(t *testing.T) {
 
 func TestNormalizePath(t *testing.T) {
 	// Arrange
-	home, err := os.UserHomeDir()
-	require.NoError(t, err, "failed to get home dir")
+	home := os.Getenv("HOME")
+	if home == "" {
+		t.Setenv("HOME", "/tmp/testuser")
+		home = "/tmp/testuser"
+	}
 
 	tests := []struct {
 		name    string
@@ -136,6 +141,9 @@ func TestNormalizePath(t *testing.T) {
 
 func TestGenerateRepoPath(t *testing.T) {
 	// Arrange
+	if os.Getenv("HOME") == "" {
+		t.Setenv("HOME", "/tmp/testuser")
+	}
 	tests := []struct {
 		name       string
 		sourcePath string
@@ -211,8 +219,11 @@ func TestGenerateRepoPath(t *testing.T) {
 
 func TestComputeRelativeSymlink(t *testing.T) {
 	// Arrange
-	home, err := os.UserHomeDir()
-	require.NoError(t, err, "failed to get home dir")
+	home := os.Getenv("HOME")
+	if home == "" {
+		t.Setenv("HOME", "/tmp/testuser")
+		home = "/tmp/testuser"
+	}
 
 	tests := []struct {
 		name       string
