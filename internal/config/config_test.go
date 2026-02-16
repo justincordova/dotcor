@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetDefaultIgnorePatterns(t *testing.T) {
@@ -367,4 +368,23 @@ func TestLoadConfigFromPath_NonExistentPath_ReturnsError(t *testing.T) {
 	// Assert
 	assert.Error(t, err, "LoadConfigFromPath() should error for non-existent file")
 	assert.Contains(t, err.Error(), "reading config file", "Error should indicate file reading failure")
+}
+
+func TestConfigFilePermissions(t *testing.T) {
+	tempDir := t.TempDir()
+	os.Setenv("HOME", tempDir)
+	defer os.Unsetenv("HOME")
+
+	cfg, err := NewDefaultConfig()
+	require.NoError(t, err)
+
+	err = cfg.SaveConfig()
+	require.NoError(t, err)
+
+	configPath, _ := GetConfigPath()
+	info, err := os.Stat(configPath)
+	require.NoError(t, err)
+
+	mode := info.Mode().Perm()
+	assert.Equal(t, os.FileMode(0600), mode, "Config should be owner-only readable")
 }
