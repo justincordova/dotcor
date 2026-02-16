@@ -210,6 +210,9 @@ func (op *RemoveFileOp) Do() error {
 	if err != nil {
 		return fmt.Errorf("creating backup: %w", err)
 	}
+	if backupPath == "" {
+		return fmt.Errorf("backup creation failed - no backup path returned")
+	}
 	op.backupPath = backupPath
 
 	return os.Remove(op.Path)
