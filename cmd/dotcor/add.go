@@ -221,7 +221,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("expanding repo path: %w", err)
 		}
-		if err := git.AutoCommit(repoPath, "Add dotfiles"); err != nil {
+		if err := git.AutoCommit(repoPath, "Add dotfiles", cfg.Logger); err != nil {
 			fmt.Printf("%s[!]%s Git commit failed: %v (files marked as uncommitted)\n", colorYellow, colorReset, err)
 			fmt.Println("Run 'dotcor sync' to commit these changes.")
 		} else {

@@ -372,7 +372,7 @@ func interactiveInit(cfg *config.Config) error {
 		if err != nil {
 			fmt.Printf("%s[!]%s Git commit skipped: invalid repo path: %v\n", colorYellow, colorReset, err)
 		} else {
-			if err := git.AutoCommit(repoPath, fmt.Sprintf("Add %d dotfiles via interactive init", added)); err != nil {
+			if err := git.AutoCommit(repoPath, fmt.Sprintf("Add %d dotfiles via interactive init", added), cfg.Logger); err != nil {
 				fmt.Printf("%s[!]%s Git commit failed: %v\n", colorYellow, colorReset, err)
 			} else {
 				fmt.Printf("%s[OK]%s Committed to Git\n", colorGreen, colorReset)

@@ -1,6 +1,7 @@
 package git
 
 import (
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -84,14 +85,14 @@ func TestAutoCommit(t *testing.T) {
 
 	configureGitUser(t, tempDir)
 
-	err = AutoCommit(tempDir, "test commit")
+	err = AutoCommit(tempDir, "test commit", slog.Default())
 	assert.NoError(t, err, "AutoCommit() with no changes should not error")
 
 	testFile := filepath.Join(tempDir, "test.txt")
 	err = os.WriteFile(testFile, []byte("content"), 0644)
 	require.NoError(t, err, "failed to create test file")
 
-	err = AutoCommit(tempDir, "add test file")
+	err = AutoCommit(tempDir, "add test file", slog.Default())
 	require.NoError(t, err, "AutoCommit() should not error")
 
 	hasChanges, err := HasChanges(tempDir)
@@ -236,13 +237,13 @@ func TestGetFileHistory(t *testing.T) {
 	err = os.WriteFile(testFile, []byte("v1"), 0644)
 	require.NoError(t, err, "failed to create test file")
 
-	err = AutoCommit(tempDir, "initial commit")
+	err = AutoCommit(tempDir, "initial commit", slog.Default())
 	require.NoError(t, err, "AutoCommit() should not error")
 
 	err = os.WriteFile(testFile, []byte("v2"), 0644)
 	require.NoError(t, err, "failed to update test file")
 
-	err = AutoCommit(tempDir, "second commit")
+	err = AutoCommit(tempDir, "second commit", slog.Default())
 	require.NoError(t, err, "AutoCommit() should not error")
 
 	history, err := GetFileHistory(tempDir, "test.txt", 10)
@@ -268,7 +269,7 @@ func TestGetCurrentCommit(t *testing.T) {
 	err = os.WriteFile(testFile, []byte("content"), 0644)
 	require.NoError(t, err, "failed to create test file")
 
-	err = AutoCommit(tempDir, "test commit")
+	err = AutoCommit(tempDir, "test commit", slog.Default())
 	require.NoError(t, err, "AutoCommit() should not error")
 
 	commit, err := GetCurrentCommit(tempDir)
@@ -318,7 +319,7 @@ func TestGetDiff(t *testing.T) {
 	err = os.WriteFile(testFile, []byte("original"), 0644)
 	require.NoError(t, err, "failed to create test file")
 
-	err = AutoCommit(tempDir, "initial commit")
+	err = AutoCommit(tempDir, "initial commit", slog.Default())
 	require.NoError(t, err, "AutoCommit() should not error")
 
 	diff, err := GetDiff(tempDir)
@@ -349,7 +350,7 @@ func TestStageAndUnstageFile(t *testing.T) {
 	err = os.WriteFile(initialFile, []byte("initial"), 0644)
 	require.NoError(t, err, "failed to create initial file")
 
-	err = AutoCommit(tempDir, "initial commit")
+	err = AutoCommit(tempDir, "initial commit", slog.Default())
 	require.NoError(t, err, "AutoCommit() should not error")
 
 	testFile := filepath.Join(tempDir, "test.txt")
@@ -489,7 +490,7 @@ func TestUnstageFile_UnstagesFile(t *testing.T) {
 	err = os.WriteFile(initialFile, []byte("initial"), 0644)
 	require.NoError(t, err, "failed to create initial file")
 
-	err = AutoCommit(tempDir, "initial commit")
+	err = AutoCommit(tempDir, "initial commit", slog.Default())
 	require.NoError(t, err, "AutoCommit() should not error")
 
 	modifiedFile := filepath.Join(tempDir, "modified.txt")
@@ -526,7 +527,7 @@ func TestPull_FetchesAndMerges(t *testing.T) {
 	err = os.WriteFile(testFile, []byte("content"), 0644)
 	require.NoError(t, err, "failed to create test file")
 
-	err = AutoCommit(tempDir, "initial commit")
+	err = AutoCommit(tempDir, "initial commit", slog.Default())
 	require.NoError(t, err, "AutoCommit() should not error")
 
 	// Act
@@ -553,7 +554,7 @@ func TestGetCurrentCommit_ReturnsHash(t *testing.T) {
 	err = os.WriteFile(testFile, []byte("content"), 0644)
 	require.NoError(t, err, "failed to create test file")
 
-	err = AutoCommit(tempDir, "test commit")
+	err = AutoCommit(tempDir, "test commit", slog.Default())
 	require.NoError(t, err, "AutoCommit() should not error")
 
 	// Act

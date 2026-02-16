@@ -427,7 +427,7 @@ func TestIntegration_GitWorkflow(t *testing.T) {
 		t.Fatalf("failed to create file: %v", err)
 	}
 
-	if err := git.AutoCommit(tempDir, "add dotfile1"); err != nil {
+	if err := git.AutoCommit(tempDir, "add dotfile1", slog.Default()); err != nil {
 		t.Fatalf("AutoCommit() error = %v", err)
 	}
 
@@ -446,7 +446,7 @@ func TestIntegration_GitWorkflow(t *testing.T) {
 		t.Fatalf("failed to create file: %v", err)
 	}
 
-	if err := git.AutoCommit(tempDir, "add dotfile2"); err != nil {
+	if err := git.AutoCommit(tempDir, "add dotfile2", slog.Default()); err != nil {
 		t.Fatalf("AutoCommit() error = %v", err)
 	}
 
@@ -612,7 +612,7 @@ func TestIntegration_FullWorkflow_InitAddSyncRestore(t *testing.T) {
 	// Create initial commit
 	gitkeepPath := filepath.Join(filesDir, ".gitkeep")
 	require.NoError(t, os.WriteFile(gitkeepPath, []byte(""), 0644))
-	require.NoError(t, git.AutoCommit(filesDir, "Initial commit"))
+	require.NoError(t, git.AutoCommit(filesDir, "Initial commit", slog.Default()))
 
 	// Verify repo is clean after initial commit
 	hasChanges, err := git.HasChanges(filesDir)
@@ -643,7 +643,7 @@ func TestIntegration_FullWorkflow_InitAddSyncRestore(t *testing.T) {
 	require.NoError(t, os.Symlink(fullRepoPath, dotfile))
 
 	// Add to git
-	require.NoError(t, git.AutoCommit(filesDir, "Add .zshrc"))
+	require.NoError(t, git.AutoCommit(filesDir, "Add .zshrc", slog.Default()))
 
 	// Verify managed files list would contain this
 	assert.FileExists(t, dotfile, "symlink should exist")
@@ -661,7 +661,7 @@ func TestIntegration_FullWorkflow_InitAddSyncRestore(t *testing.T) {
 	assert.Contains(t, string(content), "/usr/local/bin", "modification should be visible through symlink")
 
 	// Commit changes
-	require.NoError(t, git.AutoCommit(filesDir, "Update .zshrc"))
+	require.NoError(t, git.AutoCommit(filesDir, "Update .zshrc", slog.Default()))
 
 	// Verify repo is clean after commit
 	hasChanges, err = git.HasChanges(filesDir)

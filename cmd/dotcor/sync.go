@@ -176,7 +176,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("committing changes: %w", err)
 			}
 		} else {
-			if err := git.AutoCommit(repoPath, commitMsg); err != nil {
+			if err := git.AutoCommit(repoPath, commitMsg, cfg.Logger); err != nil {
 				return fmt.Errorf("committing changes: %w", err)
 			}
 		}

@@ -2,6 +2,7 @@ package git
 
 import (
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -39,7 +40,7 @@ func (c *ExecGitCommander) Output(args ...string) ([]byte, error) {
 type GitService interface {
 	InitRepo(repoPath string) error
 	IsRepo(repoPath string) bool
-	AutoCommit(repoPath, message string) error
+	AutoCommit(repoPath, message string, logger *slog.Logger) error
 	Commit(repoPath, message string) error
 	Push(repoPath string) error
 	Pull(repoPath string) error
@@ -87,7 +88,7 @@ func (s *GitServiceImpl) IsRepo(repoPath string) bool {
 }
 
 // AutoCommit stages all changes and commits with message
-func (s *GitServiceImpl) AutoCommit(repoPath, message string) error {
+func (s *GitServiceImpl) AutoCommit(repoPath, message string, logger *slog.Logger) error {
 	hasChanges, err := s.HasChanges(repoPath)
 	if err != nil {
 		return &GitError{op: "has-changes", err: err}
@@ -278,7 +279,7 @@ func (m *MockGitService) IsRepo(repoPath string) bool {
 }
 
 // AutoCommit stages all changes and commits with message (mock)
-func (m *MockGitService) AutoCommit(repoPath, message string) error {
+func (m *MockGitService) AutoCommit(repoPath, message string, logger *slog.Logger) error {
 	if m.Changes {
 		m.Commits = append(m.Commits, CommitInfo{
 			Hash:    m.CommitHash,

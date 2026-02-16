@@ -126,7 +126,7 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 			fmt.Printf("%s[!]%s Git commit skipped: invalid repo path: %v\n", colorYellow, colorReset, err)
 		} else {
 			message := fmt.Sprintf("Adopt %d existing symlink(s)", adopted)
-			if err := git.AutoCommit(repoPath, message); err != nil {
+			if err := git.AutoCommit(repoPath, message, cfg.Logger); err != nil {
 				fmt.Printf("%s[!]%s Git commit failed: %v\n", colorYellow, colorReset, err)
 			}
 		}

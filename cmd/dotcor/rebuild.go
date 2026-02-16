@@ -229,7 +229,7 @@ func scanAndRebuild(cfg *config.Config, repoPath string, force bool) error {
 	// Git commit
 	if git.IsGitInstalled() && added > 0 {
 		message := fmt.Sprintf("Rebuild config: add %d file(s)", added)
-		if err := git.AutoCommit(repoPath, message); err != nil {
+		if err := git.AutoCommit(repoPath, message, cfg.Logger); err != nil {
 			fmt.Printf("%s[!]%s Git commit failed: %v\n", colorYellow, colorReset, err)
 		} else {
 			fmt.Printf("%s[OK]%s Committed to Git\n", colorGreen, colorReset)

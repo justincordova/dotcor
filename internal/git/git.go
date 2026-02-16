@@ -2,6 +2,7 @@ package git
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strconv"
@@ -63,7 +64,7 @@ func isNothingToCommitError(output string) bool {
 
 // AutoCommit stages all changes and commits with message
 // Returns nil if no changes to commit
-func AutoCommit(repoPath, message string) error {
+func AutoCommit(repoPath, message string, logger *slog.Logger) error {
 	// Check if there are changes
 	hasChanges, err := HasChanges(repoPath)
 	if err != nil {
@@ -85,6 +86,7 @@ func AutoCommit(repoPath, message string) error {
 	commitCmd.Dir = repoPath
 	if output, err := commitCmd.CombinedOutput(); err != nil {
 		if isNothingToCommitError(string(output)) {
+			logger.Debug("no changes to commit")
 			return nil
 		}
 		return fmt.Errorf("git commit failed: %s: %w", string(output), err)
@@ -131,12 +133,12 @@ func AutoCommitFiles(repoPath string, files []string, message string) error {
 }
 
 // Sync commits all changes and pushes to remote (if configured)
-func Sync(repoPath string) error {
+func Sync(repoPath string, logger *slog.Logger) error {
 	// Generate commit message with timestamp
 	message := fmt.Sprintf("Sync dotfiles - %s", time.Now().Format("2006-01-02 15:04"))
 
 	// Commit changes
-	if err := AutoCommit(repoPath, message); err != nil {
+	if err := AutoCommit(repoPath, message, logger); err != nil {
 		return err
 	}
 
