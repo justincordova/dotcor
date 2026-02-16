@@ -84,8 +84,7 @@ func AutoCommit(repoPath, message string) error {
 	commitCmd := exec.Command("git", "commit", "-m", message)
 	commitCmd.Dir = repoPath
 	if output, err := commitCmd.CombinedOutput(); err != nil {
-		// Check if it's "nothing to commit" error
-		if strings.Contains(string(output), "nothing to commit") {
+		if isNothingToCommitError(string(output)) {
 			return nil
 		}
 		return fmt.Errorf("git commit failed: %s: %w", string(output), err)
