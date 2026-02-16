@@ -494,19 +494,7 @@ func GetChangedFiles(repoPath string) ([]string, error) {
 		if line == "" {
 			continue
 		}
-
-		// Git status --porcelain format: XY filename
-		// X and Y are single characters for staged and unstaged status
-		// They can be spaces if no change
-		if len(line) < 4 {
-			continue
-		}
-
-		// Extract filename (everything after first 3 characters: X, Y, and space)
-		// Examples: "M .zshrc" or "M  filename" or "MM filename"
-		// Do NOT trim whitespace here - the dot needs to be preserved
-		filename := line[3:]
-		filename = strings.TrimSpace(filename)
+		filename := parseGitStatusLine(line)
 		if filename != "" {
 			files = append(files, filename)
 		}
