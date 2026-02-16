@@ -564,3 +564,162 @@ func TestGetCurrentCommit_ReturnsHash(t *testing.T) {
 	assert.NotEmpty(t, commit, "GetCurrentCommit() should return non-empty hash")
 	assert.Len(t, commit, 40, "GetCurrentCommit() should return 40-character hash")
 }
+
+func TestParseGitStatusLine_UntrackedFiles(t *testing.T) {
+	tests := []struct {
+		name     string
+		line     string
+		expected string
+	}{
+		{
+			name:     "basic untracked file",
+			line:     "?? newfile.txt",
+			expected: "newfile.txt",
+		},
+		{
+			name:     "untracked file in subdirectory",
+			line:     "?? subdir/newfile.txt",
+			expected: "subdir/newfile.txt",
+		},
+		{
+			name:     "untracked file with leading dot",
+			line:     "?? .hiddenfile",
+			expected: ".hiddenfile",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parseGitStatusLine(tt.line)
+			assert.Equal(t, tt.expected, result, "parseGitStatusLine() should return correct filename")
+		})
+	}
+}
+
+func TestParseGitStatusLine_RenamedFiles(t *testing.T) {
+	tests := []struct {
+		name     string
+		line     string
+		expected string
+	}{
+		{
+			name:     "renamed file (R)",
+			line:     "R  oldname.txt -> newname.txt",
+			expected: "newname.txt",
+		},
+		{
+			name:     "renamed file (RR)",
+			line:     "RR oldname.txt -> newname.txt",
+			expected: "newname.txt",
+		},
+		{
+			name:     "renamed file with spaces",
+			line:     "R  old name.txt -> new name.txt",
+			expected: "new name.txt",
+		},
+		{
+			name:     "renamed file in subdirectory",
+			line:     "R  old/oldname.txt -> new/newname.txt",
+			expected: "new/newname.txt",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parseGitStatusLine(tt.line)
+			assert.Equal(t, tt.expected, result, "parseGitStatusLine() should return new filename for renamed files")
+		})
+	}
+}
+
+func TestParseGitStatusLine_StandardCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		line     string
+		expected string
+	}{
+		{
+			name:     "modified file (M)",
+			line:     "M  modified.txt",
+			expected: "modified.txt",
+		},
+		{
+			name:     "staged modification (MM)",
+			line:     "MM modified.txt",
+			expected: "modified.txt",
+		},
+		{
+			name:     "deleted file (D)",
+			line:     "D  deleted.txt",
+			expected: "deleted.txt",
+		},
+		{
+			name:     "added file (A)",
+			line:     "A  added.txt",
+			expected: "added.txt",
+		},
+		{
+			name:     "file with leading dot",
+			line:     "M  .hiddenfile",
+			expected: ".hiddenfile",
+		},
+		{
+			name:     "file with spaces in name",
+			line:     "M  file with spaces.txt",
+			expected: "file with spaces.txt",
+		},
+		{
+			name:     "file in subdirectory",
+			line:     "M  subdir/file.txt",
+			expected: "subdir/file.txt",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parseGitStatusLine(tt.line)
+			assert.Equal(t, tt.expected, result, "parseGitStatusLine() should return correct filename")
+		})
+	}
+}
+
+func TestParseGitStatusLine_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		line     string
+		expected string
+	}{
+		{
+			name:     "empty string",
+			line:     "",
+			expected: "",
+		},
+		{
+			name:     "single character",
+			line:     "M",
+			expected: "",
+		},
+		{
+			name:     "two characters only",
+			line:     "M ",
+			expected: "",
+		},
+		{
+			name:     "renamed file without arrow",
+			line:     "R  oldname.txt newname.txt",
+			expected: "",
+		},
+		{
+			name:     "trailing whitespace",
+			line:     "M  file.txt   ",
+			expected: "file.txt",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parseGitStatusLine(tt.line)
+			assert.Equal(t, tt.expected, result, "parseGitStatusLine() should handle edge cases correctly")
+		})
+	}
+}

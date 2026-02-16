@@ -449,6 +449,35 @@ func GetCurrentCommit(repoPath string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
+// parseGitStatusLine parses a single line from git status --porcelain
+func parseGitStatusLine(line string) string {
+	if len(line) < 2 {
+		return ""
+	}
+
+	// Handle untracked files (?? prefix)
+	if strings.HasPrefix(line, "?? ") {
+		return strings.TrimSpace(line[2:])
+	}
+
+	// Handle renamed files (R  old -> new)
+	if strings.HasPrefix(line, "R ") || strings.HasPrefix(line, "RR ") {
+		parts := strings.SplitN(line, " -> ", 2)
+		if len(parts) == 2 {
+			return strings.TrimSpace(parts[1])
+		}
+		// Malformed rename line, don't fall through
+		return ""
+	}
+
+	// Standard case: XY filename (minimum 3 chars: X, Y, space)
+	if len(line) >= 3 {
+		return strings.TrimSpace(line[3:])
+	}
+
+	return ""
+}
+
 // GetChangedFiles returns list of changed files
 func GetChangedFiles(repoPath string) ([]string, error) {
 	cmd := exec.Command("git", "status", "--porcelain")
