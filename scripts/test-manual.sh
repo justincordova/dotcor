@@ -269,10 +269,23 @@ EOF
     mkdir -p "$TEST_HOME/.local/share/dotcor"
     echo "Test local data file" > "$TEST_HOME/.local/share/test-data.txt"
 
+    # Create test file for adopt testing (independent, not in dotcor repo)
+    mkdir -p "$TEST_HOME/external_files"
+    cat > "$TEST_HOME/external_files/test_dotfile" << 'EOF'
+# Test configuration file for adopt command
+# This file should be imported via adopt symlink
+
+export ADOPT_TEST_VAR="adopted_value"
+alias adopt-test="echo 'This file was adopted!'"
+EOF
+    # Create symlink for adopt testing (points to external file)
+    ln -s "external_files/test_dotfile" "$TEST_HOME/.adopt_test_link"
+
     success "Sample dotfiles created"
     info "Created: .zshrc, .bashrc, .gitconfig, .gitignore_global, .tmux.conf"
     info "Created: .config/nvim/ (init.lua, test.lua)"
     info "Created: .local/share/ (test-data.txt)"
+    info "Created: external_files/test_dotfile + symlink ~/.adopt_test_link (for adopt testing)"
 
     export HOME="$TEST_HOME"
     export PATH="$PROJECT_ROOT/bin:$PATH"
@@ -384,10 +397,23 @@ EOF
     mkdir -p "$TEST_HOME/.local/share/dotcor"
     echo "Test local data file" > "$TEST_HOME/.local/share/test-data.txt"
 
+    # Create test file for adopt testing (independent, not in dotcor repo)
+    mkdir -p "$TEST_HOME/external_files"
+    cat > "$TEST_HOME/external_files/test_dotfile" << 'EOF'
+# Test configuration file for adopt command
+# This file should be imported via adopt symlink
+
+export ADOPT_TEST_VAR="adopted_value"
+alias adopt-test="echo 'This file was adopted!'"
+EOF
+    # Create symlink for adopt testing (points to external file)
+    ln -s "external_files/test_dotfile" "$TEST_HOME/.adopt_test_link"
+
     success "Sample dotfiles created"
     info "Created: .zshrc, .bashrc, .gitconfig, .gitignore_global, .tmux.conf"
     info "Created: .config/nvim/ (init.lua, test.lua)"
     info "Created: .local/share/ (test-data.txt)"
+    info "Created: external_files/test_dotfile + symlink ~/.adopt_test_link (for adopt testing)"
 
     export HOME="$TEST_HOME"
     export PATH="$PROJECT_ROOT/bin:$PATH"
