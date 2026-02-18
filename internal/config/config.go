@@ -177,16 +177,22 @@ func (c *Config) SaveConfig() error {
 		return fmt.Errorf("marshaling config: %w", err)
 	}
 
-	// Write to file with safe logging
-	if c.Logger != nil {
-		c.Logger.Debug("saving config", "path", configPath)
+	// Write to temp file first for atomicity
+	tempPath := configPath + ".tmp"
+	if err := os.WriteFile(tempPath, data, 0600); err != nil {
+		if c.Logger != nil {
+			c.Logger.Error("failed to write temp config file", "error", err)
+		}
+		return fmt.Errorf("writing temp config file: %w", err)
 	}
 
-	if err := os.WriteFile(configPath, data, 0644); err != nil {
+	// Rename temp to actual (atomic on most filesystems)
+	if err := os.Rename(tempPath, configPath); err != nil {
+		os.Remove(tempPath)
 		if c.Logger != nil {
-			c.Logger.Error("failed to save config", "error", err)
+			c.Logger.Error("failed to rename config file", "error", err)
 		}
-		return fmt.Errorf("saving config: %w", err)
+		return fmt.Errorf("renaming config file: %w", err)
 	}
 
 	if c.Logger != nil {
