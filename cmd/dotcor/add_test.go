@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/justincordova/dotcor/internal/config"
+	"github.com/justincordova/dotcor/internal/core"
+	"github.com/justincordova/dotcor/internal/fs"
 )
 
 // ========== Happy Path Tests ==========
@@ -1171,4 +1173,65 @@ func TestAdd_HelperFunctions_Work(t *testing.T) {
 		CreateTestSymlink(t, target, link)
 		AssertSymlinkPointsTo(t, link, target)
 	})
+}
+
+func TestAddTransactionVerification(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a source file (simulating ~/.zshrc)
+	homeDir := filepath.Join(tmpDir, "home")
+	sourceFile := filepath.Join(homeDir, ".zshrc")
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	err := os.WriteFile(sourceFile, []byte("test"), 0644)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	cfg := CreateTestConfig(t)
+
+	// Use tmpDir as repo path for this test
+	repoDir := filepath.Join(tmpDir, "dotcor")
+	if err := os.MkdirAll(filepath.Join(repoDir, "files"), 0755); err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+	cfg.RepoPath = filepath.Join(repoDir, "files")
+	cfg.GitEnabled = false
+
+	// Test that add verifies operations before commit
+	tx, err := core.AddFileTransaction(cfg, sourceFile, "shell/zshrc", config.ManagedFile{
+		SourcePath: sourceFile,
+		RepoPath:   "shell/zshrc",
+		AddedAt:    time.Now(),
+	})
+
+	if err != nil {
+		t.Fatalf("AddFileTransaction failed: %v", err)
+	}
+
+	// Execute and verify
+	err = tx.ExecuteAll()
+	if err != nil {
+		t.Fatalf("ExecuteAll failed: %v", err)
+	}
+
+	// Verify operations actually succeeded
+	repoPath := filepath.Join(repoDir, "files", "shell", "zshrc")
+
+	if !fs.PathExists(repoPath) {
+		t.Error("file should be in repo after add")
+	}
+
+	if !fs.PathExists(sourceFile) {
+		t.Error("symlink should be created")
+	}
+
+	if fs.PathExists(sourceFile) {
+		isValid, _ := fs.IsValidSymlink(sourceFile)
+		if !isValid {
+			t.Error("symlink should be valid")
+		}
+	}
 }

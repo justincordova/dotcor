@@ -366,6 +366,34 @@ func processAddFile(cfg *config.Config, sourcePath string, force bool, isTemplat
 	}
 
 	tx.Commit()
+
+	// Verify operations succeeded
+	fullRepoPath, err := config.GetRepoFilePath(cfg, repoPath)
+	if err != nil {
+		return addResultError, "", fmt.Errorf("expanding repo path for verification: %w", err)
+	}
+
+	sourceExpanded, err := config.ExpandPath(sourcePath, cfg)
+	if err != nil {
+		return addResultError, "", fmt.Errorf("expanding source path for verification: %w", err)
+	}
+
+	// Verify file in repo
+	if !fs.PathExists(fullRepoPath) {
+		return addResultError, "", fmt.Errorf("file not in repo after add: %s", fullRepoPath)
+	}
+
+	// Verify symlink exists
+	if !fs.PathExists(sourceExpanded) {
+		return addResultError, "", fmt.Errorf("symlink not created: %s", sourceExpanded)
+	}
+
+	// Verify it's a valid symlink
+	isValid, _ := fs.IsValidSymlink(sourceExpanded)
+	if !isValid {
+		return addResultError, "", fmt.Errorf("symlink is invalid: %s", sourceExpanded)
+	}
+
 	if !quiet {
 		fmt.Printf("  %s[OK]%s %s\n", colorGreen, colorReset, normalized)
 	}
