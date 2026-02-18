@@ -11,6 +11,24 @@ import (
 	"github.com/justincordova/dotcor/internal/fs"
 )
 
+// WarningError wraps an error to indicate it's a warning rather than a hard error
+type WarningError struct {
+	Err error
+}
+
+func (e *WarningError) Error() string {
+	return e.Err.Error()
+}
+
+func (e *WarningError) Unwrap() error {
+	return e.Err
+}
+
+// NewWarning creates a new warning error
+func NewWarning(err error) error {
+	return &WarningError{Err: err}
+}
+
 // Secret detection patterns
 var secretPatterns = []*regexp.Regexp{
 	// API keys and tokens
@@ -197,7 +215,7 @@ func ValidateFileSize(path string, cfg *config.Config) error {
 	if size > int64(threshold) {
 		sizeMB := float64(size) / (1024 * 1024)
 		cfg.Logger.Warn("file is very large", "file", path, "size_mb", sizeMB)
-		return fmt.Errorf("file is very large (%.1fMB), consider excluding: %s", sizeMB, path)
+		return NewWarning(fmt.Errorf("file is very large (%.1fMB), consider excluding: %s", sizeMB, path))
 	}
 
 	return nil

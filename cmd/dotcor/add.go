@@ -462,8 +462,6 @@ func isWarning(err error) bool {
 	if err == nil {
 		return false
 	}
-	msg := err.Error()
-	return strings.Contains(msg, "warning") ||
-		strings.Contains(msg, "large file") ||
-		strings.Contains(msg, "unusual permissions")
+	_, ok := err.(*core.WarningError)
+	return ok
 }
