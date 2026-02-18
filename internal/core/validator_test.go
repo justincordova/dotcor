@@ -252,3 +252,23 @@ func TestShouldWarnAboutSecrets(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateFileSizeEdgeCases(t *testing.T) {
+	cfg := createTestConfig(t)
+
+	// Test negative threshold
+	cfg.LargeFileThreshold = -100
+
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.txt")
+	err := os.WriteFile(testFile, []byte("test"), 0644)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	// Should treat negative same as zero (disabled)
+	err = ValidateFileSize(testFile, cfg)
+	if err != nil {
+		t.Error("negative threshold should disable validation")
+	}
+}
