@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -10,6 +11,18 @@ import (
 	"strings"
 	"time"
 )
+
+const gitCommandTimeout = 30 * time.Second
+
+// runGitCommand executes a git command with timeout
+func runGitCommand(dir string, name string, args ...string) (*exec.Cmd, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(context.Background(), gitCommandTimeout)
+
+	cmd := exec.CommandContext(ctx, "git", append([]string{name}, args...)...)
+	cmd.Dir = dir
+
+	return cmd, cancel
+}
 
 // StatusInfo represents Git repository status
 type StatusInfo struct {
@@ -37,8 +50,9 @@ func IsGitInstalled() bool {
 
 // InitRepo initializes git repository in directory
 func InitRepo(repoPath string) error {
-	cmd := exec.Command("git", "init")
-	cmd.Dir = repoPath
+	cmd, cancel := runGitCommand(repoPath, "init")
+	defer cancel()
+
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git init failed: %s: %w", string(output), err)

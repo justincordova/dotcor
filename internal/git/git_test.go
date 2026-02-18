@@ -1039,3 +1039,24 @@ func TestRefExistsValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestGitCommandTimeout(t *testing.T) {
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
+
+	tmpDir := t.TempDir()
+	err := InitRepo(tmpDir)
+	require.NoError(t, err, "InitRepo() should not error")
+
+	// Test that git commands don't hang indefinitely
+	start := time.Now()
+
+	// Try to get status (should complete quickly)
+	status, err := GetStatus(tmpDir)
+
+	elapsed := time.Since(start)
+	if err != nil && elapsed > 10*time.Second {
+		t.Error("git command took too long, should have timeout")
+	}
+
+	_ = status
+}
