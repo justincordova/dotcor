@@ -204,7 +204,7 @@ func IsWritable(path string) bool {
 			return false
 		}
 		file.Close()
-		os.Remove(tempFile)
+		defer os.Remove(tempFile)
 		return true
 	}
 

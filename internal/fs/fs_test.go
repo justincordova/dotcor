@@ -433,3 +433,22 @@ func TestRemoveAll(t *testing.T) {
 	assert.NoFileExists(t, file2, "RemoveAll() should delete file2")
 	assert.NoDirExists(t, testDir, "RemoveAll() should delete entire directory tree")
 }
+
+func TestIsWritableTempCleanup(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.txt")
+
+	err := os.WriteFile(testFile, []byte("test"), 0644)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	// Test that temp test file is cleaned up
+	if IsWritable(tmpDir) {
+		// Check that temp file doesn't exist
+		tempFile := filepath.Join(tmpDir, ".dotcor_write_test")
+		if _, err := os.Stat(tempFile); err == nil {
+			t.Error("temp write test file should be cleaned up")
+		}
+	}
+}
