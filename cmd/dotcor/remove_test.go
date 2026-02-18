@@ -6,11 +6,13 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/justincordova/dotcor/internal/config"
+	"github.com/justincordova/dotcor/internal/fs"
 )
 
 // ========== Happy Path Tests ==========
@@ -949,4 +951,59 @@ func TestRemove_HelperFunctions_Work(t *testing.T) {
 		CreateTestSymlink(t, target, link)
 		AssertSymlinkPointsTo(t, link, target)
 	})
+}
+
+func TestRemoveAtomicity(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create test config
+	cfg := CreateTestConfig(t)
+	repoDir := filepath.Join(tmpDir, "repo")
+	if err := os.MkdirAll(repoDir, 0755); err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+	cfg.RepoPath = repoDir
+	cfg.GitEnabled = false
+
+	// Create a test file in repo
+	repoFile := filepath.Join(repoDir, ".zshrc")
+	err := os.WriteFile(repoFile, []byte("original"), 0644)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	sourceFile := filepath.Join(tmpDir, "test_source")
+
+	// Create symlink
+	err = os.Symlink(repoFile, sourceFile)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	// Add to managed files
+	mf := config.ManagedFile{
+		SourcePath: sourceFile,
+		RepoPath:   ".zshrc",
+		AddedAt:    time.Now(),
+	}
+	cfg.ManagedFiles = append(cfg.ManagedFiles, mf)
+
+	// Test remove should create backup and restore file
+	err = processRemoveFile(cfg, mf, false, false, true)
+	if err != nil {
+		t.Fatalf("processRemoveFile failed: %v", err)
+	}
+
+	// Verify symlink was removed and file was restored
+	if fs.PathExists(sourceFile) {
+		link, _ := fs.IsSymlink(sourceFile)
+		if link {
+			t.Error("source should not be a symlink after remove")
+		}
+	}
+
+	// Verify repo file was removed
+	if fs.PathExists(repoFile) {
+		t.Error("repo file should be removed after remove with delete-repo")
+	}
 }
