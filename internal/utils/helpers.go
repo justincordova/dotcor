@@ -11,6 +11,7 @@ const (
 	KB = 1024
 	MB = KB * 1024
 	GB = MB * 1024
+	TB = GB * 1024
 
 	// Diff command constants
 	DiffBinary      = "diff"
@@ -24,7 +25,13 @@ const (
 
 // FormatSize formats file size in human-readable format
 func FormatSize(bytes int64) string {
+	if bytes < 0 {
+		return "0 bytes"
+	}
+
 	switch {
+	case bytes >= TB:
+		return fmt.Sprintf("%.1f TB", float64(bytes)/float64(TB))
 	case bytes >= GB:
 		return fmt.Sprintf("%.1f GB", float64(bytes)/float64(GB))
 	case bytes >= MB:
