@@ -15,14 +15,14 @@ import (
 
 // isValidGitURL checks if URL looks like a valid git remote URL
 func isValidGitURL(url string) bool {
-	prefixes := []string{
+	validPrefixes := []string{
 		"http://",
 		"https://",
 		"git://",
 		"git@",
 		"ssh://",
 	}
-	for _, prefix := range prefixes {
+	for _, prefix := range validPrefixes {
 		if strings.HasPrefix(url, prefix) {
 			return true
 		}

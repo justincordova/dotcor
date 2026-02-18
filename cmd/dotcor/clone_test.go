@@ -217,3 +217,24 @@ func TestClone_ProgressShown(t *testing.T) {
 		assert.Contains(t, outputStr, "Cloning repository", "should show cloning message")
 	})
 }
+
+func TestCloneURLValidation(t *testing.T) {
+	tests := []struct {
+		url   string
+		valid bool
+	}{
+		{"http://github.com/user/repo", true},
+		{"https://github.com/user/repo", true},
+		{"git@github.com:user/repo", true},
+		{"ssh://github.com/user/repo", true},
+		{"invalid://url", false},
+		{"not-a-url", false},
+	}
+
+	for _, tt := range tests {
+		result := isValidGitURL(tt.url)
+		if result != tt.valid {
+			t.Errorf("isValidGitURL(%q) = %v, want %v", tt.url, result, tt.valid)
+		}
+	}
+}
