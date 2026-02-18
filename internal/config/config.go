@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -24,6 +25,7 @@ type Config struct {
 	IgnorePatterns     []string      `yaml:"ignore_patterns"`      // Files/patterns to never add
 	ManagedFiles       []ManagedFile `yaml:"managed_files"`        // List of managed dotfiles
 	LargeFileThreshold int           `yaml:"large_file_threshold"` // Max file size warning (bytes, 0 = disabled)
+	mu                 sync.RWMutex  `yaml:"-"`                    // Mutex for thread-safe access to ManagedFiles
 }
 
 // ManagedFile represents a single managed dotfile
@@ -204,6 +206,10 @@ func (c *Config) SaveConfig() error {
 
 // AddManagedFile adds a new managed file to the config
 func (c *Config) AddManagedFile(mf ManagedFile) error {
+	// Lock for write
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	// Validate input
 	if mf.SourcePath == "" {
 		return fmt.Errorf("source path cannot be empty")
@@ -215,9 +221,15 @@ func (c *Config) AddManagedFile(mf ManagedFile) error {
 		return fmt.Errorf("added_at time cannot be zero")
 	}
 
-	// Check if already managed
-	if c.IsManaged(mf.SourcePath) {
-		return fmt.Errorf("file %s is already managed", mf.SourcePath)
+	// Check if already managed (inline to avoid deadlock)
+	normalized, err := NormalizePath(mf.SourcePath)
+	if err != nil {
+		return fmt.Errorf("normalizing path: %w", err)
+	}
+	for _, existing := range c.ManagedFiles {
+		if existing.SourcePath == normalized || existing.SourcePath == mf.SourcePath {
+			return fmt.Errorf("file %s is already managed", mf.SourcePath)
+		}
 	}
 
 	c.ManagedFiles = append(c.ManagedFiles, mf)
@@ -226,6 +238,9 @@ func (c *Config) AddManagedFile(mf ManagedFile) error {
 
 // RemoveManagedFile removes a managed file by source path
 func (c *Config) RemoveManagedFile(sourcePath string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	normalized, err := NormalizePath(sourcePath)
 	if err != nil {
 		return fmt.Errorf("normalizing path: %w", err)
@@ -243,6 +258,9 @@ func (c *Config) RemoveManagedFile(sourcePath string) error {
 
 // GetManagedFile retrieves managed file by source path
 func (c *Config) GetManagedFile(sourcePath string) (*ManagedFile, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
 	normalized, err := NormalizePath(sourcePath)
 	if err != nil {
 		return nil, fmt.Errorf("normalizing path: %w", err)
@@ -259,34 +277,68 @@ func (c *Config) GetManagedFile(sourcePath string) (*ManagedFile, error) {
 
 // IsManaged checks if a file is already managed
 func (c *Config) IsManaged(sourcePath string) bool {
-	_, err := c.GetManagedFile(sourcePath)
-	return err == nil
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	normalized, err := NormalizePath(sourcePath)
+	if err != nil {
+		return false
+	}
+
+	for _, mf := range c.ManagedFiles {
+		if mf.SourcePath == normalized || mf.SourcePath == sourcePath {
+			return true
+		}
+	}
+
+	return false
 }
 
 // MarkAsUncommitted marks a file as having uncommitted changes
 func (c *Config) MarkAsUncommitted(sourcePath string) error {
-	mf, err := c.GetManagedFile(sourcePath)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	normalized, err := NormalizePath(sourcePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("normalizing path: %w", err)
 	}
 
-	mf.HasUncommitted = true
-	return c.SaveConfig()
+	for i := range c.ManagedFiles {
+		if c.ManagedFiles[i].SourcePath == normalized || c.ManagedFiles[i].SourcePath == sourcePath {
+			c.ManagedFiles[i].HasUncommitted = true
+			return c.SaveConfig()
+		}
+	}
+
+	return fmt.Errorf("file %s is not managed", sourcePath)
 }
 
 // ClearUncommitted clears the uncommitted flag for a file
 func (c *Config) ClearUncommitted(sourcePath string) error {
-	mf, err := c.GetManagedFile(sourcePath)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	normalized, err := NormalizePath(sourcePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("normalizing path: %w", err)
 	}
 
-	mf.HasUncommitted = false
-	return c.SaveConfig()
+	for i := range c.ManagedFiles {
+		if c.ManagedFiles[i].SourcePath == normalized || c.ManagedFiles[i].SourcePath == sourcePath {
+			c.ManagedFiles[i].HasUncommitted = false
+			return c.SaveConfig()
+		}
+	}
+
+	return fmt.Errorf("file %s is not managed", sourcePath)
 }
 
 // GetUncommittedFiles returns all files with uncommitted changes
 func (c *Config) GetUncommittedFiles() []ManagedFile {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
 	result := []ManagedFile{}
 
 	for _, mf := range c.ManagedFiles {
