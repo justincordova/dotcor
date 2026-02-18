@@ -92,11 +92,13 @@ func CreateBackup(sourcePath string, cfg *config.Config) (string, error) {
 		return "", fmt.Errorf("copying to backup: %w", err)
 	}
 
-	cfg.Logger.Info("backup created",
-		"file", sourcePath,
-		"path", backupPath,
-	)
+	// Verify backup was created successfully
+	if !fs.PathExists(backupPath) {
+		cfg.Logger.Error("backup file does not exist after creation", "path", backupPath)
+		return "", fmt.Errorf("backup file not created: %s", backupPath)
+	}
 
+	cfg.Logger.Info("backup created", "file", sourcePath, "path", backupPath)
 	return backupPath, nil
 }
 
