@@ -136,11 +136,6 @@ func IsDirectory(path string, cfg *config.Config) (bool, error) {
 	return isDir, nil
 }
 
-func Exists(path string) bool {
-	_, err := os.Stat(path)
-	return !os.IsNotExist(err)
-}
-
 func GetFileSize(path string, cfg *config.Config) (int64, error) {
 	cfg.Logger.Debug("getting file size", "path", path)
 	info, err := os.Stat(path)
