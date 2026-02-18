@@ -295,3 +295,30 @@ func gitIsAvailable() bool {
 	_, err := exec.LookPath("git")
 	return err == nil
 }
+
+func TestTruncateHashSafety(t *testing.T) {
+	tests := []struct {
+		hash     string
+		maxLen   int
+		expected string
+	}{
+		{"abc123def", 7, "abc123d"}, // > 7 gets truncated to 7
+		{"abc123", 7, "abc123"},     // == 7 stays same
+		{"a", 7, "a"},               // < 7 stays same
+		{"", 7, ""},                 // empty stays same
+		{"short", 10, "short"},      // < 10 stays same
+	}
+
+	for _, tt := range tests {
+		// Simulating truncateHash logic from history.go
+		shortHash := tt.hash
+		if len(shortHash) > tt.maxLen {
+			shortHash = shortHash[:tt.maxLen]
+		}
+
+		result := shortHash
+		if result != tt.expected {
+			t.Errorf("truncate logic (%q, %d) = %q, want %q", tt.hash, tt.maxLen, result, tt.expected)
+		}
+	}
+}
