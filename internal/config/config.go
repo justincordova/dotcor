@@ -198,6 +198,17 @@ func (c *Config) SaveConfig() error {
 
 // AddManagedFile adds a new managed file to the config
 func (c *Config) AddManagedFile(mf ManagedFile) error {
+	// Validate input
+	if mf.SourcePath == "" {
+		return fmt.Errorf("source path cannot be empty")
+	}
+	if mf.RepoPath == "" {
+		return fmt.Errorf("repo path cannot be empty")
+	}
+	if mf.AddedAt.IsZero() {
+		return fmt.Errorf("added_at time cannot be zero")
+	}
+
 	// Check if already managed
 	if c.IsManaged(mf.SourcePath) {
 		return fmt.Errorf("file %s is already managed", mf.SourcePath)

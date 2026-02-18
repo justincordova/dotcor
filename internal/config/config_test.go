@@ -119,6 +119,24 @@ func TestExpandGlobErrorHandling(t *testing.T) {
 	}
 }
 
+func TestAddManagedFileValidation(t *testing.T) {
+	cfg, _ := NewDefaultConfig()
+
+	// Test empty paths
+	tests := []ManagedFile{
+		{SourcePath: "", RepoPath: "test", AddedAt: time.Now()},
+		{SourcePath: "~/.test", RepoPath: "", AddedAt: time.Now()},
+		{SourcePath: "~/.test", RepoPath: "test", AddedAt: time.Time{}},
+	}
+
+	for i, mf := range tests {
+		err := cfg.AddManagedFile(mf)
+		if err == nil {
+			t.Errorf("Test %d: Should reject invalid managed file", i)
+		}
+	}
+}
+
 func TestConfigManagedFiles(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
