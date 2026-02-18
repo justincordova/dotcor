@@ -81,6 +81,29 @@ func TestGetRepoFilePathWithNilLogger(t *testing.T) {
 	}
 }
 
+func TestRemoveManagedFileErrorHandling(t *testing.T) {
+	cfg, _ := NewDefaultConfig()
+
+	// Test that non-existent file returns error
+	err := cfg.RemoveManagedFile("~/.nonexistent")
+	if err == nil {
+		t.Error("Should return error for non-existent file")
+	}
+}
+
+func TestGetManagedFileErrorHandling(t *testing.T) {
+	cfg, _ := NewDefaultConfig()
+
+	// Test that invalid paths return error
+	mf, err := cfg.GetManagedFile("../../../etc/passwd")
+	if err == nil {
+		t.Error("Should return error for path traversal attempt")
+	}
+	if mf != nil {
+		t.Error("Should not return managed file for invalid path")
+	}
+}
+
 func TestConfigManagedFiles(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")

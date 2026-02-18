@@ -211,7 +211,7 @@ func (c *Config) AddManagedFile(mf ManagedFile) error {
 func (c *Config) RemoveManagedFile(sourcePath string) error {
 	normalized, err := NormalizePath(sourcePath)
 	if err != nil {
-		normalized = sourcePath
+		return fmt.Errorf("normalizing path: %w", err)
 	}
 
 	for i, mf := range c.ManagedFiles {
@@ -228,7 +228,7 @@ func (c *Config) RemoveManagedFile(sourcePath string) error {
 func (c *Config) GetManagedFile(sourcePath string) (*ManagedFile, error) {
 	normalized, err := NormalizePath(sourcePath)
 	if err != nil {
-		normalized = sourcePath
+		return nil, fmt.Errorf("normalizing path: %w", err)
 	}
 
 	for i := range c.ManagedFiles {
