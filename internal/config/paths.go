@@ -195,17 +195,25 @@ func ComputeRelativeSymlink(linkPath, targetPath string) (string, error) {
 // ExpandGlob expands glob pattern to list of files
 // Example: ~/.config/nvim/*.lua -> [~/.config/nvim/init.lua, ~/.config/nvim/plugins.lua]
 func ExpandGlob(pattern string) ([]string, error) {
+	// Validate pattern is not empty
+	if pattern == "" {
+		return nil, fmt.Errorf("glob pattern cannot be empty")
+	}
+
 	// First expand ~ and env vars
 	expanded, err := ExpandPath(pattern, nil)
 	if err != nil {
-		// If expansion fails, try using pattern as-is (might still work for globs)
-		expanded = pattern
+		return nil, fmt.Errorf("expanding path: %w", err)
 	}
 
 	// Use filepath.Glob to expand the pattern
 	matches, err := filepath.Glob(expanded)
 	if err != nil {
-		return nil, fmt.Errorf("expanding glob pattern: %w", err)
+		return nil, fmt.Errorf("invalid glob pattern: %w", err)
+	}
+
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("no files match pattern: %s", pattern)
 	}
 
 	// Filter out directories, only return files
@@ -216,7 +224,12 @@ func ExpandGlob(pattern string) ([]string, error) {
 			continue // Skip files we cannot stat
 		}
 		if !info.IsDir() {
-			files = append(files, match)
+			normalized, _ := NormalizePath(match)
+			if normalized != "" {
+				files = append(files, normalized)
+			} else {
+				files = append(files, match)
+			}
 		}
 	}
 

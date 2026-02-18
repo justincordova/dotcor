@@ -104,6 +104,21 @@ func TestGetManagedFileErrorHandling(t *testing.T) {
 	}
 }
 
+func TestExpandGlobErrorHandling(t *testing.T) {
+	// Test that invalid glob patterns return error
+	tests := []string{
+		"",
+		"[",
+	}
+
+	for _, pattern := range tests {
+		result, err := ExpandGlob(pattern)
+		if err == nil {
+			t.Errorf("ExpandGlob(%q) should return error, got: %v", pattern, result)
+		}
+	}
+}
+
 func TestConfigManagedFiles(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
