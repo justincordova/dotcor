@@ -30,6 +30,15 @@ func GetTemplateContext() (*TemplateContext, error) {
 		home = "~"
 	}
 
+	// Validate and sanitize context values
+	if strings.Contains(hostname, "..") || strings.Contains(hostname, "/") {
+		hostname = "unknown"
+	}
+
+	if strings.Contains(currentUser.Username, "..") || strings.Contains(currentUser.Username, "/") {
+		currentUser.Username = "user"
+	}
+
 	return &TemplateContext{
 		Hostname: hostname,
 		User:     currentUser.Username,

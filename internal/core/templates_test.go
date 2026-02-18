@@ -3,6 +3,7 @@ package core
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -163,5 +164,23 @@ Home: {{ .Home }}
 
 	for _, line := range expectedLines {
 		assert.Contains(t, result, line, "Template result should contain expected line: %s", line)
+	}
+}
+
+func TestGetTemplateContextSanitization(t *testing.T) {
+	// Test that context values are sanitized
+	ctx, err := GetTemplateContext()
+	if err != nil {
+		t.Fatalf("GetTemplateContext failed: %v", err)
+	}
+
+	// Check hostname doesn't contain dangerous patterns
+	if strings.Contains(ctx.Hostname, "..") || strings.Contains(ctx.Hostname, "/") {
+		t.Error("Hostname should be sanitized")
+	}
+
+	// Check username doesn't contain dangerous patterns
+	if strings.Contains(ctx.User, "..") || strings.Contains(ctx.User, "/") {
+		t.Error("User should be sanitized")
 	}
 }
