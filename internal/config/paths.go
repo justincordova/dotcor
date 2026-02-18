@@ -47,7 +47,7 @@ func NormalizePath(path string) (string, error) {
 // Example: ~/.zshrc -> /Users/you/.zshrc
 // Also handles environment variables: $XDG_CONFIG_HOME, %APPDATA%, etc.
 func ExpandPath(path string, cfg *Config) (string, error) {
-	if cfg != nil {
+	if cfg != nil && cfg.Logger != nil {
 		cfg.Logger.Debug("expanding path", "path", path)
 	}
 
@@ -62,7 +62,7 @@ func ExpandPath(path string, cfg *Config) (string, error) {
 		}
 
 		if path == "~" {
-			if cfg != nil {
+			if cfg != nil && cfg.Logger != nil {
 				cfg.Logger.Debug("path expanded", "path", "~", "expanded", home)
 			}
 			return home, nil
@@ -81,7 +81,7 @@ func ExpandPath(path string, cfg *Config) (string, error) {
 	}
 
 	expanded := filepath.Clean(absPath)
-	if cfg != nil {
+	if cfg != nil && cfg.Logger != nil {
 		cfg.Logger.Debug("path expanded", "path", path, "expanded", expanded)
 	}
 
@@ -91,15 +91,27 @@ func ExpandPath(path string, cfg *Config) (string, error) {
 // GetRepoFilePath returns full path to file in repo
 // Example: shell/zshrc -> /Users/you/.dotcor/files/shell/zshrc
 func GetRepoFilePath(config *Config, repoPath string) (string, error) {
-	config.Logger.Debug("getting repo file path", "repo_path", repoPath)
+	if config == nil {
+		return "", fmt.Errorf("config is nil")
+	}
+
+	if config.Logger != nil {
+		config.Logger.Debug("getting repo file path", "repo_path", repoPath)
+	}
 
 	expanded, err := ExpandPath(config.RepoPath, config)
 	if err != nil {
-		return "", err
+		if config.Logger != nil {
+			config.Logger.Error("failed to expand repo path", "error", err)
+		}
+		return "", fmt.Errorf("expanding repo path: %w", err)
 	}
 
 	fullPath := filepath.Join(expanded, repoPath)
-	config.Logger.Debug("repo file path resolved", "repo_path", repoPath, "full_path", fullPath)
+
+	if config.Logger != nil {
+		config.Logger.Debug("repo file path resolved", "repo_path", repoPath, "full_path", fullPath)
+	}
 
 	return fullPath, nil
 }

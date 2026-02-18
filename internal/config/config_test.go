@@ -67,6 +67,20 @@ func TestSaveConfigWithNilLogger(t *testing.T) {
 	}
 }
 
+func TestGetRepoFilePathWithNilLogger(t *testing.T) {
+	cfg := &Config{
+		Logger:       nil,
+		RepoPath:     "/tmp/test",
+		ManagedFiles: []ManagedFile{},
+	}
+
+	// Should not panic
+	_, err := GetRepoFilePath(cfg, "test.txt")
+	if err != nil {
+		t.Logf("GetRepoFilePath returned error: %v", err)
+	}
+}
+
 func TestConfigManagedFiles(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
