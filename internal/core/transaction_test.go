@@ -366,3 +366,35 @@ func findSubstring(s, substr string) bool {
 	}
 	return false
 }
+
+func TestRemoveFileOpBackupVerification(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.txt")
+
+	err := os.WriteFile(testFile, []byte("test"), 0644)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	cfg := &config.Config{Logger: slog.Default()}
+
+	op := &RemoveFileOp{
+		Path:   testFile,
+		config: cfg,
+	}
+
+	// Execute should create backup
+	err = op.Do()
+	if err != nil {
+		t.Fatalf("Do failed: %v", err)
+	}
+
+	// Verify backup exists
+	if op.backupPath == "" {
+		t.Fatal("backup path should not be empty")
+	}
+
+	if _, err := os.Stat(op.backupPath); err != nil {
+		t.Fatalf("backup file not created: %v", err)
+	}
+}

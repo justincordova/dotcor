@@ -230,6 +230,13 @@ func (op *RemoveFileOp) Do() error {
 	if backupPath == "" {
 		return fmt.Errorf("backup creation failed - no backup path returned")
 	}
+
+	// Verify backup was actually created
+	if !fs.PathExists(backupPath) {
+		op.config.Logger.Error("backup file does not exist", "path", backupPath)
+		return fmt.Errorf("backup file does not exist: %s", backupPath)
+	}
+
 	op.backupPath = backupPath
 
 	return os.Remove(op.Path)
