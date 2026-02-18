@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -160,7 +161,7 @@ func MigrateFromEmpty(config *Config) error {
 		if err != nil {
 			return err
 		}
-		config.RepoPath = configDir + "/files"
+		config.RepoPath = filepath.Join(configDir, "files")
 	}
 
 	if len(config.IgnorePatterns) == 0 {

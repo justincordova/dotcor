@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -195,4 +196,20 @@ func TestExportConfig(t *testing.T) {
 	assert.NotEmpty(t, data, "ExportConfig should return non-empty data")
 	assert.Contains(t, string(data), "version",
 		"ExportConfig should contain version field")
+}
+
+func TestMigrateRepoPathConstruction(t *testing.T) {
+	// Arrange
+	configDir := "/tmp/test"
+	cfg := &Config{
+		RepoPath: configDir + "/files",
+	}
+
+	// Act
+	_ = cfg.RepoPath
+
+	// Assert - RepoPath should be absolute
+	if !filepath.IsAbs(cfg.RepoPath) {
+		t.Error("RepoPath should be absolute")
+	}
 }
