@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -193,6 +194,31 @@ func ValidateConfig(config *Config) error {
 
 	if config.RepoPath == "" {
 		return fmt.Errorf("repo path is empty")
+	}
+
+	// Validate repo path doesn't contain dangerous patterns
+	if strings.Contains(config.RepoPath, "..") {
+		return fmt.Errorf("repo path contains path traversal: %s", config.RepoPath)
+	}
+
+	// Validate ignore patterns
+	for i, pattern := range config.IgnorePatterns {
+		if pattern == "" {
+			return fmt.Errorf("ignore pattern at index %d cannot be empty", i)
+		}
+	}
+
+	// Validate managed files
+	for i, mf := range config.ManagedFiles {
+		if mf.SourcePath == "" {
+			return fmt.Errorf("managed file at index %d has empty source path", i)
+		}
+		if mf.RepoPath == "" {
+			return fmt.Errorf("managed file at index %d has empty repo path", i)
+		}
+		if mf.AddedAt.IsZero() {
+			return fmt.Errorf("managed file at index %d has zero timestamp", i)
+		}
 	}
 
 	return nil

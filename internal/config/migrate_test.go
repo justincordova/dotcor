@@ -173,6 +173,44 @@ func TestValidateConfig(t *testing.T) {
 	}
 }
 
+func TestValidateConfigComprehensive(t *testing.T) {
+	tests := []struct {
+		name  string
+		cfg   *Config
+		valid bool
+	}{
+		{
+			name:  "empty version",
+			cfg:   &Config{Version: "", RepoPath: "/tmp/test"},
+			valid: false,
+		},
+		{
+			name:  "invalid repo path with traversal",
+			cfg:   &Config{Version: "1.0", RepoPath: "../../../etc"},
+			valid: false,
+		},
+		{
+			name: "empty ignore pattern",
+			cfg: &Config{
+				Version:        "1.0",
+				RepoPath:       "/tmp/test",
+				IgnorePatterns: []string{""},
+			},
+			valid: false,
+		},
+	}
+
+	for _, tt := range tests {
+		err := ValidateConfig(tt.cfg)
+		if tt.valid && err != nil {
+			t.Errorf("%s: unexpected error: %v", tt.name, err)
+		}
+		if !tt.valid && err == nil {
+			t.Errorf("%s: expected error but got nil", tt.name)
+		}
+	}
+}
+
 func TestExportConfig(t *testing.T) {
 	// Arrange
 	cfg := &Config{
