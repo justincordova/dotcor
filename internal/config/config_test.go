@@ -52,6 +52,21 @@ func TestNewDefaultConfigLoggerNotNil(t *testing.T) {
 	}
 }
 
+func TestSaveConfigWithNilLogger(t *testing.T) {
+	cfg := &Config{
+		Logger:       nil,
+		Version:      CurrentConfigVersion,
+		RepoPath:     t.TempDir(),
+		ManagedFiles: []ManagedFile{},
+	}
+
+	// Should not panic
+	err := cfg.SaveConfig()
+	if err != nil {
+		t.Logf("SaveConfig returned error: %v", err)
+	}
+}
+
 func TestConfigManagedFiles(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
