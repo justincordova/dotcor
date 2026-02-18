@@ -646,7 +646,9 @@ func TestInit_InteractiveMode_ScansDotfiles(t *testing.T) {
 
 func TestInitInteractiveFlag(t *testing.T) {
 	cfg, _ := config.NewDefaultConfig()
-	cfg.SaveConfig()
+	if err := cfg.SaveConfig(); err != nil {
+		t.Fatalf("SaveConfig failed: %v", err)
+	}
 	defer os.RemoveAll(cfg.RepoPath)
 
 	cmd := NewInitCmd(cfg)

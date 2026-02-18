@@ -15,7 +15,7 @@ import (
 
 func init() {
 	// Load .env file if it exists
-	godotenv.Load()
+	_ = godotenv.Load()
 }
 
 var (
@@ -56,11 +56,6 @@ func Warning(msg string) {
 // Error prints error message in red
 func Error(msg string) {
 	fmt.Printf("%s✗%s %s\n", colorRed, colorReset, msg)
-}
-
-// printSectionHeader prints a colored section header using the theme color
-func printSectionHeader(title string) {
-	fmt.Printf("\n  %s%s%s\n", colorLightPink, title, colorReset)
 }
 
 // Info prints info message in blue
@@ -141,10 +136,10 @@ Simply type dotcor help [path to command] for full details.`,
 				cmd, _, e := c.Root().Find(args)
 				if cmd == nil || e != nil {
 					c.Printf("Unknown help topic %#q\n", args)
-					c.Root().Usage()
+					_ = c.Root().Usage()
 				} else {
 					cmd.InitDefaultHelpFlag()
-					cmd.Help()
+					_ = cmd.Help()
 				}
 			}
 		},

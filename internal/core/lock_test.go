@@ -200,7 +200,11 @@ func TestLockAcquireWithRetry(t *testing.T) {
 		t.Fatalf("AcquireLock failed: %v", err)
 	}
 
-	defer ReleaseLock(cfg)
+	defer func() {
+		if err := ReleaseLock(cfg); err != nil {
+			t.Logf("Failed to release lock: %v", err)
+		}
+	}()
 
 	// Try to acquire same lock - should fail after retries
 	cfg2 := &config.Config{Logger: slog.Default()}

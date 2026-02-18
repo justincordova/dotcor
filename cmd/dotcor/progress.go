@@ -82,7 +82,7 @@ func confirmBatchOperation(total int, operation string, force bool) error {
 	fmt.Printf("%s", prompt)
 
 	var input string
-	fmt.Scanln(&input)
+	_, _ = fmt.Scanln(&input)
 	input = strings.TrimSpace(strings.ToLower(input))
 
 	if input == "n" || input == "no" {
