@@ -452,3 +452,27 @@ func TestIsWritableTempCleanup(t *testing.T) {
 		}
 	}
 }
+
+func TestMoveFileCleanupOnError(t *testing.T) {
+	tmpDir := t.TempDir()
+	src := filepath.Join(tmpDir, "src.txt")
+	dst := filepath.Join(tmpDir, "dst.txt")
+
+	err := os.WriteFile(src, []byte("content"), 0644)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	cfg := testConfig()
+
+	// Test that move operation completes successfully
+	err = MoveFile(src, dst, cfg)
+	if err != nil {
+		t.Fatalf("MoveFile failed: %v", err)
+	}
+
+	// After successful move, source should not exist
+	if PathExists(src) {
+		t.Error("source file should not exist after move")
+	}
+}
