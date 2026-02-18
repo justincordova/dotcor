@@ -281,7 +281,12 @@ func applySymlinks(cfg *config.Config) error {
 				continue
 			}
 			fmt.Printf("  → Backed up to %s\n", backupPath)
-			os.Remove(sourcePath)
+
+			// Remove original file
+			if err := os.Remove(sourcePath); err != nil {
+				fmt.Printf("  %s[!]%s Failed to remove original file: %v\n", colorYellow, colorReset, err)
+				continue
+			}
 		}
 
 		// Create symlink

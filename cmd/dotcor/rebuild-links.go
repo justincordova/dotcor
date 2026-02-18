@@ -155,7 +155,10 @@ func runRebuildLinks(cmd *cobra.Command, args []string) error {
 		// Update or create symlink
 		// First, remove existing file/symlink if it exists
 		if fs.PathExists(sourcePath) {
-			os.Remove(sourcePath)
+			if err := os.Remove(sourcePath); err != nil {
+				fmt.Fprintf(os.Stderr, "  %s[!]%s Failed to remove existing file: %v\n", colorYellow, colorReset, err)
+				continue
+			}
 		}
 
 		// Create symlink to rendered file
