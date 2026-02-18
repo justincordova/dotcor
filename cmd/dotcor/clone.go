@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/justincordova/dotcor/internal/config"
@@ -82,7 +83,7 @@ func runClone(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting config directory: %w", err)
 	}
 
-	filesDir := configDir + "/files"
+	filesDir := filepath.Join(configDir, "files")
 
 	// Check if already exists
 	if fs.PathExists(configDir) {
@@ -125,7 +126,7 @@ func runClone(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
 
-	backupsDir := configDir + "/backups"
+	backupsDir := filepath.Join(configDir, "backups")
 	if err := fs.EnsureDir(backupsDir, cfg); err != nil {
 		return fmt.Errorf("creating backups directory: %w", err)
 	}
@@ -149,10 +150,10 @@ func runClone(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check for config.yaml in repo
-	configPath := filesDir + "/config.yaml"
+	configPath := filepath.Join(filesDir, "config.yaml")
 	if fs.PathExists(configPath) {
 		// Copy config to correct location
-		destConfig := configDir + "/config.yaml"
+		destConfig := filepath.Join(configDir, "config.yaml")
 		if err := fs.CopyFile(configPath, destConfig, cfg); err != nil {
 			fmt.Printf("%s[!]%s Could not copy config: %v\n", colorYellow, colorReset, err)
 		} else {
