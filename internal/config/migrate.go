@@ -173,6 +173,10 @@ func MigrateFromEmpty(config *Config) error {
 		config.LargeFileThreshold = 100 * 1024 * 1024 // 100MB default
 	}
 
+	if config.LockTimeout == 0 {
+		config.LockTimeout = 5 * time.Minute // 5 minutes default
+	}
+
 	return nil
 }
 

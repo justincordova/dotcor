@@ -21,9 +21,6 @@ type LockInfo struct {
 	Hostname  string
 }
 
-// LockTimeout is the duration after which a lock is considered stale
-const LockTimeout = time.Hour
-
 // maxRetries is the maximum number of lock acquisition attempts
 const maxRetries = 3
 
@@ -201,8 +198,8 @@ func IsStale(lockPath string, cfg *config.Config) (bool, error) {
 		return true, nil // Malformed lock file is considered stale
 	}
 
-	// Check if lock is older than LockTimeout
-	if time.Since(info.Timestamp) > LockTimeout {
+	// Check if lock is older than configured timeout
+	if time.Since(info.Timestamp) > cfg.LockTimeout {
 		cfg.Logger.Debug("lock is stale due to age", "pid", info.PID, "age", time.Since(info.Timestamp))
 		return true, nil
 	}

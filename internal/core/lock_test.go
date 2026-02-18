@@ -161,14 +161,16 @@ func TestGetLockInfo(t *testing.T) {
 
 func TestLockTimeout(t *testing.T) {
 	// Arrange
-	// (No arrangement - testing constant values)
+	cfg, err := config.NewDefaultConfig()
+	require.NoError(t, err, "NewDefaultConfig() should not error")
 
 	// Act
-	// (No action - testing constants)
+	// (No action - testing config values)
 
 	// Assert
-	assert.GreaterOrEqual(t, LockTimeout, time.Second, "LockTimeout should be at least 1 second")
-	assert.LessOrEqual(t, LockTimeout, time.Hour, "LockTimeout should not exceed 1 hour")
+	assert.GreaterOrEqual(t, cfg.LockTimeout, time.Second, "LockTimeout should be at least 1 second")
+	assert.LessOrEqual(t, cfg.LockTimeout, time.Hour, "LockTimeout should not exceed 1 hour")
+	assert.Equal(t, 5*time.Minute, cfg.LockTimeout, "Default LockTimeout should be 5 minutes")
 }
 
 func TestErrLockHeld(t *testing.T) {
@@ -186,8 +188,11 @@ func TestErrLockHeld(t *testing.T) {
 func TestLockAcquireWithRetry(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	cfg := &config.Config{Logger: slog.Default()}
+	cfg, err := config.NewDefaultConfig()
+	require.NoError(t, err, "NewDefaultConfig() should not error")
+	cfg.Logger = slog.Default()
 	cfg.RepoPath = filepath.Join(tmpDir, "files")
+	cfg.LockTimeout = 5 * time.Minute
 
 	// Set HOME to temp dir so lock is created there
 	oldHome := os.Getenv("HOME")
@@ -195,7 +200,7 @@ func TestLockAcquireWithRetry(t *testing.T) {
 	defer os.Setenv("HOME", oldHome)
 
 	// Test that lock acquisition has bounded retries
-	err := AcquireLock(cfg)
+	err = AcquireLock(cfg)
 	if err != nil {
 		t.Fatalf("AcquireLock failed: %v", err)
 	}
@@ -207,15 +212,18 @@ func TestLockAcquireWithRetry(t *testing.T) {
 	}()
 
 	// Try to acquire same lock - should fail after retries
-	cfg2 := &config.Config{Logger: slog.Default()}
+	cfg2, err := config.NewDefaultConfig()
+	require.NoError(t, err, "NewDefaultConfig() should not error")
+	cfg2.Logger = slog.Default()
 	cfg2.RepoPath = filepath.Join(tmpDir, "files")
+	cfg2.LockTimeout = 5 * time.Minute
 	err = AcquireLock(cfg2)
 	if err == nil {
 		t.Error("Should fail to acquire already held lock")
 	}
 
 	// Verify error message mentions retry attempts
-	if !strings.Contains(err.Error(), "attempts") {
+	if err != nil && !strings.Contains(err.Error(), "attempts") {
 		t.Error("Error should mention retry attempts")
 	}
 }

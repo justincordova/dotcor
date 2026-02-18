@@ -25,6 +25,7 @@ type Config struct {
 	IgnorePatterns     []string      `yaml:"ignore_patterns"`      // Files/patterns to never add
 	ManagedFiles       []ManagedFile `yaml:"managed_files"`        // List of managed dotfiles
 	LargeFileThreshold int           `yaml:"large_file_threshold"` // Max file size warning (bytes, 0 = disabled)
+	LockTimeout        time.Duration `yaml:"lock_timeout"`         // Duration after which lock is considered stale
 	mu                 sync.RWMutex  `yaml:"-"`                    // Mutex for thread-safe access to ManagedFiles
 }
 
@@ -156,6 +157,7 @@ func NewDefaultConfig() (*Config, error) {
 		IgnorePatterns:     GetDefaultIgnorePatterns(),
 		ManagedFiles:       []ManagedFile{},
 		LargeFileThreshold: 100 * 1024 * 1024, // 100MB default
+		LockTimeout:        5 * time.Minute,   // 5 minutes default
 	}, nil
 }
 
