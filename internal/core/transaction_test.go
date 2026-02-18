@@ -311,3 +311,58 @@ func TestTransactionRollback_PartialFailure(t *testing.T) {
 	assert.Equal(t, 1, op2.undoCalls, "op2.Undo() should be called and fail")
 	assert.Equal(t, 1, op3.undoCalls, "op3.Undo() should be called first")
 }
+
+// testPanicOp is an operation that panics during Undo
+type testPanicOp struct {
+	panicMessage string
+}
+
+func (op *testPanicOp) Do() error {
+	return nil
+}
+
+func (op *testPanicOp) Undo() error {
+	panic(op.panicMessage)
+}
+
+func (op *testPanicOp) Describe() string {
+	return "panic operation"
+}
+
+func TestTransactionPanicRecovery(t *testing.T) {
+	cfg := &config.Config{Logger: slog.Default()}
+
+	// Create a transaction that will panic
+	tx := NewTransaction(cfg)
+
+	op := &testPanicOp{panicMessage: "test panic"}
+
+	// Execute the operation (should succeed)
+	if err := tx.Execute(op); err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+
+	// Rollback should handle panic gracefully
+	err := tx.Rollback()
+	if err == nil {
+		t.Error("should return error after panic")
+	}
+
+	// Verify the error mentions panic
+	if err != nil && !containsString(err.Error(), "panic") {
+		t.Errorf("error should mention panic, got: %v", err)
+	}
+}
+
+func containsString(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && findSubstring(s, substr))
+}
+
+func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}

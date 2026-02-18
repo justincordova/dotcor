@@ -74,17 +74,34 @@ func (t *Transaction) Rollback() error {
 		return fmt.Errorf("cannot rollback committed transaction")
 	}
 
+	var rollbackErr error
 	for i := len(t.executed) - 1; i >= 0; i-- {
 		op := t.executed[i]
 		t.config.Logger.Debug("rolling back operation", "op", op.Describe(), "index", i)
-		if err := op.Undo(); err != nil {
-			t.config.Logger.Error("rollback failed",
-				"op", op.Describe(),
-				"error", err,
-				"index", i,
-			)
+
+		// Handle panics in undo operations
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					t.config.Logger.Error("panic in rollback", "op", op.Describe(), "error", r)
+					rollbackErr = fmt.Errorf("panic during rollback: %v", r)
+				}
+			}()
+
+			if err := op.Undo(); err != nil {
+				t.config.Logger.Error("rollback failed",
+					"op", op.Describe(),
+					"error", err,
+					"index", i,
+				)
+				rollbackErr = fmt.Errorf("rolling back %s: %w", op.Describe(), err)
+			}
+		}()
+
+		if rollbackErr != nil {
+			t.config.Logger.Error("stopping rollback due to error", "error", rollbackErr)
 			t.executed = nil
-			return fmt.Errorf("rolling back %s: %w", op.Describe(), err)
+			return rollbackErr
 		}
 	}
 
