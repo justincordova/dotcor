@@ -288,7 +288,7 @@ func TestIntegration_SecretDetection(t *testing.T) {
 		},
 		{
 			name:        "contains password",
-			content:     "db_password=supersecret123\n",
+			content:     "db_password=supersecret123456\n",
 			wantSecrets: true,
 		},
 	}

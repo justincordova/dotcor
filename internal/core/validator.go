@@ -31,39 +31,33 @@ func NewWarning(err error) error {
 
 // Secret detection patterns
 var secretPatterns = []*regexp.Regexp{
-	// API keys and tokens
-	regexp.MustCompile(`(?i)api[_-]?key\s*[:=]\s*['"]?[a-zA-Z0-9_-]{20,}['"]?`),
-	regexp.MustCompile(`(?i)api[_-]?secret\s*[:=]\s*['"]?[a-zA-Z0-9_-]{20,}['"]?`),
-	regexp.MustCompile(`(?i)access[_-]?token\s*[:=]\s*['"]?[a-zA-Z0-9_-]{20,}['"]?`),
-	regexp.MustCompile(`(?i)auth[_-]?token\s*[:=]\s*['"]?[a-zA-Z0-9_-]{20,}['"]?`),
+	// API keys - require assignment and longer value, require quotes or no spaces after
+	regexp.MustCompile(`(?i)api[_-]?key\s*[:=]\s*['"]?[a-zA-Z0-9_-]{32,}['"]?`),
+	regexp.MustCompile(`(?i)api[_-]?secret\s*[:=]\s*['"]?[a-zA-Z0-9_-]{32,}['"]?`),
 
-	// Passwords
-	regexp.MustCompile(`(?i)password\s*[:=]\s*['"]?[^\s'";]{8,}['"]?`),
-	regexp.MustCompile(`(?i)passwd\s*[:=]\s*['"]?[^\s'";]{8,}['"]?`),
+	// Tokens - look for specific prefixes (Bearer, token, secret)
+	regexp.MustCompile(`(?i)(?:bearer\s+)?['"]?[a-zA-Z0-9_+/=]{40,}['"]?`),
+
+	// Passwords - require password= assignment with value in quotes
+	regexp.MustCompile(`(?i)password\s*[:=]\s*['"]?[^'"\s]{16,}['"]?`),
+	regexp.MustCompile(`(?i)passwd\s*[:=]\s*['"]?[^'"\s]{16,}['"]?`),
 
 	// Secrets
-	regexp.MustCompile(`(?i)secret\s*[:=]\s*['"]?[a-zA-Z0-9_-]{20,}['"]?`),
-	regexp.MustCompile(`(?i)private[_-]?key\s*[:=]\s*['"]?[a-zA-Z0-9_-]{20,}['"]?`),
+	regexp.MustCompile(`(?i)secret\s*[:=]\s*['"]?[a-zA-Z0-9_-]{32,}['"]?`),
+	regexp.MustCompile(`(?i)private[_-]?key\s*[:=]\s*['"]?[a-zA-Z0-9_-]{32,}['"]?`),
 
-	// Private key headers
-	regexp.MustCompile(`-----BEGIN\s+.*PRIVATE\s+KEY-----`),
-	regexp.MustCompile(`-----BEGIN\s+RSA\s+PRIVATE\s+KEY-----`),
-	regexp.MustCompile(`-----BEGIN\s+EC\s+PRIVATE\s+KEY-----`),
-	regexp.MustCompile(`-----BEGIN\s+OPENSSH\s+PRIVATE\s+KEY-----`),
+	// Private key headers - more specific
+	regexp.MustCompile(`-----BEGIN\s+(RSA|EC|OPENSSH)\s+PRIVATE\s+KEY-----`),
 
-	// Cloud provider credentials
+	// AWS keys - specific format (20 char key, 40 char secret)
 	regexp.MustCompile(`(?i)aws[_-]?access[_-]?key[_-]?id\s*[:=]\s*['"]?[A-Z0-9]{20}['"]?`),
 	regexp.MustCompile(`(?i)aws[_-]?secret[_-]?access[_-]?key\s*[:=]\s*['"]?[a-zA-Z0-9/+=]{40}['"]?`),
-	regexp.MustCompile(`(?i)azure[_-]?.*secret`),
-	regexp.MustCompile(`(?i)gcp[_-]?.*secret`),
 
-	// Database connection strings with passwords
-	regexp.MustCompile(`(?i)postgres://[^:]+:[^@]+@`),
-	regexp.MustCompile(`(?i)mysql://[^:]+:[^@]+@`),
-	regexp.MustCompile(`(?i)mongodb://[^:]+:[^@]+@`),
+	// Database connection strings with actual passwords (look for patterns)
+	regexp.MustCompile(`(?i)(postgres|mysql|mongodb)://[^:]+:[^@]+@`),
 
-	// Generic credentials
-	regexp.MustCompile(`(?i)credentials\s*[:=]\s*['"]?[^\s'";]{10,}['"]?`),
+	// Generic credentials - require "credentials:" or "credentials =" with reasonable length
+	regexp.MustCompile(`(?i)credentials\s*[:=]\s*['"]?[a-zA-Z0-9_-]{20,}['"]?`),
 }
 
 // DefaultLargeFileThreshold is the fallback large file warning threshold (100MB)
