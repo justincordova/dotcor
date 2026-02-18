@@ -42,6 +42,16 @@ func TestNewDefaultConfig(t *testing.T) {
 	assert.Empty(t, cfg.ManagedFiles, "ManagedFiles should be empty initially")
 }
 
+func TestNewDefaultConfigLoggerNotNil(t *testing.T) {
+	cfg, err := NewDefaultConfig()
+	if err != nil {
+		t.Fatalf("NewDefaultConfig failed: %v", err)
+	}
+	if cfg.Logger == nil {
+		t.Error("Logger should not be nil in NewDefaultConfig")
+	}
+}
+
 func TestConfigManagedFiles(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")

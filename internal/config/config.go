@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -142,8 +143,11 @@ func NewDefaultConfig() (*Config, error) {
 		return nil, err
 	}
 
+	// Initialize logger with discard handler (can be upgraded later)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
 	return &Config{
-		Logger:             nil,
+		Logger:             logger,
 		Version:            CurrentConfigVersion,
 		RepoPath:           filepath.Join(configDir, "files"),
 		GitEnabled:         true,
