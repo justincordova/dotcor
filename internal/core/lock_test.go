@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -180,4 +181,37 @@ func TestErrLockHeld(t *testing.T) {
 	// Assert
 	assert.NotNil(t, ErrLockHeld, "ErrLockHeld should not be nil")
 	assert.NotNil(t, ErrStaleLock, "ErrStaleLock should not be nil")
+}
+
+func TestLockAcquireWithRetry(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &config.Config{Logger: slog.Default()}
+	cfg.RepoPath = filepath.Join(tmpDir, "files")
+
+	// Set HOME to temp dir so lock is created there
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	// Test that lock acquisition has bounded retries
+	err := AcquireLock(cfg)
+	if err != nil {
+		t.Fatalf("AcquireLock failed: %v", err)
+	}
+
+	defer ReleaseLock(cfg)
+
+	// Try to acquire same lock - should fail after retries
+	cfg2 := &config.Config{Logger: slog.Default()}
+	cfg2.RepoPath = filepath.Join(tmpDir, "files")
+	err = AcquireLock(cfg2)
+	if err == nil {
+		t.Error("Should fail to acquire already held lock")
+	}
+
+	// Verify error message mentions retry attempts
+	if !strings.Contains(err.Error(), "attempts") {
+		t.Error("Error should mention retry attempts")
+	}
 }

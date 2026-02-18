@@ -48,6 +48,7 @@ func getLockPath() (string, error) {
 func AcquireLock(cfg *config.Config) error {
 	cfg.Logger.Debug("acquiring lock")
 
+	var lastErr error
 	for i := 0; i < maxRetries; i++ {
 		lockPath, err := getLockPath()
 		if err != nil {
@@ -68,17 +69,19 @@ func AcquireLock(cfg *config.Config) error {
 				stale, staleErr := IsStale(lockPath, cfg)
 				if staleErr != nil {
 					cfg.Logger.Error("failed to check stale lock", "error", staleErr)
-					return fmt.Errorf("checking stale lock: %w", staleErr)
+					lastErr = fmt.Errorf("checking stale lock: %w", staleErr)
+					continue
 				}
 
 				if stale {
-					// Try to remove stale lock and retry
+					// Try to remove stale lock
 					if removeErr := os.Remove(lockPath); removeErr != nil {
 						info, _ := ReadLockInfo(lockPath)
 						cfg.Logger.Error("failed to remove stale lock", "pid", info.PID)
-						return fmt.Errorf("%w: PID %d (process appears dead). Run 'dotcor doctor --fix' to clear", ErrStaleLock, info.PID)
+						lastErr = fmt.Errorf("stale lock but cannot remove: PID %d", info.PID)
+						continue
 					}
-					// Retry lock acquisition after removing stale lock
+					// Successfully removed stale lock, retry
 					cfg.Logger.Debug("removed stale lock, retrying")
 					continue
 				}
@@ -87,11 +90,14 @@ func AcquireLock(cfg *config.Config) error {
 				info, _ := ReadLockInfo(lockPath)
 				age := time.Since(info.Timestamp)
 				cfg.Logger.Error("lock held by another process", "pid", info.PID, "hostname", info.Hostname, "age", age)
-				return fmt.Errorf("%w: PID %d on %s (lock held for %v). If this is incorrect, run 'dotcor doctor --fix'", ErrLockHeld, info.PID, info.Hostname, formatAge(age))
+				lastErr = fmt.Errorf("%w: PID %d on %s (lock held for %v). If this is incorrect, run 'dotcor doctor --fix'", ErrLockHeld, info.PID, info.Hostname, formatAge(age))
+				continue
 			}
 			cfg.Logger.Error("failed to create lock file", "error", err)
 			return fmt.Errorf("creating lock file: %w", err)
 		}
+
+		// Lock acquired successfully
 		defer f.Close()
 
 		// Write lock content
@@ -106,7 +112,7 @@ func AcquireLock(cfg *config.Config) error {
 			hostname,
 		)
 		if _, err := f.WriteString(content); err != nil {
-			// Clean up on write failure
+			f.Close()
 			os.Remove(lockPath)
 			cfg.Logger.Error("failed to write lock file", "error", err)
 			return fmt.Errorf("writing lock file: %w", err)
@@ -115,8 +121,8 @@ func AcquireLock(cfg *config.Config) error {
 		cfg.Logger.Info("lock acquired")
 		return nil
 	}
-	cfg.Logger.Error("failed to acquire lock after retries", "attempts", maxRetries)
-	return fmt.Errorf("failed to acquire lock after %d attempts", maxRetries)
+	cfg.Logger.Error("failed to acquire lock after retries", "attempts", maxRetries, "last_error", lastErr)
+	return fmt.Errorf("failed to acquire lock after %d attempts: %w", maxRetries, lastErr)
 }
 
 // ReleaseLock releases the file lock
