@@ -385,6 +385,32 @@ func (op *WriteFileOp) Describe() string {
 // Steps: move to repo -> create symlink -> add to config
 // Note: Backup is handled separately by the caller (backups are kept regardless of rollback).
 func AddFileTransaction(cfg *config.Config, sourcePath string, repoPath string, mf config.ManagedFile) (*Transaction, error) {
+	// Input validation
+	if cfg == nil {
+		return nil, fmt.Errorf("config cannot be nil")
+	}
+
+	// Validate source path
+	if sourcePath == "" {
+		return nil, fmt.Errorf("source path cannot be empty")
+	}
+
+	// Validate repo path
+	if repoPath == "" {
+		return nil, fmt.Errorf("repo path cannot be empty")
+	}
+
+	// Validate managed file
+	if mf.SourcePath == "" {
+		return nil, fmt.Errorf("managed file source path cannot be empty")
+	}
+	if mf.RepoPath == "" {
+		return nil, fmt.Errorf("managed file repo path cannot be empty")
+	}
+	if mf.AddedAt.IsZero() {
+		return nil, fmt.Errorf("managed file added_at time cannot be zero")
+	}
+
 	tx := NewTransaction(cfg)
 
 	fullRepoPath, err := config.GetRepoFilePath(cfg, repoPath)
