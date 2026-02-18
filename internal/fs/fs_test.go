@@ -21,7 +21,11 @@ func TestFileExists(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	testFile := filepath.Join(tempDir, "testfile")
 	err = os.WriteFile(testFile, []byte("test"), 0644)
@@ -70,7 +74,11 @@ func TestPathExists(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	testFile := filepath.Join(tempDir, "testfile")
 	err = os.WriteFile(testFile, []byte("test"), 0644)
@@ -113,7 +121,11 @@ func TestEnsureDir(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	tests := []struct {
 		name    string
@@ -167,7 +179,11 @@ func TestCopyWithPermissions(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	srcFile := filepath.Join(tempDir, "source")
 	content := []byte("test content for copy")
@@ -197,7 +213,11 @@ func TestMoveFile(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	srcFile := filepath.Join(tempDir, "source")
 	content := []byte("move me")
@@ -225,7 +245,11 @@ func TestMoveFileCreatesParentDir(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	srcFile := filepath.Join(tempDir, "source")
 	err = os.WriteFile(srcFile, []byte("test"), 0644)
@@ -246,7 +270,11 @@ func TestIsDirectory(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	testFile := filepath.Join(tempDir, "testfile")
 	err = os.WriteFile(testFile, []byte("test"), 0644)
@@ -299,7 +327,11 @@ func TestGetFileSize(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	content := []byte("hello world")
 	testFile := filepath.Join(tempDir, "testfile")
@@ -320,7 +352,11 @@ func TestRemoveFile(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	testFile := filepath.Join(tempDir, "testfile")
 	err = os.WriteFile(testFile, []byte("test"), 0644)
@@ -340,7 +376,11 @@ func TestIsReadable(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	testFile := filepath.Join(tempDir, "testfile")
 	err = os.WriteFile(testFile, []byte("test"), 0644)
@@ -355,7 +395,11 @@ func TestIsWritable(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	// Test writable directory
 	// Act & Assert
@@ -380,7 +424,11 @@ func TestGetFileMode(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	testFile := filepath.Join(tempDir, "testfile")
 	err = os.WriteFile(testFile, []byte("test"), 0644)

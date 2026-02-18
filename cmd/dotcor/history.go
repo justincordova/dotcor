@@ -135,14 +135,18 @@ func outputHistoryOneline(commits []git.CommitInfo) error {
 			shortHash = shortHash[:7]
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\n",
+		if _, err := fmt.Fprintf(w, "%s\t%s\t%s\n",
 			shortHash,
 			c.Date.Format("2006-01-02"),
 			truncateMessage(c.Message, 60),
-		)
+		); err != nil {
+			return fmt.Errorf("writing output: %w", err)
+		}
 	}
 
-	w.Flush()
+	if err := w.Flush(); err != nil {
+		return fmt.Errorf("flushing output: %w", err)
+	}
 	return nil
 }
 

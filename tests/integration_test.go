@@ -29,7 +29,11 @@ func TestIntegration_InitAddListRemove(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	homeDir := filepath.Join(tempDir, "home")
 	repoDir := filepath.Join(tempDir, "dotcor")
@@ -210,7 +214,11 @@ func TestIntegration_TransactionRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	// Create source files
 	file1 := filepath.Join(tempDir, "file1.txt")
@@ -269,7 +277,11 @@ func TestIntegration_SecretDetection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	tests := []struct {
 		name        string
@@ -345,7 +357,11 @@ func TestIntegration_BackupRestore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	// Create original file
 	originalFile := filepath.Join(tempDir, "original.txt")
@@ -402,7 +418,11 @@ func TestIntegration_GitWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	// Initialize repo
 	if err := git.InitRepo(tempDir); err != nil {
@@ -594,7 +614,11 @@ func TestIntegration_FullWorkflow_InitAddSyncRestore(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-e2e-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	homeDir := filepath.Join(tempDir, "home")
 	repoDir := filepath.Join(tempDir, "dotcor")

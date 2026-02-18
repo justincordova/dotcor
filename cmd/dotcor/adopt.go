@@ -193,7 +193,7 @@ func processAdoptSymlink(cfg *config.Config, symlinkPath string, dryRun bool) (a
 	}
 
 	relPath, err := filepath.Rel(repoFilesPath, absoluteTarget)
-	targetInRepo := err == nil && relPath != ".." && !(len(relPath) > 2 && relPath[:3] == "../")
+	targetInRepo := err == nil && relPath != ".." && (len(relPath) <= 2 || relPath[:3] != "../")
 
 	// Check if already managed
 	if cfg.IsManaged(symlinkPath) {

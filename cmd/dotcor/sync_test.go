@@ -49,8 +49,10 @@ managed_files: []
 
 		// Set HOME to tempDir
 		originalHome := os.Getenv("HOME")
-		os.Setenv("HOME", tempDir)
-		defer os.Setenv("HOME", originalHome)
+		require.NoError(t, os.Setenv("HOME", tempDir), "failed to set HOME")
+		defer func() {
+			require.NoError(t, os.Setenv("HOME", originalHome), "failed to restore HOME")
+		}()
 
 		// Act - Run sync command
 		cmd := syncCmd
@@ -110,8 +112,10 @@ managed_files: []
 
 		// Set HOME to tempDir
 		originalHome := os.Getenv("HOME")
-		os.Setenv("HOME", tempDir)
-		defer os.Setenv("HOME", originalHome)
+		require.NoError(t, os.Setenv("HOME", tempDir), "failed to set HOME")
+		defer func() {
+			require.NoError(t, os.Setenv("HOME", originalHome), "failed to restore HOME")
+		}()
 
 		// Act - Run sync command with force flag
 		cmd := syncCmd
@@ -182,8 +186,10 @@ managed_files:
 
 		// Set HOME to tempDir
 		originalHome := os.Getenv("HOME")
-		os.Setenv("HOME", tempDir)
-		defer os.Setenv("HOME", originalHome)
+		require.NoError(t, os.Setenv("HOME", tempDir), "failed to set HOME")
+		defer func() {
+			require.NoError(t, os.Setenv("HOME", originalHome), "failed to restore HOME")
+		}()
 
 		// Act - Try to sync (should commit changes)
 		cmd := syncCmd
@@ -245,8 +251,10 @@ managed_files: []
 
 		// Set HOME to tempDir
 		originalHome := os.Getenv("HOME")
-		os.Setenv("HOME", tempDir)
-		defer os.Setenv("HOME", originalHome)
+		require.NoError(t, os.Setenv("HOME", tempDir), "failed to set HOME")
+		defer func() {
+			require.NoError(t, os.Setenv("HOME", originalHome), "failed to restore HOME")
+		}()
 
 		// Act - Try to sync with --push (push will fail on non-bare repo)
 		cmd := syncCmd
@@ -298,8 +306,10 @@ managed_files: []
 
 		// Set HOME to tempDir
 		originalHome := os.Getenv("HOME")
-		os.Setenv("HOME", tempDir)
-		defer os.Setenv("HOME", originalHome)
+		require.NoError(t, os.Setenv("HOME", tempDir), "failed to set HOME")
+		defer func() {
+			require.NoError(t, os.Setenv("HOME", originalHome), "failed to restore HOME")
+		}()
 
 		// Act - Run sync without --no-push flag (should auto-push if remote exists)
 		// Since we have no remote, it should just commit
@@ -357,8 +367,10 @@ managed_files: []
 		require.NoError(t, err)
 
 		originalHome := os.Getenv("HOME")
-		os.Setenv("HOME", tempDir)
-		defer os.Setenv("HOME", originalHome)
+		require.NoError(t, os.Setenv("HOME", tempDir), "failed to set HOME")
+		defer func() {
+			require.NoError(t, os.Setenv("HOME", originalHome), "failed to restore HOME")
+		}()
 
 		// Create a fresh command to avoid global state issues
 		testCmd := &cobra.Command{
@@ -455,8 +467,10 @@ managed_files:
 		require.NoError(t, err)
 
 		originalHome := os.Getenv("HOME")
-		os.Setenv("HOME", tempDir)
-		defer os.Setenv("HOME", originalHome)
+		require.NoError(t, os.Setenv("HOME", tempDir), "failed to set HOME")
+		defer func() {
+			require.NoError(t, os.Setenv("HOME", originalHome), "failed to restore HOME")
+		}()
 
 		// Create a fresh command to avoid global state issues
 		testCmd := &cobra.Command{
@@ -521,8 +535,10 @@ managed_files: []
 		require.NoError(t, err)
 
 		originalHome := os.Getenv("HOME")
-		os.Setenv("HOME", tempDir)
-		defer os.Setenv("HOME", originalHome)
+		require.NoError(t, os.Setenv("HOME", tempDir), "failed to set HOME")
+		defer func() {
+			require.NoError(t, os.Setenv("HOME", originalHome), "failed to restore HOME")
+		}()
 
 		// Create a fresh command to avoid global state issues
 		testCmd := &cobra.Command{
@@ -583,8 +599,10 @@ managed_files: []
 		require.NoError(t, err)
 
 		originalHome := os.Getenv("HOME")
-		os.Setenv("HOME", tempDir)
-		defer os.Setenv("HOME", originalHome)
+		require.NoError(t, os.Setenv("HOME", tempDir), "failed to set HOME")
+		defer func() {
+			require.NoError(t, os.Setenv("HOME", originalHome), "failed to restore HOME")
+		}()
 
 		// Create a fresh command to avoid global state issues
 		testCmd := &cobra.Command{

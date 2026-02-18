@@ -368,7 +368,7 @@ func checkSymlinks(fix, fixAll bool, cmd *cobra.Command) (issues, critical, fixe
 
 			if shouldFix(severityWarning, fix, fixAll) && fs.PathExists(repoPath) {
 				// Remove broken symlink and recreate
-				os.Remove(sourcePath)
+				_ = os.Remove(sourcePath)
 				if err := fs.CreateSymlink(repoPath, sourcePath, cfg); err == nil {
 					fmt.Printf("  %s[OK]%s Fixed symlink: %s\n", colorGreen, colorReset, mf.SourcePath)
 					fixed++

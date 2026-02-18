@@ -34,7 +34,11 @@ func TestReadLockInfo(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	lockContent := "12345\n2024-01-15T10:30:00Z\ntesthost\n"
 	lockFile := filepath.Join(tempDir, ".lock")
@@ -54,7 +58,11 @@ func TestReadLockInfoMalformed(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	tests := []struct {
 		name    string
@@ -94,7 +102,11 @@ func TestIsStale(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	oldTime := time.Now().Add(-2 * time.Hour).Format(time.RFC3339)
 	oldLockContent := "99999\n" + oldTime + "\ntesthost\n"
@@ -196,8 +208,10 @@ func TestLockAcquireWithRetry(t *testing.T) {
 
 	// Set HOME to temp dir so lock is created there
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	require.NoError(t, os.Setenv("HOME", tmpDir), "failed to set HOME")
+	defer func() {
+		require.NoError(t, os.Setenv("HOME", oldHome), "failed to restore HOME")
+	}()
 
 	// Test that lock acquisition has bounded retries
 	err = AcquireLock(cfg)

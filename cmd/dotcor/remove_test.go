@@ -131,7 +131,7 @@ func TestRemove_MultipleFiles_Success(t *testing.T) {
 	// Act - Remove all symlinks
 	for _, mf := range cfg.ManagedFiles {
 		sourceFile := filepath.Join(homeDir, filepath.Base(mf.SourcePath))
-		os.Remove(sourceFile)
+		_ = os.Remove(sourceFile)
 	}
 
 	cfg.ManagedFiles = []config.ManagedFile{}
@@ -448,7 +448,7 @@ func TestRemove_Flag_All_RemovesAllFiles(t *testing.T) {
 	// Remove all files
 	for _, mf := range filesToRemove {
 		sourceFile := filepath.Join(homeDir, filepath.Base(mf.SourcePath))
-		os.Remove(sourceFile)
+		_ = os.Remove(sourceFile)
 	}
 
 	cfg.ManagedFiles = []config.ManagedFile{}
@@ -497,7 +497,7 @@ func TestRemove_Flag_Force_SkipsConfirmation(t *testing.T) {
 	assert.True(t, confirmed, "with --force, confirmation should be skipped")
 
 	if confirmed {
-		os.Remove(sourceFile)
+		_ = os.Remove(sourceFile)
 		cfg.ManagedFiles = []config.ManagedFile{}
 
 		AssertFileNotExists(t, sourceFile)
@@ -746,7 +746,7 @@ func TestRemove_SymlinkTarget_Validation(t *testing.T) {
 	assert.Equal(t, repoFile, target, "symlink should point to repo file")
 
 	// Remove symlink
-	os.Remove(sourceFile)
+	_ = os.Remove(sourceFile)
 
 	// Verify symlink is gone
 	_, err = os.Lstat(sourceFile)
@@ -778,10 +778,10 @@ func TestRemove_CleansUpEmptyDirectories(t *testing.T) {
 	}
 
 	// Act - Remove repo file
-	os.Remove(repoFile)
+	_ = os.Remove(repoFile)
 
 	// Remove empty directory
-	os.Remove(shellDir)
+	_ = os.Remove(shellDir)
 
 	// Assert
 	AssertFileNotExists(t, repoFile)

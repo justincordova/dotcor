@@ -95,7 +95,11 @@ func AcquireLock(cfg *config.Config) error {
 		}
 
 		// Lock acquired successfully
-		defer f.Close()
+		defer func() {
+			if err := f.Close(); err != nil {
+				cfg.Logger.Warn("failed to close lock file", "error", err)
+			}
+		}()
 
 		// Write lock content
 		hostname, err := os.Hostname()
@@ -109,8 +113,10 @@ func AcquireLock(cfg *config.Config) error {
 			hostname,
 		)
 		if _, err := f.WriteString(content); err != nil {
-			f.Close()
-			os.Remove(lockPath)
+			if closeErr := f.Close(); closeErr != nil {
+				cfg.Logger.Warn("failed to close lock file", "error", closeErr)
+			}
+			_ = os.Remove(lockPath)
 			cfg.Logger.Error("failed to write lock file", "error", err)
 			return fmt.Errorf("writing lock file: %w", err)
 		}

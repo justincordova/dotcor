@@ -1099,13 +1099,17 @@ func TestAdd_PathCollision(t *testing.T) {
 	homeTestFile := filepath.Join(home, ".zshrc_test")
 
 	// Clean up any existing test file from previous runs
-	os.Remove(homeTestFile)
+	_ = os.Remove(homeTestFile)
 
 	// Create test file in home directory
 	if err := os.WriteFile(homeTestFile, []byte("zsh config"), 0644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
-	defer os.Remove(homeTestFile)
+	defer func() {
+		if err := os.Remove(homeTestFile); err != nil {
+			t.Logf("failed to clean up test file: %v", err)
+		}
+	}()
 
 	// Create config with logger
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))

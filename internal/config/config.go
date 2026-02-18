@@ -192,7 +192,7 @@ func (c *Config) SaveConfig() error {
 
 	// Rename temp to actual (atomic on most filesystems)
 	if err := os.Rename(tempPath, configPath); err != nil {
-		os.Remove(tempPath)
+		_ = os.Remove(tempPath)
 		if c.Logger != nil {
 			c.Logger.Error("failed to rename config file", "error", err)
 		}

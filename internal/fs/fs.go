@@ -32,7 +32,7 @@ func MoveFile(src, dst string, cfg *config.Config) error {
 	dstExisted := PathExists(dst)
 	if err := os.Remove(src); err != nil {
 		if !dstExisted {
-			os.Remove(dst)
+			_ = os.Remove(dst)
 		}
 		cfg.Logger.Error("failed to remove original file", "error", err)
 		return fmt.Errorf("removing original file: %w", err)
@@ -64,14 +64,22 @@ func CopyWithPermissions(src, dst string, cfg *config.Config) error {
 		cfg.Logger.Error("failed to open source file", "path", src, "error", err)
 		return fmt.Errorf("opening source file: %w", err)
 	}
-	defer srcFile.Close()
+	defer func() {
+		if err := srcFile.Close(); err != nil {
+			cfg.Logger.Warn("failed to close source file", "path", src, "error", err)
+		}
+	}()
 
 	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, srcInfo.Mode())
 	if err != nil {
 		cfg.Logger.Error("failed to create destination file", "path", dst, "error", err)
 		return fmt.Errorf("creating destination file: %w", err)
 	}
-	defer dstFile.Close()
+	defer func() {
+		if err := dstFile.Close(); err != nil {
+			cfg.Logger.Warn("failed to close destination file", "path", dst, "error", err)
+		}
+	}()
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
 		cfg.Logger.Error("failed to copy file contents", "src", src, "dst", dst, "error", err)
@@ -174,7 +182,7 @@ func IsReadable(path string) bool {
 	if err != nil {
 		return false
 	}
-	file.Close()
+	_ = file.Close()
 	return true
 }
 
@@ -198,8 +206,10 @@ func IsWritable(path string) bool {
 		if err != nil {
 			return false
 		}
-		file.Close()
-		defer os.Remove(tempFile)
+		_ = file.Close()
+		defer func() {
+			_ = os.Remove(tempFile)
+		}()
 		return true
 	}
 
@@ -208,7 +218,7 @@ func IsWritable(path string) bool {
 	if err != nil {
 		return false
 	}
-	file.Close()
+	_ = file.Close()
 	return true
 }
 

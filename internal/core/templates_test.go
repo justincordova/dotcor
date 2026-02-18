@@ -129,7 +129,11 @@ func TestTemplateIntegration(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-template-test-*")
 	require.NoError(t, err, "should create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	templatePath := filepath.Join(tempDir, "config.template")
 	templateContent := `# Config file for {{ .Hostname }}

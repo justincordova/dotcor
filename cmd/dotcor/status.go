@@ -300,17 +300,26 @@ func outputStatusFull(status StatusReport, problemsOnly bool, cfg *config.Config
 			}
 
 			icon := getStatusIcon(f.Status)
-			if f.Status == "ok" {
-				fmt.Fprintf(w, "  %s %s\tok\n", icon, f.SourcePath)
-			} else if f.Status == "modified" {
-				fmt.Fprintf(w, "  %s %s\t~\n", icon, f.SourcePath)
-			} else {
-				fmt.Fprintf(w, "  %s %s\t%s\n", icon, f.SourcePath, f.Problem)
+			switch f.Status {
+			case "ok":
+				if _, err := fmt.Fprintf(w, "  %s %s\tok\n", icon, f.SourcePath); err != nil {
+					return fmt.Errorf("writing output: %w", err)
+				}
+			case "modified":
+				if _, err := fmt.Fprintf(w, "  %s %s\t~\n", icon, f.SourcePath); err != nil {
+					return fmt.Errorf("writing output: %w", err)
+				}
+			default:
+				if _, err := fmt.Fprintf(w, "  %s %s\t%s\n", icon, f.SourcePath, f.Problem); err != nil {
+					return fmt.Errorf("writing output: %w", err)
+				}
 				hasProblems = true
 			}
 		}
 
-		w.Flush()
+		if err := w.Flush(); err != nil {
+			return fmt.Errorf("flushing output: %w", err)
+		}
 
 		if problemsOnly && !hasProblems {
 			fmt.Println("  All files are healthy!")

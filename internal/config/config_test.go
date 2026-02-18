@@ -141,7 +141,11 @@ func TestConfigManagedFiles(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	assert.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	cfg := &Config{
 		Version:        CurrentConfigVersion,
@@ -211,7 +215,11 @@ func TestMarkAsUncommitted_UpdatesFileFlag(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	assert.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	cfg := &Config{
 		Version:        CurrentConfigVersion,
@@ -243,7 +251,11 @@ func TestClearUncommitted_ClearsFileFlag(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	assert.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	cfg := &Config{
 		Version:        CurrentConfigVersion,
@@ -316,7 +328,11 @@ func TestSaveConfig_AtomicWrite(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	assert.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	configDir := filepath.Join(tempDir, ".dotcor")
 	configPath := filepath.Join(configDir, "config.yaml")
@@ -348,7 +364,11 @@ func TestLoadConfig_CorruptFile_ReturnsError(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	assert.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	configDir := filepath.Join(tempDir, ".dotcor")
 	err = os.MkdirAll(configDir, 0755)
@@ -372,7 +392,11 @@ func TestLoadConfig_VersionMismatch_Migrates(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	assert.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	configDir := filepath.Join(tempDir, ".dotcor")
 	err = os.MkdirAll(configDir, 0755)
@@ -398,7 +422,11 @@ func TestRemoveManagedFile_BySourcePath_Deletes(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	assert.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	cfg := &Config{
 		Version:        CurrentConfigVersion,
@@ -435,7 +463,11 @@ func TestLoadConfigFromPath_LoadsCustomPath(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	assert.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	customConfigPath := filepath.Join(tempDir, "custom-config.yaml")
 	customConfigContent := "version: 1.0\nrepo_path: /custom/files\ngit_enabled: true\nmanaged_files:\n  - source_path: ~/.zshrc\n"
@@ -467,8 +499,14 @@ func TestLoadConfigFromPath_NonExistentPath_ReturnsError(t *testing.T) {
 
 func TestConfigFilePermissions(t *testing.T) {
 	tempDir := t.TempDir()
-	os.Setenv("HOME", tempDir)
-	defer os.Unsetenv("HOME")
+	if err := os.Setenv("HOME", tempDir); err != nil {
+		t.Fatalf("failed to set HOME: %v", err)
+	}
+	defer func() {
+		if err := os.Unsetenv("HOME"); err != nil {
+			t.Logf("failed to unset HOME: %v", err)
+		}
+	}()
 
 	cfg, err := NewDefaultConfig()
 	require.NoError(t, err)

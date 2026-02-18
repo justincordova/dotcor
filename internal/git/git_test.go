@@ -23,7 +23,11 @@ func TestInitRepo(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	err = InitRepo(tempDir)
 	require.NoError(t, err, "InitRepo() should not error")
@@ -38,7 +42,11 @@ func TestIsRepo(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	isRepo := IsRepo(tempDir)
 	assert.False(t, isRepo, "IsRepo() should return false for non-repo directory")
@@ -55,7 +63,11 @@ func TestHasChanges(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	err = InitRepo(tempDir)
 	require.NoError(t, err, "InitRepo() should not error")
@@ -78,7 +90,11 @@ func TestAutoCommit(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	err = InitRepo(tempDir)
 	require.NoError(t, err, "InitRepo() should not error")
@@ -105,7 +121,11 @@ func TestGetStatus(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	err = InitRepo(tempDir)
 	require.NoError(t, err, "InitRepo() should not error")
@@ -133,7 +153,11 @@ func TestGetRemoteURL(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	err = InitRepo(tempDir)
 	require.NoError(t, err, "InitRepo() should not error")
@@ -148,7 +172,11 @@ func TestSetRemote(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	err = InitRepo(tempDir)
 	require.NoError(t, err, "InitRepo() should not error")
@@ -175,7 +203,11 @@ func TestSetRemote_CreatesNew(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	err = InitRepo(tempDir)
 	require.NoError(t, err, "InitRepo() should not error")
@@ -198,7 +230,11 @@ func TestSetRemote_UpdatesExisting(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	err = InitRepo(tempDir)
 	require.NoError(t, err, "InitRepo() should not error")
@@ -226,7 +262,11 @@ func TestGetFileHistory(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	err = InitRepo(tempDir)
 	require.NoError(t, err, "InitRepo() should not error")
@@ -258,7 +298,11 @@ func TestGetCurrentCommit(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	err = InitRepo(tempDir)
 	require.NoError(t, err, "InitRepo() should not error")
@@ -283,7 +327,11 @@ func TestGetChangedFiles(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	err = InitRepo(tempDir)
 	require.NoError(t, err, "InitRepo() should not error")
@@ -308,7 +356,11 @@ func TestGetDiff(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	err = InitRepo(tempDir)
 	require.NoError(t, err, "InitRepo() should not error")
@@ -339,7 +391,11 @@ func TestStageAndUnstageFile(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	err = InitRepo(tempDir)
 	require.NoError(t, err, "InitRepo() should not error")
@@ -413,7 +469,11 @@ func TestGetConfig_ReturnsValue(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	err = InitRepo(tempDir)
 	require.NoError(t, err, "InitRepo() should not error")
@@ -433,7 +493,11 @@ func TestSetConfig_SetsValue(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	err = InitRepo(tempDir)
 	require.NoError(t, err, "InitRepo() should not error")
@@ -454,7 +518,11 @@ func TestStageFile_StageCorrectFile(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	err = InitRepo(tempDir)
 	require.NoError(t, err, "InitRepo() should not error")
@@ -479,7 +547,11 @@ func TestUnstageFile_UnstagesFile(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	err = InitRepo(tempDir)
 	require.NoError(t, err, "InitRepo() should not error")
@@ -516,7 +588,11 @@ func TestPull_FetchesAndMerges(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	err = InitRepo(tempDir)
 	require.NoError(t, err, "InitRepo() should not error")
@@ -543,7 +619,11 @@ func TestGetCurrentCommit_ReturnsHash(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	err = InitRepo(tempDir)
 	require.NoError(t, err, "InitRepo() should not error")
@@ -730,7 +810,11 @@ func TestGetDiffBetweenFiles_DifferentFiles(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	file1 := filepath.Join(tempDir, "file1.txt")
 	file2 := filepath.Join(tempDir, "file2.txt")
@@ -754,7 +838,11 @@ func TestGetDiffBetweenFiles_IdenticalFiles(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	file1 := filepath.Join(tempDir, "file1.txt")
 	file2 := filepath.Join(tempDir, "file2.txt")
@@ -777,7 +865,11 @@ func TestGetDiffBetweenFiles_MissingFile(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	file1 := filepath.Join(tempDir, "file1.txt")
 	file2 := filepath.Join(tempDir, "nonexistent.txt")

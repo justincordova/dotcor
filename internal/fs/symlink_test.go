@@ -16,7 +16,11 @@ func TestIsSymlink(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	regularFile := filepath.Join(tempDir, "regular")
 	err = os.WriteFile(regularFile, []byte("test"), 0644)
@@ -74,7 +78,11 @@ func TestReadSymlink(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	targetFile := filepath.Join(tempDir, "target")
 	err = os.WriteFile(targetFile, []byte("test"), 0644)
@@ -96,7 +104,11 @@ func TestIsValidSymlink(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	targetFile := filepath.Join(tempDir, "target")
 	err = os.WriteFile(targetFile, []byte("test"), 0644)
@@ -162,7 +174,11 @@ func TestIsRelativeSymlink(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	targetFile := filepath.Join(tempDir, "target")
 	err = os.WriteFile(targetFile, []byte("test"), 0644)
@@ -214,7 +230,11 @@ func TestResolveSymlink(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	targetFile := filepath.Join(tempDir, "target")
 	err = os.WriteFile(targetFile, []byte("test"), 0644)
@@ -236,7 +256,11 @@ func TestGetSymlinkStatus(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	targetFile := filepath.Join(tempDir, "target")
 	err = os.WriteFile(targetFile, []byte("test"), 0644)
@@ -262,7 +286,11 @@ func TestRemoveSymlink(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	targetFile := filepath.Join(tempDir, "target")
 	err = os.WriteFile(targetFile, []byte("test"), 0644)
@@ -287,7 +315,11 @@ func TestRemoveSymlinkErrorsOnRegularFile(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	regularFile := filepath.Join(tempDir, "regular")
 	err = os.WriteFile(regularFile, []byte("content"), 0644)
@@ -314,7 +346,11 @@ func TestSymlinkPointsToRepo_ChecksRepositoryMembership(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	repoDir := filepath.Join(tempDir, "repo")
 	err = os.MkdirAll(repoDir, 0755)
@@ -346,7 +382,11 @@ func TestCreateSymlink_RelativePath_ComputedCorrectly(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	repoDir := filepath.Join(tempDir, "repo")
 	err = os.MkdirAll(repoDir, 0755)

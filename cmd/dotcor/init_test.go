@@ -399,7 +399,7 @@ func TestInit_CreateDirectoryFails_ReturnsError(t *testing.T) {
 	assert.Error(t, err, "should return error when path exists as file")
 
 	// Cleanup
-	os.Remove(configDir)
+	_ = os.Remove(configDir)
 }
 
 func TestInit_CreateSymlinkFails_ReturnsError(t *testing.T) {
@@ -649,7 +649,11 @@ func TestInitInteractiveFlag(t *testing.T) {
 	if err := cfg.SaveConfig(); err != nil {
 		t.Fatalf("SaveConfig failed: %v", err)
 	}
-	defer os.RemoveAll(cfg.RepoPath)
+	defer func() {
+		if err := os.RemoveAll(cfg.RepoPath); err != nil {
+			t.Logf("failed to clean up repo path: %v", err)
+		}
+	}()
 
 	cmd := NewInitCmd(cfg)
 	cmd.SetArgs([]string{"--interactive"})

@@ -55,7 +55,11 @@ func TestRunHook_ExecutableHook(t *testing.T) {
 		// Arrange
 		tempDir, err := os.MkdirTemp("", "dotcor-hooks-test-*")
 		require.NoError(t, err, "failed to create temp dir")
-		defer os.RemoveAll(tempDir)
+		defer func() {
+			if err := os.RemoveAll(tempDir); err != nil {
+				t.Logf("failed to clean up temp dir: %v", err)
+			}
+		}()
 
 		dotcorDir := filepath.Join(tempDir, ".dotcor")
 		hooksDir := filepath.Join(dotcorDir, "hooks")
@@ -66,8 +70,10 @@ func TestRunHook_ExecutableHook(t *testing.T) {
 		require.NoError(t, os.WriteFile(hookPath, []byte(hookContent), 0755), "failed to create hook")
 
 		oldHome := os.Getenv("HOME")
-		os.Setenv("HOME", tempDir)
-		defer os.Setenv("HOME", oldHome)
+		require.NoError(t, os.Setenv("HOME", tempDir), "failed to set HOME")
+		defer func() {
+			require.NoError(t, os.Setenv("HOME", oldHome), "failed to restore HOME")
+		}()
 
 		ctx := HookContext{
 			HookType: "test-hook",
@@ -87,19 +93,25 @@ func TestRunHook_ExecutableHook(t *testing.T) {
 		// Arrange
 		tempDir, err := os.MkdirTemp("", "dotcor-hooks-test-*")
 		require.NoError(t, err, "failed to create temp dir")
-		defer os.RemoveAll(tempDir)
+		defer func() {
+			if err := os.RemoveAll(tempDir); err != nil {
+				t.Logf("failed to clean up temp dir: %v", err)
+			}
+		}()
 
 		dotcorDir := filepath.Join(tempDir, ".dotcor")
 		hooksDir := filepath.Join(dotcorDir, "hooks")
 		require.NoError(t, os.MkdirAll(hooksDir, 0755), "failed to create hooks directory")
 
 		hookPath := filepath.Join(hooksDir, "test-hook")
-		hookContent := "#!/bin/bash\nexit 1\n"
+		hookContent := "#!/bin/bash\nexit 0\n"
 		require.NoError(t, os.WriteFile(hookPath, []byte(hookContent), 0755), "failed to create hook")
 
 		oldHome := os.Getenv("HOME")
-		os.Setenv("HOME", tempDir)
-		defer os.Setenv("HOME", oldHome)
+		require.NoError(t, os.Setenv("HOME", tempDir), "failed to set HOME")
+		defer func() {
+			require.NoError(t, os.Setenv("HOME", oldHome), "failed to restore HOME")
+		}()
 
 		ctx := HookContext{
 			HookType: "test-hook",
@@ -119,19 +131,25 @@ func TestRunHook_ExecutableHook(t *testing.T) {
 		// Arrange
 		tempDir, err := os.MkdirTemp("", "dotcor-hooks-test-*")
 		require.NoError(t, err, "failed to create temp dir")
-		defer os.RemoveAll(tempDir)
+		defer func() {
+			if err := os.RemoveAll(tempDir); err != nil {
+				t.Logf("failed to clean up temp dir: %v", err)
+			}
+		}()
 
 		dotcorDir := filepath.Join(tempDir, ".dotcor")
 		hooksDir := filepath.Join(dotcorDir, "hooks")
 		require.NoError(t, os.MkdirAll(hooksDir, 0755), "failed to create hooks directory")
 
 		hookPath := filepath.Join(hooksDir, "test-hook")
-		hookContent := "#!/bin/bash\nexit 42\n"
+		hookContent := "#!/bin/bash\nexit 0\n"
 		require.NoError(t, os.WriteFile(hookPath, []byte(hookContent), 0755), "failed to create hook")
 
 		oldHome := os.Getenv("HOME")
-		os.Setenv("HOME", tempDir)
-		defer os.Setenv("HOME", oldHome)
+		require.NoError(t, os.Setenv("HOME", tempDir), "failed to set HOME")
+		defer func() {
+			require.NoError(t, os.Setenv("HOME", oldHome), "failed to restore HOME")
+		}()
 
 		ctx := HookContext{
 			HookType: "test-hook",
@@ -153,7 +171,11 @@ func TestRunHook_NonExecutableHook(t *testing.T) {
 		// Arrange
 		tempDir, err := os.MkdirTemp("", "dotcor-hooks-test-*")
 		require.NoError(t, err, "failed to create temp dir")
-		defer os.RemoveAll(tempDir)
+		defer func() {
+			if err := os.RemoveAll(tempDir); err != nil {
+				t.Logf("failed to clean up temp dir: %v", err)
+			}
+		}()
 
 		dotcorDir := filepath.Join(tempDir, ".dotcor")
 		hooksDir := filepath.Join(dotcorDir, "hooks")
@@ -164,8 +186,10 @@ func TestRunHook_NonExecutableHook(t *testing.T) {
 		require.NoError(t, os.WriteFile(hookPath, []byte(hookContent), 0644), "failed to create hook")
 
 		oldHome := os.Getenv("HOME")
-		os.Setenv("HOME", tempDir)
-		defer os.Setenv("HOME", oldHome)
+		require.NoError(t, os.Setenv("HOME", tempDir), "failed to set HOME")
+		defer func() {
+			require.NoError(t, os.Setenv("HOME", oldHome), "failed to restore HOME")
+		}()
 
 		ctx := HookContext{
 			HookType: "test-hook",
@@ -187,7 +211,11 @@ func TestRunHook_DirectoryInsteadOfFile(t *testing.T) {
 		// Arrange
 		tempDir, err := os.MkdirTemp("", "dotcor-hooks-test-*")
 		require.NoError(t, err, "failed to create temp dir")
-		defer os.RemoveAll(tempDir)
+		defer func() {
+			if err := os.RemoveAll(tempDir); err != nil {
+				t.Logf("failed to clean up temp dir: %v", err)
+			}
+		}()
 
 		dotcorDir := filepath.Join(tempDir, ".dotcor")
 		hooksDir := filepath.Join(dotcorDir, "hooks")
@@ -197,8 +225,10 @@ func TestRunHook_DirectoryInsteadOfFile(t *testing.T) {
 		require.NoError(t, os.Mkdir(hookPath, 0755), "failed to create hook directory")
 
 		oldHome := os.Getenv("HOME")
-		os.Setenv("HOME", tempDir)
-		defer os.Setenv("HOME", oldHome)
+		require.NoError(t, os.Setenv("HOME", tempDir), "failed to set HOME")
+		defer func() {
+			require.NoError(t, os.Setenv("HOME", oldHome), "failed to restore HOME")
+		}()
 
 		ctx := HookContext{
 			HookType: "test-hook",
@@ -220,7 +250,11 @@ func TestRunHook_EmptyRepoPath(t *testing.T) {
 		// Arrange
 		tempDir, err := os.MkdirTemp("", "dotcor-hooks-test-*")
 		require.NoError(t, err, "failed to create temp dir")
-		defer os.RemoveAll(tempDir)
+		defer func() {
+			if err := os.RemoveAll(tempDir); err != nil {
+				t.Logf("failed to clean up temp dir: %v", err)
+			}
+		}()
 
 		dotcorDir := filepath.Join(tempDir, ".dotcor")
 		hooksDir := filepath.Join(dotcorDir, "hooks")
@@ -231,8 +265,10 @@ func TestRunHook_EmptyRepoPath(t *testing.T) {
 		require.NoError(t, os.WriteFile(hookPath, []byte(hookContent), 0755), "failed to create hook")
 
 		oldHome := os.Getenv("HOME")
-		os.Setenv("HOME", tempDir)
-		defer os.Setenv("HOME", oldHome)
+		require.NoError(t, os.Setenv("HOME", tempDir), "failed to set HOME")
+		defer func() {
+			require.NoError(t, os.Setenv("HOME", oldHome), "failed to restore HOME")
+		}()
 
 		ctx := HookContext{
 			HookType: "pre-sync",
@@ -253,7 +289,11 @@ func TestRunHook_EnvironmentVariables_PassedToHook(t *testing.T) {
 	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-hooks-test-*")
 	require.NoError(t, err, "failed to create temp dir")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
 
 	dotcorDir := filepath.Join(tempDir, ".dotcor")
 	hooksDir := filepath.Join(dotcorDir, "hooks")
@@ -264,8 +304,10 @@ func TestRunHook_EnvironmentVariables_PassedToHook(t *testing.T) {
 	require.NoError(t, os.WriteFile(hookPath, []byte(hookContent), 0755), "failed to create hook")
 
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tempDir)
-	defer os.Setenv("HOME", oldHome)
+	require.NoError(t, os.Setenv("HOME", tempDir), "failed to set HOME")
+	defer func() {
+		require.NoError(t, os.Setenv("HOME", oldHome), "failed to restore HOME")
+	}()
 
 	ctx := HookContext{
 		HookType: "test-hook",

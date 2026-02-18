@@ -52,7 +52,7 @@ func CreateSymlink(target, link string, cfg *config.Config) error {
 
 	// Atomically rename to target (works on Unix, Windows supports it too)
 	if err := os.Rename(tempLink, expandedLink); err != nil {
-		os.Remove(tempLink)
+		_ = os.Remove(tempLink)
 		return fmt.Errorf("moving symlink into place: %w", err)
 	}
 

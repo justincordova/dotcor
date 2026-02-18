@@ -109,11 +109,12 @@ func runList(cmd *cobra.Command, args []string) error {
 
 	for _, f := range filtered {
 		icon := getStatusIcon(f.status)
-		if f.status == "ok" {
+		switch f.status {
+		case "ok":
 			fmt.Printf("  %s %s\n", icon, f.path)
-		} else if f.status == "modified" {
+		case "modified":
 			fmt.Printf("  %s %s [uncommitted]\n", icon, f.path)
-		} else {
+		default:
 			fmt.Printf("  %s %s [%s]\n", icon, f.path, f.problem)
 		}
 	}
