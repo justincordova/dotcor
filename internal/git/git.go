@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -610,6 +611,19 @@ func GetDiffBetweenFiles(file1, file2 string) (string, error) {
 func RefExists(repoPath, ref string) (bool, error) {
 	if ref == "" {
 		return false, fmt.Errorf("ref is empty")
+	}
+
+	// Validate ref format to prevent path traversal
+	if strings.Contains(ref, "..") {
+		return false, fmt.Errorf("ref contains path traversal: %s", ref)
+	}
+
+	if strings.Contains(ref, "\\") {
+		return false, fmt.Errorf("ref contains backslash: %s", ref)
+	}
+
+	if filepath.IsAbs(ref) && !strings.HasPrefix(ref, "refs/") && !strings.HasPrefix(ref, "HEAD") {
+		return false, fmt.Errorf("ref is absolute but not a valid ref: %s", ref)
 	}
 
 	cmd := exec.Command("git", "cat-file", "-e", ref)

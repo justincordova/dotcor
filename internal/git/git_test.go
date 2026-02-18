@@ -1013,3 +1013,29 @@ func TestGetDiffBetweenFilesWithDifferentFiles(t *testing.T) {
 	assert.Contains(t, diff, "+++ b/", "diff should contain +++ b/ marker")
 	assert.Contains(t, diff, "--- a/", "diff should contain --- a/ marker")
 }
+
+func TestRefExistsValidation(t *testing.T) {
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
+
+	tmpDir := t.TempDir()
+	err := InitRepo(tmpDir)
+	require.NoError(t, err, "InitRepo() should not error")
+
+	// Test that malicious refs are rejected
+	maliciousRefs := []string{
+		"../../../etc/passwd",
+		"..\\..\\..\\windows\\system32",
+		"/absolute/path",
+		"",
+	}
+
+	for _, ref := range maliciousRefs {
+		exists, err := RefExists(tmpDir, ref)
+		if err == nil {
+			t.Errorf("Should reject malicious ref %s", ref)
+		}
+		if exists {
+			t.Errorf("Should not find malicious ref %s", ref)
+		}
+	}
+}
