@@ -59,11 +59,9 @@ brews:
     homepage: https://github.com/justincordova/dotcor
     description: "Symlink-based dotfile manager with Git integration"
     license: MIT
-    dependencies:
-      - name: go
-        type: build
+    skip_upload: false
     install: |
-      system "go", "build", *std_go_args(ldflags: "-s -w -X main.version=#{version}"), "./cmd/dotcor"
+      bin.install "dotcor"
     test: |
       assert_match "dotcor version #{version}", shell_output("#{bin}/dotcor --version")
 
