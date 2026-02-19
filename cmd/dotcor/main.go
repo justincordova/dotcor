@@ -79,7 +79,7 @@ func printBanner() {
 	fmt.Println("  ╚═════╝  ╚═════╝    ╚═╝    ╚═════╝ ╚═════╝ ╚═╝  ╚═╝")
 	fmt.Print(colorReset)
 	fmt.Println()
-	fmt.Printf("  %s%sv%s%s %s· symlink-based dotfile manager%s\n", colorBold, colorLightPink, version, colorReset, colorDim, colorReset)
+	fmt.Printf("  %sv%sv%s%s %s· symlink-based dotfile manager%s\n", colorBold, colorLightPink, version, colorReset, colorDim, colorReset)
 	fmt.Println()
 }
 
