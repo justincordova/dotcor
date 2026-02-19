@@ -79,7 +79,9 @@ func printBanner() {
 	fmt.Println("  ╚═════╝  ╚═════╝    ╚═╝    ╚═════╝ ╚═════╝ ╚═╝  ╚═╝")
 	fmt.Print(colorReset)
 	fmt.Println()
-	fmt.Printf("  %s%s%s %s%s· symlink-based dotfile manager%s\n", colorBold, colorLightPink, "v"+version, colorReset, colorDim, colorReset)
+
+	versionStr := "v" + version
+	fmt.Printf("  %s%s%s %s%s· symlink-based dotfile manager%s\n", colorBold, colorLightPink, versionStr, colorReset, colorDim, colorReset)
 	fmt.Println()
 }
 
@@ -91,7 +93,7 @@ var rootCmd = &cobra.Command{
 Manage your dotfiles with symlinks - edit files directly, changes instantly
 appear in your repository. Built-in Git automation handles commits and sync.`,
 		colorRed, colorBold, colorReset, colorRed),
-	Version: version,
+	Version: "v" + version,
 	Run:     runRoot,
 }
 
