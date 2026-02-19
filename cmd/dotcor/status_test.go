@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -15,14 +16,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// getProjectRoot returns the project root directory
+func getProjectRoot() string {
+	// Get the directory of this test file
+	_, filename, _, _ := runtime.Caller(0)
+	testFileDir := filepath.Dir(filename)
+	// Go up 2 levels to reach project root
+	projectRoot, _ := filepath.Abs(filepath.Join(testFileDir, "..", ".."))
+	return projectRoot
+}
+
 func TestStatus_NotInitialized_ReturnsError(t *testing.T) {
 	t.Run("no config returns error", func(t *testing.T) {
 		// Arrange - Create temp directory without config
 		tempDir := t.TempDir()
 
+		// Get project root directory (where go.mod is)
+		projectRoot := getProjectRoot()
+
 		// Build dotcor binary (build with original HOME, not tempDir)
 		buildPath := filepath.Join(tempDir, "dotcor-test")
 		buildCmd := exec.Command("go", "build", "-o", buildPath, "github.com/justincordova/dotcor/cmd/dotcor")
+		buildCmd.Dir = projectRoot
 		output, err := buildCmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("building test binary failed: %v\noutput: %s", err, string(output))
@@ -53,6 +68,8 @@ func TestStatus_ValidSymlink_ShowsOK(t *testing.T) {
 	t.Run("valid symlink shows ok status", func(t *testing.T) {
 		// Arrange
 		tempDir := t.TempDir()
+		// Get project root directory (where go.mod is)
+		projectRoot := getProjectRoot()
 		configDir := filepath.Join(tempDir, ".dotcor")
 		filesDir := filepath.Join(configDir, "files")
 		homeDir := filepath.Join(tempDir, "home")
@@ -92,6 +109,7 @@ managed_files:
 		// Build dotcor binary
 		buildPath := filepath.Join(tempDir, "dotcor-test")
 		buildCmd := exec.Command("go", "build", "-o", buildPath, "github.com/justincordova/dotcor/cmd/dotcor")
+		buildCmd.Dir = projectRoot
 		output, err := buildCmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("building test binary failed: %v\noutput: %s", err, string(output))
@@ -123,6 +141,8 @@ func TestStatus_BrokenSymlink_ShowsError(t *testing.T) {
 	t.Run("missing repo file shows error status", func(t *testing.T) {
 		// Arrange
 		tempDir := t.TempDir()
+		// Get project root directory (where go.mod is)
+		projectRoot := getProjectRoot()
 		configDir := filepath.Join(tempDir, ".dotcor")
 		filesDir := filepath.Join(configDir, "files")
 		homeDir := filepath.Join(tempDir, "home")
@@ -160,6 +180,7 @@ managed_files:
 		// Build dotcor binary
 		buildPath := filepath.Join(tempDir, "dotcor-test")
 		buildCmd := exec.Command("go", "build", "-o", buildPath, "github.com/justincordova/dotcor/cmd/dotcor")
+		buildCmd.Dir = projectRoot
 		output, err := buildCmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("building test binary failed: %v\noutput: %s", err, string(output))
@@ -193,6 +214,8 @@ func TestStatus_UncommittedChanges_ShowsWarning(t *testing.T) {
 	t.Run("uncommitted files show in output", func(t *testing.T) {
 		// Arrange
 		tempDir := t.TempDir()
+		// Get project root directory (where go.mod is)
+		projectRoot := getProjectRoot()
 		configDir := filepath.Join(tempDir, ".dotcor")
 		filesDir := filepath.Join(configDir, "files")
 		homeDir := filepath.Join(tempDir, "home")
@@ -233,6 +256,7 @@ managed_files:
 		// Build dotcor binary
 		buildPath := filepath.Join(tempDir, "dotcor-test")
 		buildCmd := exec.Command("go", "build", "-o", buildPath, "github.com/justincordova/dotcor/cmd/dotcor")
+		buildCmd.Dir = projectRoot
 		output, err := buildCmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("building test binary failed: %v\noutput: %s", err, string(output))
@@ -263,6 +287,9 @@ managed_files:
 
 func TestStatus_GitAheadBehind_ShowsCounts(t *testing.T) {
 	t.Run("git status shows ahead/behind counts", func(t *testing.T) {
+		// Get project root directory (where go.mod is)
+		projectRoot := getProjectRoot()
+
 		if !git.IsGitInstalled() {
 			t.Skip("git not installed, skipping test")
 		}
@@ -342,6 +369,7 @@ managed_files:
 		// Build dotcor binary
 		buildPath := filepath.Join(tempDir, "dotcor-test")
 		buildCmd := exec.Command("go", "build", "-o", buildPath, "github.com/justincordova/dotcor/cmd/dotcor")
+		buildCmd.Dir = projectRoot
 		output, err := buildCmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("building test binary failed: %v\noutput: %s", err, string(output))
@@ -394,6 +422,8 @@ func TestStatus_SpecificFiles_ShowsOnlyThose(t *testing.T) {
 	t.Run("status with file arguments shows only those files", func(t *testing.T) {
 		// Arrange
 		tempDir := t.TempDir()
+		// Get project root directory (where go.mod is)
+		projectRoot := getProjectRoot()
 		configDir := filepath.Join(tempDir, ".dotcor")
 		filesDir := filepath.Join(configDir, "files")
 		homeDir := filepath.Join(tempDir, "home")
@@ -442,6 +472,7 @@ managed_files:
 		// Build dotcor binary
 		buildPath := filepath.Join(tempDir, "dotcor-test")
 		buildCmd := exec.Command("go", "build", "-o", buildPath, "github.com/justincordova/dotcor/cmd/dotcor")
+		buildCmd.Dir = projectRoot
 		output, err := buildCmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("building test binary failed: %v\noutput: %s", err, string(output))
@@ -468,6 +499,8 @@ func TestStatus_NoArgs_ShowsAll(t *testing.T) {
 	t.Run("status without arguments shows all files", func(t *testing.T) {
 		// Arrange
 		tempDir := t.TempDir()
+		// Get project root directory (where go.mod is)
+		projectRoot := getProjectRoot()
 		configDir := filepath.Join(tempDir, ".dotcor")
 		filesDir := filepath.Join(configDir, "files")
 		homeDir := filepath.Join(tempDir, "home")
@@ -500,6 +533,7 @@ managed_files:
 		// Build dotcor binary
 		buildPath := filepath.Join(tempDir, "dotcor-test")
 		buildCmd := exec.Command("go", "build", "-o", buildPath, "github.com/justincordova/dotcor/cmd/dotcor")
+		buildCmd.Dir = projectRoot
 		output, err := buildCmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("building test binary failed: %v\noutput: %s", err, string(output))
@@ -525,6 +559,8 @@ func TestStatus_JSONOutput_IncludesBackupLockConfig(t *testing.T) {
 	t.Run("JSON output includes backup_count, lock_status, config_issues", func(t *testing.T) {
 		// Arrange
 		tempDir := t.TempDir()
+		// Get project root directory (where go.mod is)
+		projectRoot := getProjectRoot()
 		configDir := filepath.Join(tempDir, ".dotcor")
 		filesDir := filepath.Join(configDir, "files")
 		homeDir := filepath.Join(tempDir, "home")
@@ -578,6 +614,7 @@ managed_files:
 		// Build dotcor binary
 		buildPath := filepath.Join(tempDir, "dotcor-test")
 		buildCmd := exec.Command("go", "build", "-o", buildPath, "github.com/justincordova/dotcor/cmd/dotcor")
+		buildCmd.Dir = projectRoot
 		output, err := buildCmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("building test binary failed: %v\noutput: %s", err, string(output))
