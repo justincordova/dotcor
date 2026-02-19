@@ -9,7 +9,7 @@ builds:
     main: ./cmd/dotcor
     binary: dotcor
     ldflags:
-      - -s -w -X main.version={{.Version}}
+      - -s -w -X main.version={{ .Version }}
     goos:
       - darwin
     goarch:
