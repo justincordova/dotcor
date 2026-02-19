@@ -1,6 +1,14 @@
 # Release Process
 
-This document outlines the automated release process for DotCor using GoReleaser and GitHub Actions.
+This document outlines the automated release process for DotCor using GoReleaser and Homebrew.
+
+## Platform
+
+**DotCor is distributed exclusively via Homebrew for macOS.**
+
+- **Supported platforms:** macOS (Intel amd64, Apple Silicon arm64)
+- **Package manager:** Homebrew tap at `justincordova/homebrew-dotcor`
+- **Installation:** `brew install justincordova/dotcor/dotcor`
 
 ## Pre-Release Checklist
 
@@ -8,7 +16,7 @@ Before creating a release, ensure:
 
 - [ ] All tests passing: `go test ./...`
 - [ ] Local build successful: `go build ./cmd/dotcor`
-- [ ] Documentation updated (README.md, CLAUDE.md, etc.)
+- [ ] Documentation updated (README.md, etc.)
 - [ ] All changes committed to main branch
 - [ ] Working tree is clean: `git status`
 
@@ -27,22 +35,21 @@ go build ./cmd/dotcor
 ./dotcor --version
 
 # 3. Create and push version tag
-git tag -a v0.2.0 -m "Release v0.2.0: Brief description of changes"
-git push origin v0.2.0
+git tag -a v1.0.0 -m "Release v1.0.0: Brief description of changes"
+git push origin v1.0.0
 ```
 
 ### What Happens Automatically
 
 Once the tag is pushed, GitHub Actions automatically:
 
-1. **Builds binaries** for all platforms:
-   - macOS: amd64, arm64
-   - Linux: amd64, arm64
-   - Windows: amd64, arm64
+1. **Builds binaries** for macOS:
+   - macOS Intel (amd64)
+   - macOS Apple Silicon (arm64)
 
 2. **Creates archives**:
-   - Unix platforms: `.tar.gz`
-   - Windows: `.zip`
+   - `.tar.gz` archives for both architectures
+   - Includes binary and README.md
 
 3. **Generates checksums** (SHA256) for all artifacts
 
@@ -55,7 +62,7 @@ Once the tag is pushed, GitHub Actions automatically:
    - Automatically updates Formula/dotcor.rb
    - Commits and pushes to tap repository
 
-## Monitoring the Release
+## Monitoring Release
 
 Monitor the release process at:
 
@@ -63,13 +70,13 @@ Monitor the release process at:
 - **GitHub Releases**: https://github.com/justincordova/dotcor/releases
 - **Homebrew Tap**: https://github.com/justincordova/homebrew-dotcor
 
-The entire process typically completes in 5-10 minutes.
+The entire process typically completes in 3-5 minutes.
 
 ## Post-Release Verification
 
-After the release completes:
+After release completes:
 
-- [ ] GitHub Release created with all artifacts
+- [ ] GitHub Release created with both macOS binaries
 - [ ] Homebrew formula updated in tap repository
 - [ ] Test Homebrew installation:
   ```bash
@@ -79,37 +86,37 @@ After the release completes:
   ```
 - [ ] Verify version:
   ```bash
-  dotcor --version  # Should show the new version
+  dotcor --version  # Should show new version
   ```
-- [ ] Download and test one binary manually (optional)
+- [ ] Test on both Intel and Apple Silicon (if available)
 
 ## Version Numbering
 
 Follow semantic versioning (semver):
 
 - **v1.0.0**: Major release (breaking changes)
-- **v0.2.0**: Minor release (new features, backward compatible)
-- **v0.1.1**: Patch release (bug fixes)
+- **v1.1.0**: Minor release (new features, backward compatible)
+- **v1.0.1**: Patch release (bug fixes)
 
 Use pre-release tags for testing:
-- **v0.2.0-rc1**: Release candidate
-- **v0.2.0-beta.1**: Beta release
+- **v1.0.0-rc1**: Release candidate
+- **v1.0.0-beta.1**: Beta release
 
 ## Rolling Back a Release
 
 If a release has critical issues:
 
-### 1. Delete the Git Tag
+### 1. Delete Git Tag
 
 ```bash
 # Delete locally
-git tag -d v0.2.0
+git tag -d v1.0.0
 
 # Delete remotely
-git push --delete origin v0.2.0
+git push --delete origin v1.0.0
 ```
 
-### 2. Delete the GitHub Release
+### 2. Delete GitHub Release
 
 1. Go to https://github.com/justincordova/dotcor/releases
 2. Find the release
@@ -119,28 +126,34 @@ git push --delete origin v0.2.0
 
 ```bash
 cd ~/cs/homebrew-dotcor
-git log  # Find the commit before the auto-update
+git log  # Find the commit before auto-update
 git revert <commit-hash>
 git push origin main
 ```
 
 ### 4. Create Fixed Release
 
-Fix the issues, then create a new release with an incremented version (e.g., v0.2.1).
+Fix issues, then create a new release with an incremented version (e.g., v1.0.1).
 
 ## Testing Releases Locally
 
 Before pushing a real tag, test the build locally:
 
 ```bash
+# Install GoReleaser
+brew install goreleaser/tap/goreleaser
+
 # Run snapshot build (doesn't publish)
 goreleaser release --snapshot --clean --skip=publish
 
 # Check generated artifacts
 ls -lh dist/
 
-# Test a binary
-./dist/dotcor_darwin_arm64_v8.0/dotcor --version
+# Test Intel binary
+./dist/dotcor_0.0.0-snapshot_darwin_amd64/dotcor --version
+
+# Test Apple Silicon binary
+./dist/dotcor_0.0.0-snapshot_darwin_arm64/dotcor --version
 
 # Review generated Homebrew formula
 cat dist/homebrew/Formula/dotcor.rb
@@ -158,28 +171,35 @@ cat dist/homebrew/Formula/dotcor.rb
 
 ### Homebrew Formula Not Updated
 
-1. Check GitHub Actions logs for goreleaser step
-2. Verify GITHUB_TOKEN has permissions
-3. Check that homebrew-dotcor repository is accessible
+1. Check GitHub Actions logs for the goreleaser step
+2. Verify that GITHUB_TOKEN has write permissions
+3. Check that the homebrew-dotcor repository is accessible
 
 ### Version Not Injected Correctly
 
-If binaries show wrong version:
-1. Verify ldflags in `.goreleaser.yaml`
-2. Check `main.go` has `var version` declared
+If binaries show the wrong version:
+1. Verify ldflags in `.goreleaser.yaml`:
+   ```yaml
+   ldflags:
+     - -s -w -X main.version={{.Version}}
+   ```
+2. Check that `cmd/dotcor/main.go` has `var version` declared
 3. Test locally: `go build -ldflags="-X main.version=test" ./cmd/dotcor`
 
-## Future Enhancements
+### Homebrew Installation Fails
 
-Not yet implemented (planned for future):
-
-- **Winget integration**: Requires setting up WINGET_TOKEN secret
-- **Code signing**: macOS notarization and Windows Authenticode
-- **Auto-update command**: `dotcor update` to download latest release
+1. Check the Homebrew formula for errors
+2. Verify that the binary URLs are accessible
+3. Check SHA256 checksums match the release
+4. Test formula locally:
+   ```bash
+   brew install --build-from-source ./dist/homebrew/Formula/dotcor.rb
+   ```
 
 ## Additional Resources
 
 - [GoReleaser Documentation](https://goreleaser.com/)
+- [GoReleaser Homebrew Integration](https://goreleaser.com/customization/homebrew/)
 - [Semantic Versioning](https://semver.org/)
 - [GitHub Actions](https://docs.github.com/en/actions)
 - [Homebrew Formula Cookbook](https://docs.brew.sh/Formula-Cookbook)
