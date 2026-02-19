@@ -273,7 +273,7 @@ func checkRepository(fix, fixAll bool, cmd *cobra.Command) (issues, critical, fi
 	}
 	configureLogger(cmd, cfg)
 
-	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
+	configDir, err := config.GetConfigDir()
 	if err != nil {
 		return
 	}
@@ -285,13 +285,13 @@ func checkRepository(fix, fixAll bool, cmd *cobra.Command) (issues, critical, fi
 	}
 
 	// Check if it's a git repo
-	if !git.IsRepo(repoPath) {
-		fmt.Printf("  %s[%s]%s Not a Git repository: %s\n", colorCritical, severityCritical, colorReset, repoPath)
+	if !git.IsRepo(configDir) {
+		fmt.Printf("  %s[%s]%s Not a Git repository: %s\n", colorCritical, severityCritical, colorReset, configDir)
 		issues++
 		critical++
 
 		if shouldFix(severityCritical, fix, fixAll) {
-			if err := git.InitRepo(repoPath); err == nil {
+			if err := git.InitRepo(configDir); err == nil {
 				fmt.Printf("  %s[OK]%s Initialized Git repository\n", colorGreen, colorReset)
 				fixed++
 			} else {
@@ -302,7 +302,7 @@ func checkRepository(fix, fixAll bool, cmd *cobra.Command) (issues, critical, fi
 	}
 
 	// Check for uncommitted changes
-	hasChanges, _ := git.HasChanges(repoPath)
+	hasChanges, _ := git.HasChanges(configDir)
 	if hasChanges {
 		fmt.Printf("  %s[%s]%s Uncommitted changes in repository\n", colorWarnLabel, severityWarning, colorReset)
 		fmt.Printf("    %s[Suggested]%s Run: dotcor sync\n", colorInfoLabel, colorReset)

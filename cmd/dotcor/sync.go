@@ -85,32 +85,32 @@ func runSync(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("git is not installed")
 	}
 
-	// Get repo path
-	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
+	// Get config directory
+	configDir, err := config.GetConfigDir()
 	if err != nil {
-		return fmt.Errorf("expanding repo path: %w", err)
+		return fmt.Errorf("getting config directory: %w", err)
 	}
 
 	// Check if it's a git repo
-	if !git.IsRepo(repoPath) {
+	if !git.IsRepo(configDir) {
 		return fmt.Errorf("dotcor repository is not a git repository")
 	}
 
 	// Check for changes
-	hasChanges, err := git.HasChanges(repoPath)
+	hasChanges, err := git.HasChanges(configDir)
 	if err != nil {
 		return fmt.Errorf("checking for changes: %w", err)
 	}
 
 	// Get git status
-	gitStatus, err := git.GetStatus(repoPath)
+	gitStatus, err := git.GetStatus(configDir)
 	if err != nil {
 		return fmt.Errorf("getting git status: %w", err)
 	}
 
 	// Preview mode
 	if preview {
-		return showSyncPreview(repoPath, hasChanges, gitStatus, !noPush && gitStatus.RemoteExists)
+		return showSyncPreview(configDir, hasChanges, gitStatus, !noPush && gitStatus.RemoteExists)
 	}
 
 	// Nothing to sync
@@ -122,7 +122,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 	// Show what will be synced
 	if hasChanges {
 		fmt.Println("Changes to be committed:")
-		changedFiles, _ := git.GetChangedFiles(repoPath)
+		changedFiles, _ := git.GetChangedFiles(configDir)
 		for _, f := range changedFiles {
 			fmt.Printf("  %s\n", f)
 		}
@@ -172,11 +172,15 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 		// Use selective commit if files specified
 		if len(filesToSyncRepoPaths) > 0 {
-			if err := git.AutoCommitFiles(repoPath, filesToSyncRepoPaths, commitMsg); err != nil {
+			gitPaths := make([]string, len(filesToSyncRepoPaths))
+			for i, repoPath := range filesToSyncRepoPaths {
+				gitPaths[i] = config.GetGitFilePath(repoPath)
+			}
+			if err := git.AutoCommitFiles(configDir, gitPaths, commitMsg); err != nil {
 				return fmt.Errorf("committing changes: %w", err)
 			}
 		} else {
-			if err := git.AutoCommit(repoPath, commitMsg, cfg.Logger); err != nil {
+			if err := git.AutoCommit(configDir, commitMsg, cfg.Logger); err != nil {
 				return fmt.Errorf("committing changes: %w", err)
 			}
 		}
@@ -195,8 +199,8 @@ func runSync(cmd *cobra.Command, args []string) error {
 	cfg.Logger.Debug("push decision", "will_push", willPush, "remote_exists", gitStatus.RemoteExists)
 	if willPush {
 		// Auto-push to remote
-		cfg.Logger.Debug("attempting push to remote", "path", repoPath)
-		if err := pushToRemote(repoPath); err != nil {
+		cfg.Logger.Debug("attempting push to remote", "path", configDir)
+		if err := pushToRemote(configDir); err != nil {
 			return fmt.Errorf("pushing to remote: %w", err)
 		}
 		fmt.Printf("%s[OK]%s Pushed to remote\n", colorGreen, colorReset)
@@ -218,13 +222,13 @@ func runSync(cmd *cobra.Command, args []string) error {
 }
 
 // showSyncPreview shows what would be synced
-func showSyncPreview(repoPath string, hasChanges bool, gitStatus git.StatusInfo, willPush bool) error {
+func showSyncPreview(configDir string, hasChanges bool, gitStatus git.StatusInfo, willPush bool) error {
 	fmt.Printf("\n  %sSync Preview%s\n", colorLightPink, colorReset)
 	fmt.Println("")
 
 	if hasChanges {
 		fmt.Printf("  %sUncommitted changes:%s\n", colorLightPink, colorReset)
-		changedFiles, _ := git.GetChangedFiles(repoPath)
+		changedFiles, _ := git.GetChangedFiles(configDir)
 		for _, f := range changedFiles {
 			fmt.Printf("  M %s\n", f)
 		}
@@ -235,7 +239,7 @@ func showSyncPreview(repoPath string, hasChanges bool, gitStatus git.StatusInfo,
 		fmt.Println("")
 
 		// Show diff stat
-		diffStat, _ := git.GetDiffStat(repoPath)
+		diffStat, _ := git.GetDiffStat(configDir)
 		if diffStat != "" {
 			fmt.Println("Summary:")
 			fmt.Print(diffStat)

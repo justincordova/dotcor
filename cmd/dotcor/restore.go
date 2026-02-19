@@ -110,9 +110,9 @@ func restoreSingleFile(sourcePath, toRef string, fromBackup, preview, showDiff, 
 		return fmt.Errorf("getting repo path: %w", err)
 	}
 
-	repoRoot, err := config.ExpandPath(cfg.RepoPath, cfg)
+	configDir, err := config.GetConfigDir()
 	if err != nil {
-		return fmt.Errorf("expanding repo root: %w", err)
+		return fmt.Errorf("getting config directory: %w", err)
 	}
 
 	// Handle backup restore
@@ -121,18 +121,21 @@ func restoreSingleFile(sourcePath, toRef string, fromBackup, preview, showDiff, 
 	}
 
 	// Git restore
-	return restoreFromGit(repoRoot, mf.RepoPath, repoPath, toRef, preview, showDiff, force, cfg)
+	return restoreFromGit(configDir, mf.RepoPath, repoPath, toRef, preview, showDiff, force, cfg)
 }
 
 // restoreFromGit restores a file from Git history
-func restoreFromGit(repoRoot, repoPath, fullRepoPath, ref string, preview, showDiff, force bool, cfg *config.Config) error {
+func restoreFromGit(configDir, repoPath, fullRepoPath, ref string, preview, showDiff, force bool, cfg *config.Config) error {
+	// Get git path (with files/ prefix)
+	gitPath := config.GetGitFilePath(repoPath)
+
 	// Check if it's a git repo
-	if !git.IsRepo(repoRoot) {
+	if !git.IsRepo(configDir) {
 		return fmt.Errorf("repository is not a git repository")
 	}
 
 	// Validate that the ref exists
-	refExists, err := git.RefExists(repoRoot, ref)
+	refExists, err := git.RefExists(configDir, ref)
 	if err != nil {
 		return fmt.Errorf("validating git ref %s: %w", ref, err)
 	}
@@ -144,8 +147,8 @@ func restoreFromGit(repoRoot, repoPath, fullRepoPath, ref string, preview, showD
 	if preview {
 		fmt.Printf("Would restore %s from %s\n", repoPath, ref)
 
-		// Show the commit info
-		commits, err := git.GetFileHistory(repoRoot, repoPath, 1)
+		// Show commit info
+		commits, err := git.GetFileHistory(configDir, gitPath, 1)
 		if err == nil && len(commits) > 0 {
 			fmt.Printf("\n%sCurrent version:%s\n", colorLightPink, colorReset)
 			fmt.Printf("  %s %s - %s\n", commits[0].Hash[:7], commits[0].Date.Format("2006-01-02"), commits[0].Message)
@@ -154,7 +157,7 @@ func restoreFromGit(repoRoot, repoPath, fullRepoPath, ref string, preview, showD
 		// Show diff if requested
 		if showDiff {
 			fmt.Printf("\n%sDiff:%s\n", colorLightPink, colorReset)
-			diffOutput, err := git.GetFileDiffFromRef(repoRoot, repoPath, ref)
+			diffOutput, err := git.GetFileDiffFromRef(configDir, gitPath, ref)
 			if err != nil {
 				fmt.Printf("%s[!]%s Could not generate diff: %v\n", colorYellow, colorReset, err)
 			} else if diffOutput == "" {
@@ -202,7 +205,7 @@ func restoreFromGit(repoRoot, repoPath, fullRepoPath, ref string, preview, showD
 	}
 
 	// Restore from Git
-	if err := git.RestoreFile(repoRoot, repoPath, ref); err != nil {
+	if err := git.RestoreFile(configDir, gitPath, ref); err != nil {
 		return fmt.Errorf("restoring from git: %w", err)
 	}
 

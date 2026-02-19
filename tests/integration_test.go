@@ -629,17 +629,17 @@ func TestIntegration_FullWorkflow_InitAddSyncRestore(t *testing.T) {
 	require.NoError(t, os.MkdirAll(repoDir, 0755))
 	require.NoError(t, os.MkdirAll(filesDir, 0755))
 
-	// Step 1: Initialize git repo
-	require.NoError(t, git.InitRepo(filesDir))
-	configureGitUser(t, filesDir)
+	// Step 1: Initialize git repo at repoDir
+	require.NoError(t, git.InitRepo(repoDir))
+	configureGitUser(t, repoDir)
 
 	// Create initial commit
 	gitkeepPath := filepath.Join(filesDir, ".gitkeep")
 	require.NoError(t, os.WriteFile(gitkeepPath, []byte(""), 0644))
-	require.NoError(t, git.AutoCommit(filesDir, "Initial commit", slog.Default()))
+	require.NoError(t, git.AutoCommit(repoDir, "Initial commit", slog.Default()))
 
 	// Verify repo is clean after initial commit
-	hasChanges, err := git.HasChanges(filesDir)
+	hasChanges, err := git.HasChanges(repoDir)
 	require.NoError(t, err)
 	assert.False(t, hasChanges, "repo should be clean after initial commit")
 
@@ -667,7 +667,7 @@ func TestIntegration_FullWorkflow_InitAddSyncRestore(t *testing.T) {
 	require.NoError(t, os.Symlink(fullRepoPath, dotfile))
 
 	// Add to git
-	require.NoError(t, git.AutoCommit(filesDir, "Add .zshrc", slog.Default()))
+	require.NoError(t, git.AutoCommit(repoDir, "Add .zshrc", slog.Default()))
 
 	// Verify managed files list would contain this
 	assert.FileExists(t, dotfile, "symlink should exist")
@@ -685,15 +685,16 @@ func TestIntegration_FullWorkflow_InitAddSyncRestore(t *testing.T) {
 	assert.Contains(t, string(content), "/usr/local/bin", "modification should be visible through symlink")
 
 	// Commit changes
-	require.NoError(t, git.AutoCommit(filesDir, "Update .zshrc", slog.Default()))
+	require.NoError(t, git.AutoCommit(repoDir, "Update .zshrc", slog.Default()))
 
 	// Verify repo is clean after commit
-	hasChanges, err = git.HasChanges(filesDir)
+	hasChanges, err = git.HasChanges(repoDir)
 	require.NoError(t, err)
 	assert.False(t, hasChanges, "repo should be clean after commit")
 
 	// Step 4: Verify git history
-	history, err := git.GetFileHistory(filesDir, "shell/zshrc", 10)
+	gitPath := config.GetGitFilePath("shell/zshrc")
+	history, err := git.GetFileHistory(repoDir, gitPath, 10)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(history), 2, "should have at least 2 commits (Initial + Add + Update)")
 

@@ -351,3 +351,8 @@ func (c *Config) GetUncommittedFiles() []ManagedFile {
 
 	return result
 }
+
+// GetGitFilePath converts a repo path (relative to files/) to a git path (relative to .dotcor/)
+func GetGitFilePath(repoPath string) string {
+	return filepath.Join("files", repoPath)
+}

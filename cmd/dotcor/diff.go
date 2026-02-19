@@ -50,19 +50,19 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("git is not installed")
 	}
 
-	// Get repo path
-	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
+	// Get config directory
+	configDir, err := config.GetConfigDir()
 	if err != nil {
-		return fmt.Errorf("expanding repo path: %w", err)
+		return fmt.Errorf("getting config directory: %w", err)
 	}
 
 	// Check if it's a git repo
-	if !git.IsRepo(repoPath) {
+	if !git.IsRepo(configDir) {
 		return fmt.Errorf("dotcor repository is not a git repository")
 	}
 
 	// Handle specific file argument
-	var filePath string
+	var gitPath string
 	if len(args) > 0 {
 		// Convert source path to repo path
 		sourcePath := args[0]
@@ -70,18 +70,18 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("file not managed: %s", sourcePath)
 		}
-		filePath = mf.RepoPath
+		gitPath = config.GetGitFilePath(mf.RepoPath)
 	}
 
 	// Get appropriate diff
 	var output string
 
 	if nameOnly {
-		output, err = getChangedFileNames(repoPath, staged)
+		output, err = getChangedFileNames(configDir, staged)
 	} else if statFlag {
-		output, err = getDiffStat(repoPath, filePath, staged)
+		output, err = getDiffStat(configDir, gitPath, staged)
 	} else {
-		output, err = getDiff(repoPath, filePath, staged)
+		output, err = getDiff(configDir, gitPath, staged)
 	}
 
 	if err != nil {
@@ -89,7 +89,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	}
 
 	if output == "" {
-		if filePath != "" {
+		if gitPath != "" {
 			fmt.Println("No changes for specified file.")
 		} else {
 			fmt.Println("No uncommitted changes.")

@@ -36,8 +36,8 @@ managed_files: []
 	remoteCmd.SetArgs([]string{})
 
 	// First, set up git remote via direct call
-	require.NoError(t, git.InitRepo(filesDir))
-	require.NoError(t, git.SetRemote(filesDir, "origin", "git@github.com:user/dotfiles.git"))
+	require.NoError(t, git.InitRepo(configDir))
+	require.NoError(t, git.SetRemote(configDir, "origin", "git@github.com:user/dotfiles.git"))
 
 	// Act
 	// Note: We can't easily test the CLI command in unit tests

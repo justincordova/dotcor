@@ -19,7 +19,7 @@ func init() {
 }
 
 var (
-	version = "1.0.0"
+	version = "1.0.4"
 )
 
 // ANSI color codes
@@ -188,9 +188,9 @@ func showQuickStatus(cfg *config.Config) {
 	// Get changed files from git
 	var changedFiles []string
 	var gitStatus git.StatusInfo
-	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
-	if err == nil && git.IsGitInstalled() && git.IsRepo(repoPath) {
-		gitStatus, err = git.GetStatus(repoPath)
+	configDir, err := config.GetConfigDir()
+	if err == nil && git.IsGitInstalled() && git.IsRepo(configDir) {
+		gitStatus, err = git.GetStatus(configDir)
 		if err == nil {
 			changedFiles = gitStatus.ChangedFiles
 		}
@@ -223,7 +223,7 @@ func showQuickStatus(cfg *config.Config) {
 	// Git status
 	if len(changedFiles) > 0 || gitStatus.HasUncommitted {
 		fmt.Printf("  %s %s uncommitted changes\n", colorYellow, colorReset)
-	} else if git.IsGitInstalled() && git.IsRepo(repoPath) {
+	} else if git.IsGitInstalled() && git.IsRepo(configDir) {
 		fmt.Printf("  %s*%s clean %s[OK]%s\n", colorGreen, colorReset, colorGreen, colorReset)
 	}
 

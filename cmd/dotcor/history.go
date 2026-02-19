@@ -50,19 +50,19 @@ func runHistory(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("git is not installed")
 	}
 
-	// Get repo path
-	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
+	// Get config directory
+	configDir, err := config.GetConfigDir()
 	if err != nil {
-		return fmt.Errorf("expanding repo path: %w", err)
+		return fmt.Errorf("getting config directory: %w", err)
 	}
 
 	// Check if it's a git repo
-	if !git.IsRepo(repoPath) {
+	if !git.IsRepo(configDir) {
 		return fmt.Errorf("dotcor repository is not a git repository")
 	}
 
 	// Determine which file to show history for
-	var filePath string
+	var gitPath string
 	var displayPath string
 
 	if len(args) > 0 {
@@ -72,18 +72,18 @@ func runHistory(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("file not managed: %s", sourcePath)
 		}
-		filePath = mf.RepoPath
+		gitPath = config.GetGitFilePath(mf.RepoPath)
 		displayPath = mf.SourcePath
 	}
 
 	// Get history
-	commits, err := git.GetFileHistory(repoPath, filePath, limit)
+	commits, err := git.GetFileHistory(configDir, gitPath, limit)
 	if err != nil {
 		return fmt.Errorf("getting history: %w", err)
 	}
 
 	if len(commits) == 0 {
-		if filePath != "" {
+		if gitPath != "" {
 			fmt.Printf("No commits found for %s\n", displayPath)
 		} else {
 			fmt.Println("No commits found.")

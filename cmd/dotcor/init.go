@@ -79,16 +79,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 	configPath := filepath.Join(configDir, "config.yaml")
 
 	if fs.PathExists(configDir) && fs.PathExists(configPath) && !applyFlag && !reinitFlag {
-		// Check if files/ directory exists and is a git repository
-		if !fs.PathExists(filesDir) || !git.IsRepo(filesDir) {
-			fmt.Printf("%s[!]%s DotCor is partially initialized (config exists but files directory is missing or not a git repo)\n\n", colorYellow, colorReset)
+		// Check if .dotcor directory is a git repository
+		if !git.IsRepo(configDir) {
+			fmt.Printf("%s[!]%s DotCor is partially initialized (config exists but not a git repo)\n\n", colorYellow, colorReset)
 			fmt.Printf("Run 'dotcor init --reinit' to complete initialization.\n\n")
-			fmt.Printf("Current state:\n")
-			if !fs.PathExists(filesDir) {
-				fmt.Printf("  - files/ directory: %s[missing]%s\n", colorRed, colorReset)
-			} else if !git.IsRepo(filesDir) {
-				fmt.Printf("  - files/ git repo: %s[not initialized]%s\n", colorRed, colorReset)
-			}
 			return fmt.Errorf("incomplete initialization - run 'dotcor init --reinit'")
 		}
 
@@ -140,20 +134,20 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// Initialize Git repository
 	if git.IsGitInstalled() {
-		if !git.IsRepo(filesDir) {
-			if err := git.InitRepo(filesDir); err != nil {
+		if !git.IsRepo(configDir) {
+			if err := git.InitRepo(configDir); err != nil {
 				fmt.Printf("%s[!]%s Git init failed: %v\n", colorYellow, colorReset, err)
 			} else {
 				fmt.Printf("%s[OK]%s Initialized Git repository\n", colorGreen, colorReset)
 			}
 
 			// Create .gitignore
-			gitignorePath := filepath.Join(filesDir, ".gitignore")
-			gitignoreContent := `# DotCor ignores
-../backups/
-../.lock
+			gitignorePath := filepath.Join(configDir, ".gitignore")
+			gitignoreContent := `# DotCor working files
+backups/
+.lock
 
-# OS-specific files
+# OS files
 .DS_Store
 Thumbs.db
 *.swp
@@ -189,17 +183,9 @@ Thumbs.db
 		}
 		fmt.Printf("%s[OK]%s Created config.yaml\n", colorGreen, colorReset)
 
-		// Symlink config into files/ so it's tracked in git
-		configLinkPath := filepath.Join(filesDir, "config.yaml")
-		if err := os.Symlink(filepath.Join("..", "config.yaml"), configLinkPath); err != nil {
-			fmt.Printf("%s[!]%s Failed to symlink config to files directory: %v\n", colorYellow, colorReset, err)
-		} else {
-			fmt.Printf("%s[OK]%s Symlinked config.yaml to git repository\n", colorGreen, colorReset)
-		}
-
 		// Auto-commit config to git
-		if git.IsGitInstalled() && git.IsRepo(filesDir) {
-			if err := git.AutoCommit(filesDir, "Initialize dotcor config", cfg.Logger); err != nil {
+		if git.IsGitInstalled() && git.IsRepo(configDir) {
+			if err := git.AutoCommit(configDir, "Initialize dotcor config", cfg.Logger); err != nil {
 				fmt.Printf("%s[!]%s Failed to commit config to git: %v\n", colorYellow, colorReset, err)
 			} else {
 				fmt.Printf("%s[OK]%s Config committed to git\n", colorGreen, colorReset)
@@ -288,20 +274,20 @@ func handleReinit(configDir, configPath string, cfg *config.Config) error {
 
 	// Initialize Git repository
 	if git.IsGitInstalled() {
-		if !git.IsRepo(filesDir) {
-			if err := git.InitRepo(filesDir); err != nil {
+		if !git.IsRepo(configDir) {
+			if err := git.InitRepo(configDir); err != nil {
 				fmt.Printf("%s[!]%s Git init failed: %v\n", colorYellow, colorReset, err)
 			} else {
 				fmt.Printf("%s[OK]%s Initialized Git repository\n", colorGreen, colorReset)
 			}
 
 			// Create .gitignore
-			gitignorePath := filepath.Join(filesDir, ".gitignore")
-			gitignoreContent := `# DotCor ignores
-../backups/
-../.lock
+			gitignorePath := filepath.Join(configDir, ".gitignore")
+			gitignoreContent := `# DotCor working files
+backups/
+.lock
 
-# OS-specific files
+# OS files
 .DS_Store
 Thumbs.db
 *.swp
@@ -316,20 +302,9 @@ Thumbs.db
 		}
 	}
 
-	// Re-create symlink to config in files/
-	configLinkPath := filepath.Join(filesDir, "config.yaml")
-	if fs.PathExists(configLinkPath) {
-		os.Remove(configLinkPath)
-	}
-	if err := os.Symlink(filepath.Join("..", "config.yaml"), configLinkPath); err != nil {
-		fmt.Printf("%s[!]%s Failed to symlink config to files directory: %v\n", colorYellow, colorReset, err)
-	} else {
-		fmt.Printf("%s[OK]%s Symlinked config.yaml to git repository\n", colorGreen, colorReset)
-	}
-
 	// Auto-commit config to git
-	if git.IsGitInstalled() && git.IsRepo(filesDir) {
-		if err := git.AutoCommit(filesDir, "Initialize dotcor config", newCfg.Logger); err != nil {
+	if git.IsGitInstalled() && git.IsRepo(configDir) {
+		if err := git.AutoCommit(configDir, "Initialize dotcor config", newCfg.Logger); err != nil {
 			fmt.Printf("%s[!]%s Failed to commit config to git: %v\n", colorYellow, colorReset, err)
 		} else {
 			fmt.Printf("%s[OK]%s Config committed to git\n", colorGreen, colorReset)

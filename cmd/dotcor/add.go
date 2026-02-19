@@ -217,11 +217,11 @@ func runAdd(cmd *cobra.Command, args []string) error {
 
 	// Git commit
 	if git.IsGitInstalled() && added > 0 {
-		repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
+		configDir, err := config.GetConfigDir()
 		if err != nil {
-			return fmt.Errorf("expanding repo path: %w", err)
+			return fmt.Errorf("getting config directory: %w", err)
 		}
-		if err := git.AutoCommit(repoPath, "Add dotfiles", cfg.Logger); err != nil {
+		if err := git.AutoCommit(configDir, "Add dotfiles", cfg.Logger); err != nil {
 			fmt.Printf("%s[!]%s Git commit failed: %v (files marked as uncommitted)\n", colorYellow, colorReset, err)
 			fmt.Println("Run 'dotcor sync' to commit these changes.")
 		} else {
