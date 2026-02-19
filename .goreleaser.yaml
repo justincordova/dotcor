@@ -47,21 +47,13 @@ changelog:
     - title: Others
       order: 999
 
-brews:
-  - name: dotcor
-    repository:
-      owner: justincordova
-      name: homebrew-dotcor
-    directory: Formula
-    homepage: https://github.com/justincordova/dotcor
-    description: "Symlink-based dotfile manager with Git integration"
-    license: MIT
-    skip_upload: false
-    token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    install: |
-      bin.install "dotcor"
-    test: |
-      assert_match "dotcor version #{version}", shell_output("#{bin}/dotcor --version")
+# Homebrew formula is updated manually at ~/cs/homebrew-dotcor/Formula/dotcor.rb
+# GoReleaser v2 brews section is deprecated and has breaking changes
+# Manual update process:
+#   1. Get SHA256 from release: https://github.com/justincordova/dotcor/releases
+#   2. Update version and SHA256 in Formula/dotcor.rb
+#   3. git commit -m "dotcor X.Y.Z" && git push
+# Takes ~30 seconds per release
 
 release:
   github:
