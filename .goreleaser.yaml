@@ -50,20 +50,21 @@ changelog:
     - title: Others
       order: 999
 
-brews:
-  - name: dotcor
-    repository:
-      owner: justincordova
-      name: homebrew-dotcor
-    directory: Formula
-    homepage: https://github.com/justincordova/dotcor
-    description: "Symlink-based dotfile manager with Git integration"
-    license: MIT
-    skip_upload: false
-    install: |
-      bin.install "dotcor"
-    test: |
-      assert_match "dotcor version #{version}", shell_output("#{bin}/dotcor --version")
+# Homebrew formula will be updated manually for now
+# brews:
+#   - name: dotcor
+#     repository:
+#       owner: justincordova
+#       name: homebrew-dotcor
+#     directory: Formula
+#     homepage: https://github.com/justincordova/dotcor
+#     description: "Symlink-based dotfile manager with Git integration"
+#     license: MIT
+#     skip_upload: true
+#     install: |
+#       bin.install "dotcor"
+#     test: |
+#       assert_match "dotcor version #{version}", shell_output("#{bin}/dotcor --version")
 
 release:
   github:
@@ -71,4 +72,4 @@ release:
     name: dotcor
   draft: false
   prerelease: auto
-  name_template: "v{{.Version}}"
+  name_template: "v{{ .Version }}"
