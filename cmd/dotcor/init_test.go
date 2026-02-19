@@ -1001,28 +1001,18 @@ managed_files: []
 	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
 
 	// Initialize git repo
-	require.NoError(t, git.InitRepo(filesDir))
+	require.NoError(t, git.InitRepo(configDir))
 
-	// Act - Create symlink from files/config.yaml to ../config.yaml
-	configLinkPath := filepath.Join(filesDir, "config.yaml")
-	err := os.Symlink(filepath.Join("..", "config.yaml"), configLinkPath)
+	// Assert - config.yaml should be in configDir (not symlinked)
+	AssertFileExists(t, configPath)
 
-	// Assert
-	require.NoError(t, err, "should create config symlink")
-	AssertFileExists(t, configLinkPath)
-
-	// Verify it's a symlink
-	info, err := os.Lstat(configLinkPath)
+	// Verify it's a regular file (not a symlink)
+	info, err := os.Lstat(configPath)
 	require.NoError(t, err)
-	assert.Equal(t, os.ModeSymlink, info.Mode()&os.ModeSymlink, "should be a symlink")
-
-	// Verify symlink target points to parent config
-	target, err := os.Readlink(configLinkPath)
-	require.NoError(t, err)
-	assert.Equal(t, filepath.Join("..", "config.yaml"), target, "symlink should point to parent config")
+	assert.NotEqual(t, os.ModeSymlink, info.Mode()&os.ModeSymlink, "should not be a symlink")
 }
 
-func TestInit_ConfigSymlink_UpdatesOnReinit_Success(t *testing.T) {
+func TestInit_ConfigUpdatedOnReinit_Success(t *testing.T) {
 	// Arrange
 	tempDir := t.TempDir()
 	configDir := filepath.Join(tempDir, ".dotcor")
@@ -1031,9 +1021,8 @@ func TestInit_ConfigSymlink_UpdatesOnReinit_Success(t *testing.T) {
 	require.NoError(t, os.MkdirAll(configDir, 0755))
 
 	configPath := filepath.Join(configDir, "config.yaml")
-	configLinkPath := filepath.Join(filesDir, "config.yaml")
 
-	// Create initial config and symlink
+	// Create initial config
 	configContent := `version: "1.0"
 repo_path: ` + filesDir + `
 git_enabled: true
@@ -1041,16 +1030,28 @@ ignore_patterns: []
 managed_files: []
 `
 	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
-	require.NoError(t, os.Symlink(filepath.Join("..", "config.yaml"), configLinkPath))
+	require.NoError(t, git.InitRepo(configDir))
 
-	// Act - Remove old symlink and create new one
-	require.NoError(t, os.Remove(configLinkPath))
-	err := os.Symlink(filepath.Join("..", "config.yaml"), configLinkPath)
+	// Act - Update config
+	updatedContent := `version: "1.0"
+repo_path: ` + filesDir + `
+git_enabled: true
+ignore_patterns: []
+managed_files:
+  - source_path: ~/.test
+    repo_path: test/.test
+    added_at: "2024-01-01T00:00:00Z"
+`
+	err := os.WriteFile(configPath, []byte(updatedContent), 0644)
 
 	// Assert
-	require.NoError(t, err, "should create new config symlink")
-	AssertFileExists(t, configLinkPath)
-	AssertSymlinkPointsTo(t, configLinkPath, filepath.Join("..", "config.yaml"))
+	require.NoError(t, err, "should update config file")
+	AssertFileExists(t, configPath)
+
+	// Verify it's still a regular file (not a symlink)
+	info, err := os.Lstat(configPath)
+	require.NoError(t, err)
+	assert.NotEqual(t, os.ModeSymlink, info.Mode()&os.ModeSymlink, "should not be a symlink")
 }
 
 func TestInit_CreatesGitignoreFile_Success(t *testing.T) {
@@ -1062,15 +1063,15 @@ func TestInit_CreatesGitignoreFile_Success(t *testing.T) {
 	require.NoError(t, os.MkdirAll(configDir, 0755))
 
 	// Initialize git repo (which should create .gitignore)
-	require.NoError(t, git.InitRepo(filesDir))
+	require.NoError(t, git.InitRepo(configDir))
 
 	// Act - Create .gitignore manually (simulating what init does)
-	gitignorePath := filepath.Join(filesDir, ".gitignore")
-	gitignoreContent := `# DotCor ignores
-../backups/
-../.lock
+	gitignorePath := filepath.Join(configDir, ".gitignore")
+	gitignoreContent := `# DotCor working files
+backups/
+.lock
 
-# OS-specific files
+# OS files
 .DS_Store
 Thumbs.db
 *.swp
@@ -1086,7 +1087,7 @@ Thumbs.db
 	// Verify content
 	content, err := os.ReadFile(gitignorePath)
 	require.NoError(t, err)
-	assert.Contains(t, string(content), "../backups/", "should ignore backups directory")
-	assert.Contains(t, string(content), "../.lock", "should ignore lock file")
+	assert.Contains(t, string(content), "backups/", "should ignore backups directory")
+	assert.Contains(t, string(content), ".lock", "should ignore lock file")
 	assert.Contains(t, string(content), ".DS_Store", "should ignore macOS files")
 }

@@ -83,8 +83,6 @@ func runClone(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting config directory: %w", err)
 	}
 
-	filesDir := filepath.Join(configDir, "files")
-
 	// Check if already exists
 	if fs.PathExists(configDir) {
 		if !force {
@@ -134,7 +132,7 @@ func runClone(cmd *cobra.Command, args []string) error {
 	// Clone repository
 	fmt.Printf("Cloning repository from %s...\n", repoURL)
 
-	if err := git.CloneWithProgress(repoURL, filesDir); err != nil {
+	if err := git.CloneWithProgress(repoURL, configDir); err != nil {
 		return fmt.Errorf("cloning repository: %w", err)
 	}
 
@@ -142,7 +140,7 @@ func runClone(cmd *cobra.Command, args []string) error {
 
 	// Set up git remote if this is a remote URL
 	if isValidGitURL(repoURL) {
-		if err := git.SetRemote(filesDir, "origin", repoURL); err != nil {
+		if err := git.SetRemote(configDir, "origin", repoURL); err != nil {
 			fmt.Fprintf(os.Stderr, "%s[!]%s Warning: failed to set git remote: %v\n", colorYellow, colorReset, err)
 		} else {
 			fmt.Printf("%s[OK]%s Git remote configured\n", colorGreen, colorReset)
@@ -150,18 +148,12 @@ func runClone(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check for config.yaml in repo
-	configPath := filepath.Join(filesDir, "config.yaml")
+	configPath := filepath.Join(configDir, "config.yaml")
 	if fs.PathExists(configPath) {
-		// Copy config to correct location
-		destConfig := filepath.Join(configDir, "config.yaml")
-		if err := fs.CopyFile(configPath, destConfig, cfg); err != nil {
-			fmt.Printf("%s[!]%s Could not copy config: %v\n", colorYellow, colorReset, err)
-		} else {
-			// Reload the config from the copied location
-			cfg, err = config.LoadConfig()
-			if err == nil {
-				fmt.Printf("%s[OK]%s Configuration loaded from repository\n", colorGreen, colorReset)
-			}
+		// Config is already in the correct location
+		cfg, err = config.LoadConfig()
+		if err == nil {
+			fmt.Printf("%s[OK]%s Configuration loaded from repository\n", colorGreen, colorReset)
 		}
 	} else {
 		// Save the default config we created earlier

@@ -50,10 +50,10 @@ func runList(cmd *cobra.Command, args []string) error {
 	brokenOnly, _ := cmd.Flags().GetBool("broken")
 	healthyOnly, _ := cmd.Flags().GetBool("healthy")
 
-	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
+	configDir, err := config.GetConfigDir()
 	var changedFiles []string
-	if err == nil && git.IsGitInstalled() && git.IsRepo(repoPath) {
-		gitStatus, _ := git.GetStatus(repoPath)
+	if err == nil && git.IsGitInstalled() && git.IsRepo(configDir) {
+		gitStatus, _ := git.GetStatus(configDir)
 		changedFiles = gitStatus.ChangedFiles
 	}
 

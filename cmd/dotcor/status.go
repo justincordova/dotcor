@@ -151,10 +151,10 @@ func collectStatus(cfg *config.Config, fileArgs []string) StatusReport {
 	report.Statistics.TotalFiles = len(files)
 
 	// Get git status first to have changed files available
-	repoPath, err := config.ExpandPath(cfg.RepoPath, cfg)
+	configDir, err := config.GetConfigDir()
 	var changedFiles []string
-	if err == nil && git.IsGitInstalled() && git.IsRepo(repoPath) {
-		gitStatus, _ := git.GetStatus(repoPath)
+	if err == nil && git.IsGitInstalled() && git.IsRepo(configDir) {
+		gitStatus, _ := git.GetStatus(configDir)
 		report.GitStatus = GitStatusInfo{
 			IsRepo:         true,
 			HasUncommitted: gitStatus.HasUncommitted,
@@ -190,8 +190,9 @@ func CheckFileStatus(cfg *config.Config, mf config.ManagedFile, changedFiles []s
 	}
 
 	// Check if file has uncommitted changes
+	gitPath := config.GetGitFilePath(mf.RepoPath)
 	for _, cf := range changedFiles {
-		if cf == mf.RepoPath {
+		if cf == gitPath {
 			status.Status = "modified"
 			status.Problem = "uncommitted changes"
 			return status
