@@ -73,10 +73,25 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting config directory: %w", err)
 	}
+	filesDir := filepath.Join(configDir, "files")
 
 	// Check if already initialized
 	configPath := filepath.Join(configDir, "config.yaml")
+
 	if fs.PathExists(configDir) && fs.PathExists(configPath) && !applyFlag && !reinitFlag {
+		// Check if files/ directory exists and is a git repository
+		if !fs.PathExists(filesDir) || !git.IsRepo(filesDir) {
+			fmt.Printf("%s[!]%s DotCor is partially initialized (config exists but files directory is missing or not a git repo)\n\n", colorYellow, colorReset)
+			fmt.Printf("Run 'dotcor init --reinit' to complete initialization.\n\n")
+			fmt.Printf("Current state:\n")
+			if !fs.PathExists(filesDir) {
+				fmt.Printf("  - files/ directory: %s[missing]%s\n", colorRed, colorReset)
+			} else if !git.IsRepo(filesDir) {
+				fmt.Printf("  - files/ git repo: %s[not initialized]%s\n", colorRed, colorReset)
+			}
+			return fmt.Errorf("incomplete initialization - run 'dotcor init --reinit'")
+		}
+
 		fmt.Printf("DotCor is already initialized at %s\n\n", configDir)
 		fmt.Printf("To reinitialize:\n")
 		fmt.Printf("  dotcor init --reinit        # Overwrite config (destructive)\n")
@@ -101,7 +116,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}()
 
 	// Create directory structure
-	filesDir := filepath.Join(configDir, "files")
 	backupsDir := filepath.Join(configDir, "backups")
 	hooksDir := filepath.Join(configDir, "hooks")
 
