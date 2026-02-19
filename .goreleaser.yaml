@@ -56,7 +56,7 @@ brews:
     homepage: https://github.com/justincordova/dotcor
     description: "Symlink-based dotfile manager with Git integration"
     license: MIT
-    skip_upload: true
+    skip_upload: false
     install: |
       bin.install "dotcor"
     test: |
