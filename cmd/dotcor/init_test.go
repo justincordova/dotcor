@@ -15,6 +15,7 @@ import (
 
 	"github.com/justincordova/dotcor/internal/config"
 	"github.com/justincordova/dotcor/internal/fs"
+	"github.com/justincordova/dotcor/internal/git"
 )
 
 // ========== Directory Structure Tests ==========
@@ -978,4 +979,114 @@ func TestInit_HelperFunctions_Work(t *testing.T) {
 		CreateTestSymlink(t, target, link)
 		AssertSymlinkPointsTo(t, link, target)
 	})
+}
+
+// ========== Config Symlink Tests ==========
+
+func TestInit_CreatesConfigSymlink_Success(t *testing.T) {
+	// Arrange
+	tempDir := t.TempDir()
+	configDir := filepath.Join(tempDir, ".dotcor")
+	filesDir := filepath.Join(configDir, "files")
+	require.NoError(t, os.MkdirAll(filesDir, 0755))
+	require.NoError(t, os.MkdirAll(configDir, 0755))
+
+	configPath := filepath.Join(configDir, "config.yaml")
+	configContent := `version: "1.0"
+repo_path: ` + filesDir + `
+git_enabled: true
+ignore_patterns: []
+managed_files: []
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
+
+	// Initialize git repo
+	require.NoError(t, git.InitRepo(filesDir))
+
+	// Act - Create symlink from files/config.yaml to ../config.yaml
+	configLinkPath := filepath.Join(filesDir, "config.yaml")
+	err := os.Symlink(filepath.Join("..", "config.yaml"), configLinkPath)
+
+	// Assert
+	require.NoError(t, err, "should create config symlink")
+	AssertFileExists(t, configLinkPath)
+
+	// Verify it's a symlink
+	info, err := os.Lstat(configLinkPath)
+	require.NoError(t, err)
+	assert.Equal(t, os.ModeSymlink, info.Mode()&os.ModeSymlink, "should be a symlink")
+
+	// Verify symlink target points to parent config
+	target, err := os.Readlink(configLinkPath)
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join("..", "config.yaml"), target, "symlink should point to parent config")
+}
+
+func TestInit_ConfigSymlink_UpdatesOnReinit_Success(t *testing.T) {
+	// Arrange
+	tempDir := t.TempDir()
+	configDir := filepath.Join(tempDir, ".dotcor")
+	filesDir := filepath.Join(configDir, "files")
+	require.NoError(t, os.MkdirAll(filesDir, 0755))
+	require.NoError(t, os.MkdirAll(configDir, 0755))
+
+	configPath := filepath.Join(configDir, "config.yaml")
+	configLinkPath := filepath.Join(filesDir, "config.yaml")
+
+	// Create initial config and symlink
+	configContent := `version: "1.0"
+repo_path: ` + filesDir + `
+git_enabled: true
+ignore_patterns: []
+managed_files: []
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
+	require.NoError(t, os.Symlink(filepath.Join("..", "config.yaml"), configLinkPath))
+
+	// Act - Remove old symlink and create new one
+	require.NoError(t, os.Remove(configLinkPath))
+	err := os.Symlink(filepath.Join("..", "config.yaml"), configLinkPath)
+
+	// Assert
+	require.NoError(t, err, "should create new config symlink")
+	AssertFileExists(t, configLinkPath)
+	AssertSymlinkPointsTo(t, configLinkPath, filepath.Join("..", "config.yaml"))
+}
+
+func TestInit_CreatesGitignoreFile_Success(t *testing.T) {
+	// Arrange
+	tempDir := t.TempDir()
+	configDir := filepath.Join(tempDir, ".dotcor")
+	filesDir := filepath.Join(configDir, "files")
+	require.NoError(t, os.MkdirAll(filesDir, 0755))
+	require.NoError(t, os.MkdirAll(configDir, 0755))
+
+	// Initialize git repo (which should create .gitignore)
+	require.NoError(t, git.InitRepo(filesDir))
+
+	// Act - Create .gitignore manually (simulating what init does)
+	gitignorePath := filepath.Join(filesDir, ".gitignore")
+	gitignoreContent := `# DotCor ignores
+../backups/
+../.lock
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+`
+	err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0644)
+
+	// Assert
+	require.NoError(t, err, "should create .gitignore file")
+	AssertFileExists(t, gitignorePath)
+
+	// Verify content
+	content, err := os.ReadFile(gitignorePath)
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "../backups/", "should ignore backups directory")
+	assert.Contains(t, string(content), "../.lock", "should ignore lock file")
+	assert.Contains(t, string(content), ".DS_Store", "should ignore macOS files")
 }

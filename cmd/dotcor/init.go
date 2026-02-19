@@ -132,6 +132,25 @@ func runInit(cmd *cobra.Command, args []string) error {
 			} else {
 				fmt.Printf("%s[OK]%s Initialized Git repository\n", colorGreen, colorReset)
 			}
+
+			// Create .gitignore
+			gitignorePath := filepath.Join(filesDir, ".gitignore")
+			gitignoreContent := `# DotCor ignores
+../backups/
+../.lock
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+`
+			if err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0644); err != nil {
+				fmt.Printf("%s[!]%s Failed to create .gitignore: %v\n", colorYellow, colorReset, err)
+			} else {
+				fmt.Printf("%s[OK]%s Created .gitignore\n", colorGreen, colorReset)
+			}
 		}
 	} else {
 		fmt.Printf("%s[!]%s Git not found. Installing Git is recommended for version control.\n", colorYellow, colorReset)
@@ -155,6 +174,23 @@ func runInit(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("saving config: %w", err)
 		}
 		fmt.Printf("%s[OK]%s Created config.yaml\n", colorGreen, colorReset)
+
+		// Symlink config into files/ so it's tracked in git
+		configLinkPath := filepath.Join(filesDir, "config.yaml")
+		if err := os.Symlink(filepath.Join("..", "config.yaml"), configLinkPath); err != nil {
+			fmt.Printf("%s[!]%s Failed to symlink config to files directory: %v\n", colorYellow, colorReset, err)
+		} else {
+			fmt.Printf("%s[OK]%s Symlinked config.yaml to git repository\n", colorGreen, colorReset)
+		}
+
+		// Auto-commit config to git
+		if git.IsGitInstalled() && git.IsRepo(filesDir) {
+			if err := git.AutoCommit(filesDir, "Initialize dotcor config", cfg.Logger); err != nil {
+				fmt.Printf("%s[!]%s Failed to commit config to git: %v\n", colorYellow, colorReset, err)
+			} else {
+				fmt.Printf("%s[OK]%s Config committed to git\n", colorGreen, colorReset)
+			}
+		}
 	}
 
 	// Handle --apply flag (create symlinks from existing config)
@@ -220,6 +256,22 @@ func handleReinit(configDir, configPath string, cfg *config.Config) error {
 		return fmt.Errorf("saving config: %w", err)
 	}
 	fmt.Printf("%s[OK]%s Created new config.yaml\n", colorGreen, colorReset)
+
+	// Re-create symlink to config in files/ if it exists
+	filesDir := filepath.Join(configDir, "files")
+	configLinkPath := filepath.Join(filesDir, "config.yaml")
+	if fs.PathExists(filesDir) {
+		// Remove old symlink if it exists
+		if fs.PathExists(configLinkPath) {
+			os.Remove(configLinkPath)
+		}
+		// Create new symlink
+		if err := os.Symlink(filepath.Join("..", "config.yaml"), configLinkPath); err != nil {
+			fmt.Printf("%s[!]%s Failed to symlink config to files directory: %v\n", colorYellow, colorReset, err)
+		} else {
+			fmt.Printf("%s[OK]%s Symlinked config.yaml to git repository\n", colorGreen, colorReset)
+		}
+	}
 
 	fmt.Println("")
 	fmt.Printf("%sDotCor reinitialized successfully!%s\n", colorLightPink, colorReset)

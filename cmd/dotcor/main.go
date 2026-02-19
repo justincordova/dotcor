@@ -110,6 +110,7 @@ func init() {
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(syncCmd)
+	rootCmd.AddCommand(remoteCmd)
 	rootCmd.AddCommand(restoreCmd)
 	rootCmd.AddCommand(historyCmd)
 	rootCmd.AddCommand(diffCmd)
@@ -252,6 +253,7 @@ func printCustomHelp(cmd *cobra.Command) {
 	printCmd(syncCmd)
 
 	fmt.Printf("\n%sAdditional Commands:%s\n", colorLightPink, colorReset)
+	printCmd(remoteCmd)
 	printCmd(restoreCmd)
 	printCmd(historyCmd)
 	printCmd(diffCmd)
