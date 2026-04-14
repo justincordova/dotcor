@@ -18,92 +18,155 @@ type addResultMsg struct {
 }
 
 func viewAdd(m Model) string {
-	var b strings.Builder
+	header := subviewHeader(m.width, "Add File", []string{stepLabel(m.addStep)})
 
-	b.WriteString(accentStyle.Bold(true).Render("Add File"))
-	b.WriteString("\n\n")
-
+	var body string
 	switch m.addStep {
 	case 0:
-		b.WriteString(textStyle.Render("Enter file path to add:"))
-		b.WriteString("\n")
-		b.WriteString(m.addInput.View())
-		b.WriteString("\n\n")
-		b.WriteString(dimStyle.Render("Enter the path to a dotfile (e.g. ~/.config/nvim/init.lua)"))
-
+		body = renderAddStep0(m)
 	case 1:
-		b.WriteString(textStyle.Render("Confirm package name:"))
-		b.WriteString("\n")
-		b.WriteString(m.addInput.View())
-		b.WriteString("\n\n")
-		b.WriteString(dimStyle.Render(fmt.Sprintf("Auto-detected from: %s", m.addPreview)))
-		b.WriteString("\n")
-		b.WriteString(dimStyle.Render("Tab to accept, or edit the package name"))
-
+		body = renderAddStep1(m)
 	case 2:
-		b.WriteString(accentStyle.Render("Preview"))
-		b.WriteString("\n\n")
-
-		path := strings.Replace(m.addPreview, m.homeDir, "~", 1)
-		b.WriteString(fmt.Sprintf("  %s %s\n", textStyle.Render("File:"), dimStyle.Render(path)))
-		b.WriteString(fmt.Sprintf("  %s %s\n", textStyle.Render("Package:"), textStyle.Render(m.addPkgName)))
-
-		repoPath := filepath.Join(m.repoDir, m.addPkgName, filepath.Base(m.addPreview))
-		b.WriteString(fmt.Sprintf("  %s %s\n", textStyle.Render("Repo:"), dimStyle.Render(repoPath)))
-
-		if len(m.addSecrets) > 0 {
-			b.WriteString("\n")
-			b.WriteString(errorStyle.Bold(true).Render("Secrets detected:"))
-			b.WriteString("\n")
-			for _, s := range m.addSecrets {
-				b.WriteString(fmt.Sprintf("  %s %s\n", errorStyle.Render("⚠"), warningStyle.Render(s)))
-			}
-		}
-
-		b.WriteString("\n")
-		b.WriteString(dimStyle.Render("Enter to confirm, Esc to cancel"))
-
+		body = renderAddStep2(m)
 	case 3:
-		b.WriteString(textStyle.Render("Adding file..."))
+		body = renderAddStep3(m)
 	}
 
-	b.WriteString("\n\n")
-	b.WriteString(dimStyle.Render("Esc to cancel"))
+	footer := subviewFooter(m.width, addFooterHints(m)...)
 
-	content := b.String()
-	return lipgloss.NewStyle().
-		Width(m.width).
-		Height(m.height).
-		Padding(1, 2).
-		Render(content)
+	return lipgloss.JoinVertical(lipgloss.Left,
+		header,
+		renderStepper(m.width, m.addStep),
+		subviewContent(m.width, m.height-4, body),
+		footer,
+	)
+}
+
+func stepLabel(step int) string {
+	switch step {
+	case 0:
+		return "path"
+	case 1:
+		return "package name"
+	case 2:
+		return "preview"
+	case 3:
+		return "adding"
+	}
+	return ""
+}
+
+func renderStepper(width, step int) string {
+	steps := []string{"Path", "Package", "Preview"}
+	var parts []string
+	for i, s := range steps {
+		num := fmt.Sprintf("%d", i+1)
+		label := fmt.Sprintf(" %s %s ", num, s)
+		switch {
+		case i < step:
+			parts = append(parts, pill(label, colBase, colGreen))
+		case i == step:
+			parts = append(parts, pill(label, colBase, colMauve))
+		default:
+			parts = append(parts, lipgloss.NewStyle().
+				Foreground(lipgloss.Color(colOverlay0)).
+				Padding(0, 1).
+				Render(label))
+		}
+	}
+	row := lipgloss.JoinHorizontal(lipgloss.Center, parts...)
+	return lipgloss.NewStyle().Width(width).Padding(0, 2).Render(row)
+}
+
+func renderAddStep0(m Model) string {
+	return strings.Join([]string{
+		textStyle.Render("Enter the path to a dotfile:"),
+		"",
+		m.addInput.View(),
+		"",
+		dimStyle.Render("e.g. ~/.config/nvim/init.lua  or  ~/.zshrc"),
+	}, "\n")
+}
+
+func renderAddStep1(m Model) string {
+	preview := collapseHome(m.addPreview, m.homeDir)
+	return strings.Join([]string{
+		textStyle.Render("Choose a package name:"),
+		"",
+		m.addInput.View(),
+		"",
+		dimStyle.Render(fmt.Sprintf("auto-detected from %s", preview)),
+		dimStyle.Render("tab to accept, or edit the name"),
+	}, "\n")
+}
+
+func renderAddStep2(m Model) string {
+	var b strings.Builder
+	b.WriteString(accentStyle.Render("Review"))
+	b.WriteString("\n")
+	b.WriteString(subtleStyle.Render(strings.Repeat("─", 40)))
+	b.WriteString("\n\n")
+
+	path := collapseHome(m.addPreview, m.homeDir)
+	repoPath := filepath.Join(m.repoDir, m.addPkgName, filepath.Base(m.addPreview))
+
+	b.WriteString(fmt.Sprintf("  %s  %s\n", padRight(textStyle.Render("File"), 12), textStyle.Render(path)))
+	b.WriteString(fmt.Sprintf("  %s  %s\n", padRight(textStyle.Render("Package"), 12), accentStyle.Render(m.addPkgName)))
+	b.WriteString(fmt.Sprintf("  %s  %s\n", padRight(textStyle.Render("Destination"), 12), dimStyle.Render(collapseHome(repoPath, m.homeDir))))
+
+	if len(m.addSecrets) > 0 {
+		b.WriteString("\n")
+		b.WriteString(pill(" SECRETS DETECTED ", colBase, colRed))
+		b.WriteString("\n")
+		for _, s := range m.addSecrets {
+			b.WriteString(fmt.Sprintf("  %s %s\n",
+				errorStyle.Render("⚠"),
+				warningStyle.Render(truncate(s, 80)),
+			))
+		}
+		b.WriteString("\n")
+		b.WriteString(warningStyle.Render("Review before committing — these may be sensitive."))
+	}
+
+	return b.String()
+}
+
+func renderAddStep3(m Model) string {
+	return fmt.Sprintf("%s  %s", m.spinner.View(), textStyle.Render("Adding file…"))
+}
+
+func addFooterHints(m Model) []string {
+	switch m.addStep {
+	case 0, 1:
+		return []string{kbd("enter", "next"), kbd("esc", "cancel")}
+	case 2:
+		return []string{kbd("enter", "confirm"), kbd("esc", "cancel")}
+	default:
+		return []string{kbd("esc", "cancel")}
+	}
 }
 
 func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if msg, ok := msg.(tea.KeyMsg); ok {
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch {
-		case key.Matches(msg, m.keys.Esc):
+		case key.Matches(keyMsg, m.keys.Esc):
 			m.activeView = DashboardView
-			m.addStep = 0
-			m.addInput.Blur()
-			m.addInput.SetValue("")
-			m.addPkgName = ""
-			m.addPreview = ""
-			m.addSecrets = nil
+			m.resetAddState()
+			m.err = nil
 			return m, nil
 
-		case key.Matches(msg, m.keys.Enter):
+		case key.Matches(keyMsg, m.keys.Enter):
 			switch m.addStep {
 			case 0:
 				path := expandHome(m.addInput.Value())
 				if path == "" {
 					return m, nil
 				}
-
 				if _, err := os.Stat(path); err != nil {
 					m.err = fmt.Errorf("file not found: %s", path)
 					return m, nil
 				}
-
+				m.err = nil
 				m.addPreview = path
 				m.addPkgName = detectPackageName(path)
 				m.addInput.SetValue(m.addPkgName)
@@ -123,10 +186,11 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 
 			case 2:
+				m.addStep = 3
 				return m, m.executeAdd()
 			}
 
-		case key.Matches(msg, m.keys.Tab) && m.addStep == 1:
+		case key.Matches(keyMsg, m.keys.Tab) && m.addStep == 1:
 			m.addInput.SetValue(m.addPkgName)
 			m.addInput.SetCursor(len(m.addPkgName))
 			return m, nil
@@ -187,7 +251,7 @@ func (m Model) executeAdd() tea.Cmd {
 			return addResultMsg{err: fmt.Errorf("creating symlink: %w", err)}
 		}
 
-		return addResultMsg{msg: fmt.Sprintf("Added %s to package %s", filepath.Base(srcPath), pkgName)}
+		return addResultMsg{msg: fmt.Sprintf("Added %s → %s", filepath.Base(srcPath), pkgName)}
 	}
 }
 
@@ -248,9 +312,7 @@ func scanForSecrets(path string) []string {
 	var found []string
 	for _, p := range patterns {
 		matches := p.FindAllString(content, -1)
-		for _, match := range matches {
-			found = append(found, match)
-		}
+		found = append(found, matches...)
 	}
 
 	return found

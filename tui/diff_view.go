@@ -17,51 +17,24 @@ type diffMsg struct {
 }
 
 func viewDiff(m Model) string {
-	header := renderDiffHeader(m)
-	body := m.viewport.View()
-	footer := renderDiffFooter(m)
-
-	return lipgloss.JoinVertical(
-		lipgloss.Left,
-		header,
-		body,
-		footer,
-	)
-}
-
-func renderDiffHeader(m Model) string {
-	title := accentStyle.Bold(true).Render("Diff")
-
-	var subtitle string
-	if m.selectedPkg < len(m.packages) && m.selectedFile < len(m.packages[m.selectedPkg].Files) {
-		f := m.packages[m.selectedPkg].Files[m.selectedFile]
-		subtitle = dimStyle.Render(f.RelPath)
+	crumbs := []string{"dotfiles"}
+	if m.selectedPkg < len(m.packages) {
+		p := m.packages[m.selectedPkg]
+		crumbs = append(crumbs, p.Name)
+		if m.expanded[m.selectedPkg] && m.selectedFile < len(p.Files) {
+			crumbs = append(crumbs, p.Files[m.selectedFile].RelPath)
+		}
 	}
 
-	return lipgloss.NewStyle().
-		Width(m.width).
-		Border(lipgloss.NormalBorder(), false, false, true, false).
-		BorderForeground(lipgloss.Color(muted)).
-		Padding(0, 1).
-		Render(
-			lipgloss.JoinHorizontal(lipgloss.Top, title, "  ", subtitle),
-		)
-}
+	header := subviewHeader(m.width, "Diff", crumbs)
+	body := m.viewport.View()
+	footer := subviewFooter(m.width,
+		kbd("c", "commit"),
+		kbd("↑↓", "scroll"),
+		kbd("esc", "back"),
+	)
 
-func renderDiffFooter(m Model) string {
-	esc := keyStyle.Render("esc")
-	back := descStyle.Render("back")
-	commit := keyStyle.Render("c")
-	commitDesc := descStyle.Render("commit")
-
-	return lipgloss.NewStyle().
-		Width(m.width).
-		Padding(0, 1).
-		Border(lipgloss.NormalBorder(), true, false, false, false).
-		BorderForeground(lipgloss.Color(muted)).
-		Render(
-			fmt.Sprintf("%s %s    %s %s", esc, back, commit, commitDesc),
-		)
+	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
 }
 
 func (m Model) updateDiff(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -81,7 +54,6 @@ func (m Model) updateDiff(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.activeView = DashboardView
 			m.err = nil
 			return m, nil
-
 		case msg.String() == "c":
 			return m, m.commitDiff()
 		}
@@ -139,30 +111,33 @@ func colorizeDiff(content string) string {
 		return dimStyle.Render("No diff available")
 	}
 
+	addStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colGreen))
+	delStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colRed))
+	hunkStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colMauve)).Bold(true)
+	metaStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colLavender)).Bold(true)
+
 	var b strings.Builder
-	lines := strings.Split(content, "\n")
-
-	for _, line := range lines {
-		if len(line) == 0 {
-			b.WriteString("\n")
-			continue
-		}
-
+	for _, line := range strings.Split(content, "\n") {
 		switch {
+		case len(line) == 0:
+			b.WriteString("\n")
 		case strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "---"):
-			b.WriteString(highlightStyle.Render(line))
-			b.WriteString("\n")
-		case strings.HasPrefix(line, "+"):
-			b.WriteString(successStyle.Render(line))
-			b.WriteString("\n")
-		case strings.HasPrefix(line, "-"):
-			b.WriteString(errorStyle.Render(line))
+			b.WriteString(metaStyle.Render(line))
 			b.WriteString("\n")
 		case strings.HasPrefix(line, "@@"):
-			b.WriteString(highlightStyle.Render(line))
+			b.WriteString(hunkStyle.Render(line))
+			b.WriteString("\n")
+		case strings.HasPrefix(line, "+"):
+			b.WriteString(addStyle.Render(line))
+			b.WriteString("\n")
+		case strings.HasPrefix(line, "-"):
+			b.WriteString(delStyle.Render(line))
+			b.WriteString("\n")
+		case strings.HasPrefix(line, "diff "):
+			b.WriteString(metaStyle.Render(line))
 			b.WriteString("\n")
 		default:
-			b.WriteString(dimStyle.Render(line))
+			b.WriteString(textStyle.Render(line))
 			b.WriteString("\n")
 		}
 	}

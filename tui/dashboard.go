@@ -2,225 +2,695 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/justincordova/dotcor/internal/git"
 	"github.com/justincordova/dotcor/internal/stow"
 )
 
 func viewDashboard(m Model) string {
 	header := renderHeader(m)
+	stats := renderStatsStrip(m)
 	main := renderMain(m)
+	activity := renderActivityStrip(m)
 	gitBar := renderGitBar(m)
 	footer := renderFooter(m)
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
+		stats,
 		main,
+		activity,
 		gitBar,
 		footer,
 	)
 }
 
+// ─── Header ──────────────────────────────────────────────────────────────────
+
 func renderHeader(m Model) string {
-	version := "v1.0.4"
-	title := accentStyle.Bold(true).Render("DotCor " + version)
+	logo := renderLogo()
+	ver := dimStyle.Render(m.version)
 
-	pkgCount := fmt.Sprintf("%d package", len(m.packages))
-	if len(m.packages) != 1 {
-		pkgCount += "s"
+	nav := renderNav()
+	left := lipgloss.JoinHorizontal(lipgloss.Center, logo, " ", ver)
+
+	gap := m.width - lipgloss.Width(left) - lipgloss.Width(nav) - 2
+	if gap < 1 {
+		gap = 1
 	}
-	count := dimStyle.Render(pkgCount)
+	spacer := strings.Repeat(" ", gap)
 
-	spacer := lipgloss.NewStyle().
-		Width(m.width - lipgloss.Width(title) - lipgloss.Width(count) - 4).
-		Render("")
+	row := lipgloss.JoinHorizontal(lipgloss.Center, left, spacer, nav)
 
 	return lipgloss.NewStyle().
 		Width(m.width).
-		Border(lipgloss.NormalBorder(), false, false, true, false).
-		BorderForeground(lipgloss.Color(muted)).
+		Background(lipgloss.Color(colMantle)).
 		Padding(0, 1).
-		Render(
-			lipgloss.JoinHorizontal(lipgloss.Top, title, spacer, count),
-		)
+		Render(row)
 }
 
-func renderMain(m Model) string {
-	leftWidth := m.width * 2 / 5
-	rightWidth := m.width - leftWidth - 4
-
-	left := renderPackageList(m, leftWidth)
-	right := renderFileDetail(m, rightWidth)
-
-	leftStyled := boxStyle.Width(leftWidth - 2).Height(m.height - 10).Render(left)
-	rightStyled := activeBoxStyle.Width(rightWidth - 2).Height(m.height - 10).Render(right)
-
-	main := lipgloss.JoinHorizontal(lipgloss.Top, leftStyled, rightStyled)
-
-	linesNeeded := m.height - 10
-	currentLines := strings.Count(main, "\n") + 1
-	if currentLines < linesNeeded {
-		padding := strings.Repeat("\n", linesNeeded-currentLines)
-		main = main + padding
-	}
-
-	return main
-}
-
-func renderPackageList(m Model, width int) string {
+// renderLogo paints "DotCor" with a mauve → pink per-char gradient.
+func renderLogo() string {
+	text := "◆ DotCor"
+	gradient := []string{colMauve, colMauve, colLavender, colPink, colPink, colFlamingo, colFlamingo, colPink}
 	var b strings.Builder
-
-	header := accentStyle.Bold(true).Render(fmt.Sprintf("Packages (%d)", len(m.packages)))
-	b.WriteString(header)
-	b.WriteString("\n")
-
-	for i, pkg := range m.packages {
-		cursor := " "
-		if i == m.selectedPkg {
-			cursor = selectedStyle.Render("▶")
-		}
-
-		name := pkg.Name
-		if i == m.selectedPkg {
-			name = selectedStyle.Render(name)
-		} else {
-			name = textStyle.Render(name)
-		}
-
-		indicator := statusIndicator(pkg.Status)
-
-		padWidth := width - 6 - len(pkg.Name)
-		if padWidth < 1 {
-			padWidth = 1
-		}
-		padding := strings.Repeat(" ", padWidth)
-
-		b.WriteString(fmt.Sprintf("%s %s%s%s\n", cursor, name, padding, indicator))
+	for i, r := range text {
+		color := gradient[i%len(gradient)]
+		b.WriteString(lipgloss.NewStyle().
+			Foreground(lipgloss.Color(color)).
+			Bold(true).
+			Render(string(r)))
 	}
-
 	return b.String()
 }
 
-func renderFileDetail(m Model, width int) string {
+func renderNav() string {
+	items := []string{
+		kbd("D", "diff"),
+		kbd("H", "history"),
+		kbd("L", "logs"),
+		kbd("g", "settings"),
+		kbd("?", "help"),
+	}
+	return strings.Join(items, dimStyle.Render("  "))
+}
+
+// ─── Stats strip ─────────────────────────────────────────────────────────────
+
+func renderStatsStrip(m Model) string {
+	var linkedFiles, totalFiles int
+	for _, p := range m.packages {
+		for _, f := range p.Files {
+			totalFiles++
+			if f.IsLinked {
+				linkedFiles++
+			}
+		}
+	}
+
+	filesVal := fmt.Sprintf("%d/%d", linkedFiles, totalFiles)
+	filesColor := colGreen
+	if linkedFiles < totalFiles {
+		filesColor = colYellow
+	}
+	if totalFiles == 0 {
+		filesVal = "—"
+		filesColor = colOverlay0
+	}
+
+	branchVal := "—"
+	branchColor := colOverlay0
+	if m.gitStatus.Branch != "" {
+		branchVal = m.gitStatus.Branch
+		branchColor = colLavender
+		if m.gitStatus.AheadBy > 0 {
+			branchVal += fmt.Sprintf(" ↑%d", m.gitStatus.AheadBy)
+		}
+		if m.gitStatus.BehindBy > 0 {
+			branchVal += fmt.Sprintf(" ↓%d", m.gitStatus.BehindBy)
+		}
+	}
+
+	syncVal := "—"
+	syncColor := colOverlay0
+	if len(m.recentCommits) > 0 && !m.recentCommits[0].Date.IsZero() {
+		syncVal = formatRelativeTime(m.recentCommits[0].Date)
+		syncColor = colBlue
+	}
+
+	repoVal := fmt.Sprintf("%d %s", len(m.packages), pluralize(len(m.packages), "pkg"))
+	if size := repoSizeMB(m.repoDir); size > 0 {
+		repoVal += fmt.Sprintf(" · %.1fMB", size)
+	}
+
+	items := []string{
+		statInline("FILES", filesVal, filesColor),
+		statInline("BRANCH", branchVal, branchColor),
+		statInline("SYNC", syncVal, syncColor),
+		statInline("REPO", repoVal, colMauve),
+	}
+
+	sep := dimStyle.Render("  │  ")
+	row := strings.Join(items, sep)
+
+	return lipgloss.NewStyle().
+		Width(m.width).
+		Padding(0, 2).
+		Render(row)
+}
+
+func statInline(label, value, valueColor string) string {
+	l := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(colOverlay1)).
+		Bold(true).
+		Render(label)
+	v := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(valueColor)).
+		Bold(true).
+		Render(value)
+	return l + " " + v
+}
+
+// ─── Main (packages + detail) ────────────────────────────────────────────────
+
+func renderMain(m Model) string {
+	// Budget: header(1) + stats(1) + activity(7) + gitbar(1) + footer(1) = 11
+	mainHeight := m.height - 11
+	if mainHeight < 10 {
+		mainHeight = 10
+	}
+
+	leftWidth := m.width * 2 / 5
+	if leftWidth < 36 {
+		leftWidth = 36
+	}
+	rightWidth := m.width - leftWidth
+
+	left := renderPackagePanel(m, leftWidth, mainHeight)
+	right := renderDetailPanel(m, rightWidth, mainHeight)
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+}
+
+func renderPackagePanel(m Model, width, height int) string {
+	title := fmt.Sprintf(" Packages %s", dimStyle.Render(fmt.Sprintf("(%d)", len(m.packages))))
+	body := renderPackageList(m, width-4, height-4)
+	return panel(title, body, width, height, !m.searching)
+}
+
+func renderDetailPanel(m Model, width, height int) string {
+	var title string
+	if m.selectedPkg < len(m.packages) {
+		p := m.packages[m.selectedPkg]
+		title = fmt.Sprintf(" %s %s",
+			accentStyle.Render(p.Name),
+			dimStyle.Render(fmt.Sprintf("(%d files)", len(p.Files))),
+		)
+	} else {
+		title = " Details"
+	}
+
+	body := renderFileDetail(m, width-4, height-4)
+	return panel(title, body, width, height, false)
+}
+
+// ─── Package list as cards ───────────────────────────────────────────────────
+
+func renderPackageList(m Model, width, maxLines int) string {
+	if len(m.packages) == 0 {
+		return renderEmptyPackages(width)
+	}
+
+	if m.searching {
+		return renderSearchInput(m, width)
+	}
+
+	// Each card is 3 lines + 1 spacer; show as many as fit.
+	cardLines := 3
+	perCard := cardLines + 1
+	maxCards := maxLines / perCard
+	if maxCards < 1 {
+		maxCards = 1
+	}
+
+	start, end := visibleRange(m.selectedPkg, len(m.packages), maxCards)
+
+	var parts []string
+	for i := start; i < end; i++ {
+		parts = append(parts, renderPackageCard(m, i, width))
+	}
+
+	return strings.Join(parts, "\n")
+}
+
+func renderPackageCard(m Model, i, width int) string {
+	pkg := m.packages[i]
+	selected := i == m.selectedPkg
+
+	// Left accent bar.
+	barStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colSurface1))
+	if selected {
+		barStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colMauve)).Bold(true)
+	}
+	bar := barStyle.Render("▌")
+
+	// Selection indicator: filled circle when selected, empty otherwise.
+	var circle string
+	if selected {
+		circle = lipgloss.NewStyle().Foreground(lipgloss.Color(colMauve)).Bold(true).Render("●")
+	} else {
+		circle = lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay0)).Render("○")
+	}
+
+	// Line-1 prefix is bar + space + circle + space (4 cols).
+	// Lines 2/3 align to that: bar + 3 spaces.
+	indent := bar + "   "
+	contentWidth := width - 4
+	if contentWidth < 20 {
+		contentWidth = 20
+	}
+
+	linked, total := 0, len(pkg.Files)
+	for _, f := range pkg.Files {
+		if f.IsLinked {
+			linked++
+		}
+	}
+
+	name := textStyle.Bold(true).Render(pkg.Name)
+	tag := categoryTag(pkg.Name)
+
+	// Line 1: circle + name + flexible gap + tag
+	leftW := lipgloss.Width(name)
+	rightW := lipgloss.Width(tag)
+	gap := contentWidth - leftW - rightW
+	if gap < 1 {
+		gap = 1
+	}
+	line1 := bar + " " + circle + " " + name + strings.Repeat(" ", gap) + tag
+
+	// Line 2: source path
+	srcPath := collapseHome(pkg.Path, m.homeDir)
+	line2 := indent + dimStyle.Render(truncate(srcPath, contentWidth))
+
+	// Line 3: progress + mtime
+	var progress string
+	switch {
+	case total == 0:
+		progress = dimStyle.Render("empty")
+	case linked == total:
+		progress = successStyle.Render(fmt.Sprintf("✓ %d/%d linked", linked, total))
+	case linked == 0:
+		progress = errorStyle.Render(fmt.Sprintf("✗ %d/%d linked", linked, total))
+	default:
+		progress = warningStyle.Render(fmt.Sprintf("◐ %d/%d linked", linked, total))
+	}
+	modified := dimStyle.Render(relativeModTime(pkg.Path))
+	line3 := indent + progress + dimStyle.Render(" · ") + modified
+
+	return lipgloss.JoinVertical(lipgloss.Left, line1, line2, line3)
+}
+
+func renderEmptyPackages(width int) string {
+	return strings.Join([]string{
+		"",
+		textStyle.Render("No packages yet."),
+		"",
+		dimStyle.Render("Press ") + kbd("a", "add") + dimStyle.Render(" to stow your first dotfile."),
+	}, "\n")
+}
+
+func renderSearchInput(m Model, width int) string {
+	prompt := accentStyle.Render("/")
+	return fmt.Sprintf("%s %s\n\n%s",
+		prompt,
+		m.searchInput.View(),
+		dimStyle.Render("enter to jump · esc to cancel"),
+	)
+}
+
+// ─── File detail ─────────────────────────────────────────────────────────────
+
+func renderFileDetail(m Model, width, maxLines int) string {
 	if m.selectedPkg >= len(m.packages) {
-		return dimStyle.Render("  No package selected")
+		return dimStyle.Render("No package selected")
 	}
 
 	pkg := m.packages[m.selectedPkg]
 
-	var b strings.Builder
-
-	b.WriteString(accentStyle.Bold(true).Render(pkg.Name))
-	b.WriteString("\n")
-
 	if len(pkg.Files) == 0 {
-		b.WriteString(dimStyle.Render("  No files"))
-		return b.String()
+		return dimStyle.Render("No files in this package.")
 	}
 
+	var b strings.Builder
+
+	linked, conflicts := 0, 0
 	for _, f := range pkg.Files {
-		arrow := textStyle.Render("→")
-		status := fileStatus(f)
+		if f.IsLinked {
+			linked++
+		} else if f.Exists && !f.IsSymlink {
+			conflicts++
+		}
+	}
 
-		line := fmt.Sprintf("  %s %s %s  %s",
-			dimStyle.Render(f.RelPath),
-			arrow,
-			dimStyle.Render(f.TargetPath),
-			status,
-		)
+	summary := []string{
+		pill(fmt.Sprintf("linked %d", linked), colBase, colGreen),
+	}
+	if conflicts > 0 {
+		summary = append(summary, pill(fmt.Sprintf("conflict %d", conflicts), colBase, colRed))
+	}
+	unlinked := len(pkg.Files) - linked - conflicts
+	if unlinked > 0 {
+		summary = append(summary, pill(fmt.Sprintf("unlinked %d", unlinked), colBase, colOverlay0))
+	}
+	b.WriteString(strings.Join(summary, " "))
+	b.WriteString("\n")
+	b.WriteString(hRule(width))
+	b.WriteString("\n")
 
+	start, end := visibleRange(m.selectedFile, len(pkg.Files), maxLines-3)
+	for i := start; i < end; i++ {
+		f := pkg.Files[i]
+		selected := i == m.selectedFile && m.expanded[m.selectedPkg]
+
+		statusBadge := fileBadge(f)
+		rel := truncate(f.RelPath, width/2-4)
+		target := truncate(collapseHome(f.TargetPath, m.homeDir), width/2-2)
+		arrow := dimStyle.Render("→")
+
+		line := fmt.Sprintf("%s %s %s %s", statusBadge, textStyle.Render(rel), arrow, dimStyle.Render(target))
+		if selected {
+			line = selectedRowStyle.Width(width).Render("▸ " + line)
+		} else {
+			line = "  " + line
+		}
 		b.WriteString(line)
 		b.WriteString("\n")
+	}
+
+	if len(pkg.Files) > maxLines-3 {
+		b.WriteString(dimStyle.Render(fmt.Sprintf("  … showing %d of %d", end-start, len(pkg.Files))))
 	}
 
 	return b.String()
 }
 
+// ─── Activity strip ──────────────────────────────────────────────────────────
+
+func renderActivityStrip(m Model) string {
+	const rows = 5
+	titleLine := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(colLavender)).
+		Bold(true).
+		Render("Recent activity")
+
+	var lines []string
+	if len(m.recentCommits) == 0 {
+		lines = append(lines,
+			dimStyle.Render("No commits yet. Press ")+kbd("S", "sync")+dimStyle.Render(" to commit your changes."),
+		)
+	} else {
+		maxAuthor := 0
+		n := rows
+		if n > len(m.recentCommits) {
+			n = len(m.recentCommits)
+		}
+		for i := 0; i < n; i++ {
+			w := lipgloss.Width(m.recentCommits[i].Author)
+			if w > maxAuthor {
+				maxAuthor = w
+			}
+		}
+		if maxAuthor > 14 {
+			maxAuthor = 14
+		}
+		if maxAuthor < 6 {
+			maxAuthor = 6
+		}
+
+		for i := 0; i < n; i++ {
+			c := m.recentCommits[i]
+			shortHash := c.Hash
+			if len(shortHash) > 7 {
+				shortHash = shortHash[:7]
+			}
+			hash := lipgloss.NewStyle().Foreground(lipgloss.Color(colPeach)).Render(shortHash)
+			author := dimStyle.Render(padRight(truncate(c.Author, maxAuthor), maxAuthor))
+			subjectBudget := m.width - 12 - maxAuthor - 14
+			if subjectBudget < 10 {
+				subjectBudget = 10
+			}
+			subject := textStyle.Render(truncate(c.Message, subjectBudget))
+			when := dimStyle.Render(formatRelativeTime(c.Date))
+			lines = append(lines, fmt.Sprintf("%s  %s  %s  %s", hash, author, subject, when))
+		}
+	}
+
+	body := strings.Join(lines, "\n")
+	content := lipgloss.JoinVertical(lipgloss.Left,
+		titleLine,
+		subtleStyle.Render(strings.Repeat("─", max(m.width-4, 4))),
+		body,
+	)
+
+	return lipgloss.NewStyle().
+		Width(m.width).
+		Padding(0, 2).
+		Render(content)
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+// ─── Git + footer ────────────────────────────────────────────────────────────
+
 func renderGitBar(m Model) string {
+	if m.err != nil {
+		return statusBarStyle.
+			Width(m.width).
+			Background(lipgloss.Color(colRed)).
+			Foreground(lipgloss.Color(colBase)).
+			Bold(true).
+			Render(fmt.Sprintf(" ✗ %v", m.err))
+	}
+	if m.statusMsg != "" {
+		return statusBarStyle.
+			Width(m.width).
+			Background(lipgloss.Color(colGreen)).
+			Foreground(lipgloss.Color(colBase)).
+			Bold(true).
+			Render(fmt.Sprintf(" ✓ %s", m.statusMsg))
+	}
+
 	var parts []string
 
 	if m.gitStatus.Branch != "" {
-		branch := fmt.Sprintf("git/%s", m.gitStatus.Branch)
-		parts = append(parts, accentStyle.Render(branch))
+		parts = append(parts, pill("⎇ "+m.gitStatus.Branch, colBase, colLavender))
 	}
 
 	if m.gitStatus.HasUncommitted {
-		count := fmt.Sprintf("%d uncommitted change", len(m.gitStatus.ChangedFiles))
-		if len(m.gitStatus.ChangedFiles) != 1 {
-			count += "s"
-		}
-		parts = append(parts, warningStyle.Render("● "+count))
+		parts = append(parts,
+			pill(fmt.Sprintf("● %s", countLabel(len(m.gitStatus.ChangedFiles), "change")), colBase, colYellow),
+		)
 	} else if m.gitStatus.Branch != "" {
-		parts = append(parts, successStyle.Render("● clean"))
+		parts = append(parts, pill("● clean", colBase, colGreen))
 	}
 
 	if m.gitStatus.AheadBy > 0 {
-		parts = append(parts, gitAheadStyle.Render(fmt.Sprintf("↑%d ahead", m.gitStatus.AheadBy)))
+		parts = append(parts, pill(fmt.Sprintf("↑ %d", m.gitStatus.AheadBy), colBase, colBlue))
 	}
-
 	if m.gitStatus.BehindBy > 0 {
-		parts = append(parts, warningStyle.Render(fmt.Sprintf("↓%d behind", m.gitStatus.BehindBy)))
+		parts = append(parts, pill(fmt.Sprintf("↓ %d", m.gitStatus.BehindBy), colBase, colPeach))
 	}
 
 	if len(parts) == 0 {
-		parts = append(parts, dimStyle.Render("no git info"))
+		parts = append(parts, dimStyle.Render("no git repository"))
 	}
 
-	content := strings.Join(parts, "  ")
+	loc := dimStyle.Render(collapseHome(m.repoDir, m.homeDir))
 
-	if m.statusMsg != "" {
-		content = successStyle.Render(m.statusMsg)
+	row := strings.Join(parts, " ")
+	leftW := lipgloss.Width(row)
+	rightW := lipgloss.Width(loc)
+	gap := m.width - leftW - rightW - 2
+	if gap < 1 {
+		gap = 1
 	}
 
-	if m.err != nil {
-		content = errorStyle.Render(fmt.Sprintf("error: %v", m.err))
-	}
-
-	return statusBarStyle.Width(m.width).Render(content)
+	return statusBarStyle.
+		Width(m.width).
+		Render(row + strings.Repeat(" ", gap) + loc)
 }
 
 func renderFooter(m Model) string {
 	if m.searching {
 		return lipgloss.NewStyle().
+			Width(m.width).
 			Padding(0, 1).
-			Border(lipgloss.NormalBorder(), false, true, false, false).
-			BorderForeground(lipgloss.Color(muted)).
-			Render(
-				keyStyle.Render("/") + " " + m.searchInput.View(),
-			)
+			Background(lipgloss.Color(colMantle)).
+			Render(accentStyle.Render("/") + " " + m.searchInput.View())
 	}
 
-	helpStr := m.help.View(m.keys)
+	hints := joinHints(
+		kbd("↑↓/jk", "nav"),
+		kbd("enter", "expand"),
+		kbd("s", "stow"),
+		kbd("u", "unstow"),
+		kbd("a", "add"),
+		kbd("S", "sync"),
+		kbd("/", "search"),
+		kbd("q", "quit"),
+	)
 
 	return lipgloss.NewStyle().
 		Width(m.width).
 		Padding(0, 1).
-		Border(lipgloss.NormalBorder(), true, false, false, false).
-		BorderForeground(lipgloss.Color(muted)).
-		Render(helpStr)
+		Background(lipgloss.Color(colMantle)).
+		Render(hints)
 }
 
-func statusIndicator(status stow.PackageStatus) string {
-	switch status {
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+func statusGlyph(s stow.PackageStatus) string {
+	switch s {
 	case stow.StatusLinked:
-		return successStyle.Render("✓")
+		return successStyle.Render("●")
 	case stow.StatusPartial:
-		return warningStyle.Render("⚠")
+		return warningStyle.Render("◐")
 	case stow.StatusUnlinked:
-		return errorStyle.Render("✗")
+		return errorStyle.Render("○")
 	default:
-		return dimStyle.Render("?")
+		return dimStyle.Render("·")
 	}
 }
 
-func fileStatus(f stow.FileEntry) string {
-	if f.IsLinked {
-		return successStyle.Render("linked")
+func fileBadge(f stow.FileEntry) string {
+	switch {
+	case f.IsLinked:
+		return pill("LINK", colBase, colGreen)
+	case f.Exists && !f.IsSymlink:
+		return pill("CONF", colBase, colRed)
+	default:
+		return pill("NONE", colText, colSurface1)
 	}
-	if f.Exists && !f.IsSymlink {
-		return errorStyle.Render("conflict")
-	}
-	return dimStyle.Render("unlinked")
 }
+
+// categoryTag returns a small colored outlined pill based on package name.
+func categoryTag(name string) string {
+	lower := strings.ToLower(name)
+	tag, color := "", ""
+	switch {
+	case containsAny(lower, "nvim", "vim", "emacs", "helix", "nano", "code", "vscode"):
+		tag, color = "editor", colMauve
+	case containsAny(lower, "zsh", "bash", "fish", "shell", "starship"):
+		tag, color = "shell", colGreen
+	case containsAny(lower, "tmux", "kitty", "alacritty", "wezterm", "ghostty", "screen", "foot"):
+		tag, color = "terminal", colBlue
+	case containsAny(lower, "i3", "sway", "hypr", "bspwm", "river", "dwm", "awesome", "qtile"):
+		tag, color = "wm", colPink
+	case containsAny(lower, "git", "gh", "lazygit"):
+		tag, color = "vcs", colPeach
+	case containsAny(lower, "polybar", "waybar", "eww", "rofi", "dunst", "mako"):
+		tag, color = "desktop", colSky
+	default:
+		return ""
+	}
+	return lipgloss.NewStyle().
+		Foreground(lipgloss.Color(color)).
+		Render(tag)
+}
+
+func containsAny(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
+}
+
+func pluralize(n int, singular string) string {
+	if n == 1 {
+		return singular
+	}
+	return singular + "s"
+}
+
+func relativeModTime(path string) string {
+	info, err := os.Stat(path)
+	if err != nil {
+		return "—"
+	}
+	return formatRelativeTime(info.ModTime())
+}
+
+// repoSizeMB returns the total size of the repo dir in MB (rough estimate from top-level).
+func repoSizeMB(repoDir string) float64 {
+	var total int64
+	entries, err := os.ReadDir(repoDir)
+	if err != nil {
+		return 0
+	}
+	for _, e := range entries {
+		if e.Name() == ".git" || e.Name() == "logs" || e.Name() == "backups" {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if info.IsDir() {
+			total += dirSize(repoDir + "/" + e.Name())
+		} else {
+			total += info.Size()
+		}
+	}
+	return float64(total) / (1024 * 1024)
+}
+
+func dirSize(path string) int64 {
+	var total int64
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return 0
+	}
+	for _, e := range entries {
+		full := path + "/" + e.Name()
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if info.IsDir() {
+			total += dirSize(full)
+		} else {
+			total += info.Size()
+		}
+	}
+	return total
+}
+
+func collapseHome(path, home string) string {
+	if home != "" && strings.HasPrefix(path, home) {
+		return "~" + strings.TrimPrefix(path, home)
+	}
+	return path
+}
+
+func visibleRange(sel, total, maxLines int) (int, int) {
+	if total <= maxLines || maxLines <= 0 {
+		if total < 0 {
+			return 0, 0
+		}
+		return 0, total
+	}
+	start := sel - maxLines/2
+	if start < 0 {
+		start = 0
+	}
+	end := start + maxLines
+	if end > total {
+		end = total
+		start = end - maxLines
+		if start < 0 {
+			start = 0
+		}
+	}
+	return start, end
+}
+
+// compatibility shims
+func statusIndicator(status stow.PackageStatus) string { return statusGlyph(status) }
+func fileStatus(f stow.FileEntry) string               { return fileBadge(f) }
+
+// silence unused import warnings when pkg is in transition
+var _ = time.Now
+var _ = git.CommitInfo{}

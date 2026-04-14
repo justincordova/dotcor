@@ -26,8 +26,6 @@ func viewSettings(m Model) string {
 	switch m.settingsStep {
 	case 1:
 		return viewSettingsEditRemote(m)
-	case 2:
-		return viewSettingsEditGit(m)
 	case 3:
 		return viewSettingsBackups(m)
 	default:
@@ -36,130 +34,99 @@ func viewSettings(m Model) string {
 }
 
 func viewSettingsMain(m Model) string {
+	header := subviewHeader(m.width, "Settings", nil)
+
 	var b strings.Builder
 
-	b.WriteString(accentStyle.Bold(true).Render("Settings"))
+	// Git section
+	b.WriteString(accentStyle.Render("Git"))
+	b.WriteString("\n")
+	b.WriteString(subtleStyle.Render(strings.Repeat("─", 40)))
 	b.WriteString("\n\n")
 
-	gitEnabled := "disabled"
-	gitStyle := errorStyle
+	gitPill := pill("disabled", colBase, colRed)
 	if m.cfg.GitEnabled {
-		gitEnabled = "enabled"
-		gitStyle = successStyle
+		gitPill = pill("enabled", colBase, colGreen)
 	}
+	b.WriteString(fmt.Sprintf("  %s  %s\n", padRight(textStyle.Render("Status"), 12), gitPill))
 
 	remote := m.cfg.GitRemote
 	if remote == "" {
 		remote = dimStyle.Render("(not configured)")
+	} else {
+		remote = textStyle.Render(remote)
 	}
-
-	b.WriteString(fmt.Sprintf("  %s %s\n", textStyle.Render("Git:"), gitStyle.Render(gitEnabled)))
-	b.WriteString(fmt.Sprintf("  %s %s\n", textStyle.Render("Remote:"), dimStyle.Render(remote)))
+	b.WriteString(fmt.Sprintf("  %s  %s\n", padRight(textStyle.Render("Remote"), 12), remote))
 
 	b.WriteString("\n")
-	b.WriteString(accentStyle.Render("Ignore Patterns:"))
+	b.WriteString(accentStyle.Render("Ignore Patterns"))
+	b.WriteString("\n")
+	b.WriteString(subtleStyle.Render(strings.Repeat("─", 40)))
 	b.WriteString("\n")
 	if len(m.cfg.IgnorePatterns) == 0 {
-		b.WriteString(dimStyle.Render("  (none)"))
-		b.WriteString("\n")
+		b.WriteString(dimStyle.Render("  (none)\n"))
 	} else {
 		for _, p := range m.cfg.IgnorePatterns {
-			b.WriteString(fmt.Sprintf("  %s %s\n", dimStyle.Render("•"), dimStyle.Render(p)))
+			b.WriteString(fmt.Sprintf("  %s %s\n", dimStyle.Render("•"), textStyle.Render(p)))
 		}
 	}
 
-	b.WriteString("\n")
-	b.WriteString(dimStyle.Render("─────────────────────────────────"))
-	b.WriteString("\n\n")
+	body := subviewContent(m.width, m.height-3, b.String())
+	footer := subviewFooter(m.width,
+		kbd("e", "edit remote"),
+		kbd("t", "toggle git"),
+		kbd("b", "backups"),
+		kbd("esc", "back"),
+	)
 
-	b.WriteString(fmt.Sprintf("  %s %s\n", keyStyle.Render("e"), descStyle.Render("edit git remote")))
-	b.WriteString(fmt.Sprintf("  %s %s\n", keyStyle.Render("t"), descStyle.Render("toggle git enabled")))
-	b.WriteString(fmt.Sprintf("  %s %s\n", keyStyle.Render("b"), descStyle.Render("manage backups")))
-	b.WriteString(fmt.Sprintf("  %s %s\n", keyStyle.Render("esc"), descStyle.Render("back to dashboard")))
-
-	content := b.String()
-	return lipgloss.NewStyle().
-		Width(m.width).
-		Height(m.height).
-		Padding(1, 2).
-		Render(content)
+	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
 }
 
 func viewSettingsEditRemote(m Model) string {
-	var b strings.Builder
+	header := subviewHeader(m.width, "Settings", []string{"edit remote"})
 
-	b.WriteString(accentStyle.Bold(true).Render("Edit Git Remote"))
-	b.WriteString("\n\n")
-	b.WriteString(textStyle.Render("Enter remote URL:"))
-	b.WriteString("\n")
-	b.WriteString(m.settingsInput.View())
-	b.WriteString("\n\n")
-	b.WriteString(dimStyle.Render("Enter to save, Esc to cancel"))
+	body := strings.Join([]string{
+		textStyle.Render("Enter git remote URL:"),
+		"",
+		m.settingsInput.View(),
+		"",
+		dimStyle.Render("e.g. git@github.com:user/dotfiles.git"),
+	}, "\n")
 
-	content := b.String()
-	return lipgloss.NewStyle().
-		Width(m.width).
-		Height(m.height).
-		Padding(1, 2).
-		Render(content)
-}
-
-func viewSettingsEditGit(m Model) string {
-	var b strings.Builder
-
-	b.WriteString(accentStyle.Bold(true).Render("Toggle Git"))
-	b.WriteString("\n\n")
-
-	status := "disabled"
-	if m.cfg.GitEnabled {
-		status = "enabled"
-	}
-	b.WriteString(fmt.Sprintf("Git is currently: %s\n", textStyle.Render(status)))
-	b.WriteString("\n")
-	b.WriteString(dimStyle.Render("Press t to toggle, Esc to cancel"))
-
-	content := b.String()
-	return lipgloss.NewStyle().
-		Width(m.width).
-		Height(m.height).
-		Padding(1, 2).
-		Render(content)
+	footer := subviewFooter(m.width, kbd("enter", "save"), kbd("esc", "cancel"))
+	return lipgloss.JoinVertical(lipgloss.Left, header, subviewContent(m.width, m.height-3, body), footer)
 }
 
 func viewSettingsBackups(m Model) string {
+	header := subviewHeader(m.width, "Settings", []string{"backups"})
+
 	var b strings.Builder
-
-	b.WriteString(accentStyle.Bold(true).Render("Backup Management"))
-	b.WriteString("\n\n")
-
 	if len(m.backups) == 0 {
-		b.WriteString(dimStyle.Render("No backups found"))
+		b.WriteString(dimStyle.Render("No backups found."))
 	} else {
-		b.WriteString(fmt.Sprintf("Total backups: %s\n\n", textStyle.Render(fmt.Sprintf("%d", len(m.backups)))))
+		b.WriteString(fmt.Sprintf("%s %s\n\n",
+			dimStyle.Render("Total:"),
+			accentStyle.Render(fmt.Sprintf("%d backups", len(m.backups))),
+		))
 		maxDisplay := 20
 		for i, backup := range m.backups {
 			if i >= maxDisplay {
-				b.WriteString(dimStyle.Render(fmt.Sprintf("  ... and %d more\n", len(m.backups)-maxDisplay)))
+				b.WriteString(dimStyle.Render(fmt.Sprintf("  … and %d more\n", len(m.backups)-maxDisplay)))
 				break
 			}
-			b.WriteString(fmt.Sprintf("  %s %s %s\n",
-				dimStyle.Render(backup.Timestamp.Format("2006-01-02 15:04")),
-				textStyle.Render(backup.SourcePath),
-				dimStyle.Render(fmt.Sprintf("(%d bytes)", backup.Size)),
-			))
+			ts := dimStyle.Render(backup.Timestamp.Format("2006-01-02 15:04"))
+			src := textStyle.Render(truncate(backup.SourcePath, m.width-40))
+			size := dimStyle.Render(fmt.Sprintf("%d B", backup.Size))
+			b.WriteString(fmt.Sprintf("  %s  %s  %s\n", ts, src, size))
 		}
 	}
 
-	b.WriteString("\n")
-	b.WriteString(fmt.Sprintf("  %s %s\n", keyStyle.Render("c"), descStyle.Render("clean old backups (>30 days)")))
-	b.WriteString(fmt.Sprintf("  %s %s\n", keyStyle.Render("esc"), descStyle.Render("back to settings")))
-
-	content := b.String()
-	return lipgloss.NewStyle().
-		Width(m.width).
-		Height(m.height).
-		Padding(1, 2).
-		Render(content)
+	body := subviewContent(m.width, m.height-3, b.String())
+	footer := subviewFooter(m.width,
+		kbd("c", "clean >30d"),
+		kbd("esc", "back"),
+	)
+	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
 }
 
 func (m Model) updateSettings(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -174,28 +141,35 @@ func (m Model) updateSettings(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func updateSettingsMain(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch {
-		case key.Matches(msg, m.keys.Esc):
+		case key.Matches(keyMsg, m.keys.Esc):
 			m.activeView = DashboardView
 			m.settingsStep = 0
 			return m, nil
+		}
 
-		case msg.String() == "e":
+		switch keyMsg.String() {
+		case "e":
 			m.settingsStep = 1
 			m.settingsInput.SetValue(m.cfg.GitRemote)
 			m.settingsInput.Focus()
 			return m, textinput.Blink
 
-		case msg.String() == "t":
+		case "t":
 			m.cfg.GitEnabled = !m.cfg.GitEnabled
 			if err := m.cfg.SaveConfig(); err != nil {
 				m.err = err
+				return m, nil
 			}
-			return m, nil
+			state := "disabled"
+			if m.cfg.GitEnabled {
+				state = "enabled"
+			}
+			m.statusMsg = "Git " + state
+			return m, clearStatusAfter(3 * time.Second)
 
-		case msg.String() == "b":
+		case "b":
 			m.settingsStep = 3
 			return m, m.loadBackups()
 		}
@@ -205,22 +179,23 @@ func updateSettingsMain(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func updateSettingsEditRemote(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch {
-		case key.Matches(msg, m.keys.Esc):
+		case key.Matches(keyMsg, m.keys.Esc):
 			m.settingsStep = 0
 			m.settingsInput.Blur()
 			return m, nil
 
-		case key.Matches(msg, m.keys.Enter):
+		case key.Matches(keyMsg, m.keys.Enter):
 			m.cfg.GitRemote = m.settingsInput.Value()
 			m.settingsInput.Blur()
 			m.settingsStep = 0
 			if err := m.cfg.SaveConfig(); err != nil {
 				m.err = err
+				return m, nil
 			}
-			return m, nil
+			m.statusMsg = "Remote saved"
+			return m, clearStatusAfter(3 * time.Second)
 		}
 	}
 
@@ -230,35 +205,16 @@ func updateSettingsEditRemote(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func updateSettingsBackups(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case backupsMsg:
-		if msg.err != nil {
-			m.err = msg.err
-			return m, nil
-		}
-		m.backups = msg.backups
-		return m, nil
-
-	case settingsMsg:
-		if msg.err != nil {
-			m.err = msg.err
-		} else {
-			m.statusMsg = msg.msg
-		}
-		return m, m.loadBackups()
-
-	case tea.KeyMsg:
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch {
-		case key.Matches(msg, m.keys.Esc):
+		case key.Matches(keyMsg, m.keys.Esc):
 			m.settingsStep = 0
 			m.backups = nil
 			return m, nil
-
-		case msg.String() == "c":
+		case keyMsg.String() == "c":
 			return m, m.cleanBackups()
 		}
 	}
-
 	return m, nil
 }
 
@@ -280,6 +236,6 @@ func (m Model) cleanBackups() tea.Cmd {
 		if err != nil {
 			return settingsMsg{err: err}
 		}
-		return settingsMsg{msg: fmt.Sprintf("Cleaned %d backups (%d failed, freed %d bytes)", deleted, failed, freed)}
+		return settingsMsg{msg: fmt.Sprintf("Cleaned %d backups (%d failed, freed %d B)", deleted, failed, freed)}
 	}
 }

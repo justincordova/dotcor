@@ -16,98 +16,62 @@ type historyMsg struct {
 }
 
 func viewHistory(m Model) string {
-	header := renderHistoryHeader(m)
-	body := renderHistoryBody(m)
-	footer := renderHistoryFooter(m)
-
-	return lipgloss.JoinVertical(
-		lipgloss.Left,
-		header,
-		body,
-		footer,
-	)
-}
-
-func renderHistoryHeader(m Model) string {
-	title := accentStyle.Bold(true).Render("History")
-
-	var subtitle string
-	if m.selectedPkg < len(m.packages) && m.selectedFile < len(m.packages[m.selectedPkg].Files) {
-		f := m.packages[m.selectedPkg].Files[m.selectedFile]
-		subtitle = dimStyle.Render(f.RelPath)
+	crumbs := []string{}
+	if m.selectedPkg < len(m.packages) {
+		p := m.packages[m.selectedPkg]
+		crumbs = append(crumbs, p.Name)
+		if m.expanded[m.selectedPkg] && m.selectedFile < len(p.Files) {
+			crumbs = append(crumbs, p.Files[m.selectedFile].RelPath)
+		}
 	}
 
-	return lipgloss.NewStyle().
-		Width(m.width).
-		Border(lipgloss.NormalBorder(), false, false, true, false).
-		BorderForeground(lipgloss.Color(muted)).
-		Padding(0, 1).
-		Render(
-			lipgloss.JoinHorizontal(lipgloss.Top, title, "  ", subtitle),
-		)
+	header := subviewHeader(m.width, "History", crumbs)
+	body := renderHistoryBody(m)
+	footer := subviewFooter(m.width,
+		kbd("enter", "restore"),
+		kbd("D", "diff"),
+		kbd("↑↓", "nav"),
+		kbd("esc", "back"),
+	)
+
+	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
 }
 
 func renderHistoryBody(m Model) string {
 	if len(m.commits) == 0 {
-		return lipgloss.NewStyle().
-			Width(m.width).
-			Padding(1, 2).
-			Render(dimStyle.Render("No commit history found"))
+		return subviewContent(m.width, m.height-2, dimStyle.Render("No commit history found."))
 	}
 
 	var b strings.Builder
-	maxHeight := m.height - 6
+	maxHeight := m.height - 4
 	if maxHeight < 5 {
 		maxHeight = 5
 	}
 
-	for i, commit := range m.commits {
-		if i >= maxHeight {
-			break
-		}
+	start, end := visibleRange(m.selectedCommit, len(m.commits), maxHeight)
 
-		cursor := "  "
-		name := textStyle
-		if i == m.selectedCommit {
-			cursor = selectedStyle.Render("▶ ")
-			name = selectedStyle
-		}
+	for i := start; i < end; i++ {
+		c := m.commits[i]
+		selected := i == m.selectedCommit
 
-		shortHash := commit.Hash
+		shortHash := c.Hash
 		if len(shortHash) > 7 {
 			shortHash = shortHash[:7]
 		}
 
-		hash := highlightStyle.Render(shortHash)
-		time := dimStyle.Render(formatRelativeTime(commit.Date))
-		msg := name.Render(commit.Message)
+		hash := lipgloss.NewStyle().Foreground(lipgloss.Color(colPeach)).Render(shortHash)
+		when := dimStyle.Render(formatRelativeTime(c.Date))
+		subject := textStyle.Render(truncate(c.Message, m.width-30))
 
-		b.WriteString(fmt.Sprintf("%s%s %s %s\n", cursor, hash, msg, time))
+		row := fmt.Sprintf("  %s  %s  %s", hash, subject, when)
+		if selected {
+			row = selectedRowStyle.Width(m.width - 4).Render(accentStyle.Render("▸ ") + hash + "  " + subject + "  " + when)
+		}
+		b.WriteString(row)
+		b.WriteString("\n")
 	}
 
-	return lipgloss.NewStyle().
-		Width(m.width).
-		Padding(1, 2).
-		Render(b.String())
-}
-
-func renderHistoryFooter(m Model) string {
-	esc := keyStyle.Render("esc")
-	back := descStyle.Render("back")
-	enter := keyStyle.Render("enter")
-	restoreDesc := descStyle.Render("restore")
-	diffKey := keyStyle.Render("D")
-	diffDesc := descStyle.Render("diff")
-	count := dimStyle.Render(fmt.Sprintf("(%d commits)", len(m.commits)))
-
-	return lipgloss.NewStyle().
-		Width(m.width).
-		Padding(0, 1).
-		Border(lipgloss.NormalBorder(), true, false, false, false).
-		BorderForeground(lipgloss.Color(muted)).
-		Render(
-			fmt.Sprintf("%s %s    %s %s    %s %s    %s", esc, back, enter, restoreDesc, diffKey, diffDesc, count),
-		)
+	return subviewContent(m.width, m.height-2, b.String())
 }
 
 func (m Model) updateHistory(msg tea.Msg) (tea.Model, tea.Cmd) {

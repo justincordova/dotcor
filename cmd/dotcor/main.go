@@ -94,7 +94,7 @@ func main() {
 		}
 	}
 
-	model := tui.NewModel(cfg)
+	model := tui.NewModel(cfg, version)
 	p := tea.NewProgram(
 		model,
 		tea.WithAltScreen(),

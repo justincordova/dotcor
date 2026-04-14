@@ -18,17 +18,16 @@ func viewHelp(m Model) string {
 				formatBinding("↑/k", "move up"),
 				formatBinding("↓/j", "move down"),
 				formatBinding("enter", "expand/collapse package"),
-				formatBinding("tab", "switch panel"),
+				formatBinding("/", "search packages"),
 				formatBinding("esc", "back"),
 			},
 		},
 		{
-			title: "Actions",
+			title: "Packages",
 			bindings: []string{
 				formatBinding("s", "stow package"),
 				formatBinding("u", "unstow package"),
-				formatBinding("a", "add file"),
-				formatBinding("d", "remove file"),
+				formatBinding("a", "add new file"),
 			},
 		},
 		{
@@ -39,14 +38,13 @@ func viewHelp(m Model) string {
 				formatBinding("P", "pull from remote"),
 				formatBinding("D", "view diff"),
 				formatBinding("H", "view history"),
-				formatBinding("r", "restore file"),
 			},
 		},
 		{
-			title: "Other",
+			title: "System",
 			bindings: []string{
-				formatBinding("/", "search packages"),
 				formatBinding("L", "view logs"),
+				formatBinding("g", "settings"),
 				formatBinding("?", "toggle help"),
 				formatBinding("q", "quit"),
 			},
@@ -58,8 +56,8 @@ func viewHelp(m Model) string {
 
 	for _, cat := range categories {
 		var lines []string
-		lines = append(lines, accentStyle.Bold(true).Render(cat.title))
-		lines = append(lines, strings.Repeat("─", 30))
+		lines = append(lines, accentStyle.Render(cat.title))
+		lines = append(lines, subtleStyle.Render(strings.Repeat("─", 28)))
 		lines = append(lines, cat.bindings...)
 		section := strings.Join(lines, "\n")
 		sections = append(sections, section)
@@ -68,28 +66,39 @@ func viewHelp(m Model) string {
 		}
 	}
 
-	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
-	content += fmt.Sprintf("\n\n%s", dimStyle.Render("Press ? or esc to close"))
+	// Arrange into 2 columns.
+	var rows []string
+	for i := 0; i < len(sections); i += 2 {
+		if i+1 < len(sections) {
+			rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top,
+				lipgloss.NewStyle().Width(maxWidth+4).Render(sections[i]),
+				sections[i+1],
+			))
+		} else {
+			rows = append(rows, sections[i])
+		}
+	}
+	content := strings.Join(rows, "\n\n")
 
-	dialogWidth := maxWidth + 4
-	dialogHeight := len(strings.Split(content, "\n")) + 2
+	title := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(colMauve)).
+		Bold(true).
+		Render("◆ DotCor — Keybindings")
+
+	footer := dimStyle.Render("press ? or esc to close")
+
+	body := lipgloss.JoinVertical(lipgloss.Left, title, "", content, "", footer)
 
 	dialog := lipgloss.NewStyle().
-		Width(dialogWidth).
-		Height(dialogHeight).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(iris)).
-		Padding(1, 2).
-		Render(content)
+		BorderForeground(lipgloss.Color(colMauve)).
+		Padding(1, 3).
+		Render(body)
 
-	return lipgloss.NewStyle().
-		Width(m.width).
-		Height(m.height).
-		Render(
-			lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, dialog),
-		)
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, dialog,
+		lipgloss.WithWhitespaceChars(" "))
 }
 
-func formatBinding(key, desc string) string {
-	return fmt.Sprintf("  %s  %s", keyStyle.Render(key), descStyle.Render(desc))
+func formatBinding(k, desc string) string {
+	return fmt.Sprintf("  %s  %s", keyStyle.Render(padRight(k, 7)), descStyle.Render(desc))
 }

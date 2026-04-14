@@ -32,6 +32,8 @@ const (
 	SettingsView
 )
 
+// ─── Messages ────────────────────────────────────────────────────────────────
+
 type packagesMsg struct {
 	packages []stow.Package
 	err      error
@@ -48,9 +50,7 @@ type errMsg struct {
 	err error
 }
 
-func (e errMsg) Error() string {
-	return e.err.Error()
-}
+func (e errMsg) Error() string { return e.err.Error() }
 
 type tickMsg time.Time
 
@@ -64,8 +64,19 @@ type syncResultMsg struct {
 	err error
 }
 
+type logsLoadedMsg struct {
+	lines []string
+}
+
+type recentCommitsMsg struct {
+	commits []git.CommitInfo
+}
+
+// ─── Model ───────────────────────────────────────────────────────────────────
+
 type Model struct {
 	cfg          *config.Config
+	version      string
 	repoDir      string
 	homeDir      string
 	packages     []stow.Package
@@ -98,22 +109,23 @@ type Model struct {
 
 	commits        []git.CommitInfo
 	selectedCommit int
+	recentCommits  []git.CommitInfo
 
 	settingsStep  int
 	settingsInput textinput.Model
 	backups       []core.BackupInfo
 }
 
-func NewModel(cfg *config.Config) Model {
+func NewModel(cfg *config.Config, version string) Model {
 	homeDir, _ := os.UserHomeDir()
 	repoDir, _ := config.GetConfigDir()
 
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
-	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color(iris))
+	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color(colMauve))
 
 	si := textinput.New()
-	si.Placeholder = "search packages..."
+	si.Placeholder = "search packages…"
 	si.CharLimit = 50
 
 	ai := textinput.New()
@@ -121,20 +133,19 @@ func NewModel(cfg *config.Config) Model {
 	ai.CharLimit = 200
 
 	sti := textinput.New()
-	sti.Placeholder = "https://github.com/..."
+	sti.Placeholder = "https://github.com/…"
 	sti.CharLimit = 200
 
 	vp := viewport.New(80, 20)
 
-	keys := newKeyMap()
-
 	return Model{
 		cfg:           cfg,
+		version:       version,
 		repoDir:       repoDir,
 		homeDir:       homeDir,
 		spinner:       sp,
 		help:          newHelpModel(),
-		keys:          keys,
+		keys:          newKeyMap(),
 		searchInput:   si,
 		addInput:      ai,
 		settingsInput: sti,
@@ -148,13 +159,15 @@ func NewModel(cfg *config.Config) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	m.statusMsg = fmt.Sprintf("repo: %s, home: %s", m.repoDir, m.homeDir)
 	return tea.Batch(
 		m.spinner.Tick,
 		discoverPackages(m.repoDir, m.homeDir),
 		fetchGitStatus(m.repoDir),
+		fetchRecentCommits(m.repoDir),
 	)
 }
+
+// ─── Update ──────────────────────────────────────────────────────────────────
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
@@ -174,9 +187,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 
 	case tickMsg:
-		if m.statusMsg != "" {
-			m.statusMsg = ""
-		}
+		m.statusMsg = ""
 		return m, nil
 
 	case packagesMsg:
@@ -199,9 +210,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case statusMsg:
 		m.statusMsg = string(msg)
-		cmds = append(cmds, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
-			return tickMsg(t)
-		}))
+		m.err = nil
+		cmds = append(cmds, clearStatusAfter(3*time.Second))
 		return m, tea.Batch(cmds...)
 
 	case errMsg:
@@ -213,9 +223,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.err
 		} else {
 			m.statusMsg = msg.msg
-			cmds = append(cmds, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
-				return tickMsg(t)
-			}))
+			m.err = nil
+			cmds = append(cmds, clearStatusAfter(3*time.Second))
 		}
 		cmds = append(cmds, m.refreshAll())
 		return m, tea.Batch(cmds...)
@@ -225,11 +234,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.err
 		} else {
 			m.statusMsg = msg.msg
-			cmds = append(cmds, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
-				return tickMsg(t)
-			}))
+			m.err = nil
+			cmds = append(cmds, clearStatusAfter(3*time.Second))
 		}
-		cmds = append(cmds, fetchGitStatus(m.repoDir))
+		cmds = append(cmds, fetchGitStatus(m.repoDir), fetchRecentCommits(m.repoDir))
 		return m, tea.Batch(cmds...)
 
 	case addResultMsg:
@@ -237,16 +245,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.err
 		} else {
 			m.statusMsg = msg.msg
-			m.addStep = 0
-			m.addInput.SetValue("")
-			m.addInput.Blur()
-			m.addPkgName = ""
-			m.addPreview = ""
-			m.addSecrets = nil
+			m.err = nil
+			m.resetAddState()
 			m.activeView = DashboardView
-			cmds = append(cmds, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
-				return tickMsg(t)
-			}))
+			cmds = append(cmds, clearStatusAfter(3*time.Second))
 		}
 		cmds = append(cmds, m.refreshAll())
 		return m, tea.Batch(cmds...)
@@ -262,9 +264,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.err
 		} else {
 			m.statusMsg = msg.msg
-			cmds = append(cmds, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
-				return tickMsg(t)
-			}))
+			m.err = nil
+			cmds = append(cmds, clearStatusAfter(3*time.Second))
 		}
 		return m, tea.Batch(cmds...)
 
@@ -274,6 +275,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.backups = msg.backups
+		return m, nil
+
+	case logsLoadedMsg:
+		m.logs = msg.lines
+		m.viewport.SetContent(strings.Join(m.logs, "\n"))
+		m.viewport.GotoBottom()
+		return m, nil
+
+	case recentCommitsMsg:
+		m.recentCommits = msg.commits
 		return m, nil
 	}
 
@@ -300,88 +311,106 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch {
-		case key.Matches(msg, m.keys.Quit):
-			return m, tea.Quit
+	keyMsg, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
 
-		case key.Matches(msg, m.keys.Up):
-			if m.selectedPkg > 0 {
-				m.selectedPkg--
-				m.selectedFile = 0
+	switch {
+	case key.Matches(keyMsg, m.keys.Quit):
+		return m, tea.Quit
+
+	case key.Matches(keyMsg, m.keys.Up):
+		if m.expanded[m.selectedPkg] && len(m.currentFiles()) > 0 {
+			if m.selectedFile > 0 {
+				m.selectedFile--
 			}
-
-		case key.Matches(msg, m.keys.Down):
-			if m.selectedPkg < len(m.packages)-1 {
-				m.selectedPkg++
-				m.selectedFile = 0
-			}
-
-		case key.Matches(msg, m.keys.Enter):
-			m.expanded[m.selectedPkg] = !m.expanded[m.selectedPkg]
-
-		case key.Matches(msg, m.keys.Stow):
-			return m, m.stowPackage()
-
-		case key.Matches(msg, m.keys.Unstow):
-			return m, m.unstowPackage()
-
-		case key.Matches(msg, m.keys.Sync):
-			return m, m.syncRepo()
-
-		case key.Matches(msg, m.keys.Help):
-			m.activeView = HelpView
-			m.help.ShowAll = true
-
-		case key.Matches(msg, m.keys.Logs):
-			m.activeView = LogsView
-			m.loadLogs()
-			m.viewport.SetContent(strings.Join(m.logs, "\n"))
-			m.viewport.GotoBottom()
-
-		case key.Matches(msg, m.keys.Search):
-			m.searching = true
-			m.searchInput.Focus()
-			return m, textinput.Blink
-
-		case key.Matches(msg, m.keys.Push):
-			return m, m.pushRepo()
-
-		case key.Matches(msg, m.keys.Pull):
-			return m, m.pullRepo()
-
-		case key.Matches(msg, m.keys.Add):
-			m.activeView = AddView
-			m.addStep = 0
-			m.addInput.SetValue("")
-			m.addInput.Focus()
-			return m, textinput.Blink
-
-		case key.Matches(msg, m.keys.Diff):
-			m.activeView = DiffView
-			return m, getDiff(m)
-
-		case key.Matches(msg, m.keys.History):
-			m.activeView = HistoryView
-			m.commits = nil
-			m.selectedCommit = 0
-			return m, getFileHistory(m)
-
-		case key.Matches(msg, m.keys.Settings):
-			m.activeView = SettingsView
-			m.settingsStep = 0
-			return m, nil
+		} else if m.selectedPkg > 0 {
+			m.selectedPkg--
+			m.selectedFile = 0
 		}
+
+	case key.Matches(keyMsg, m.keys.Down):
+		if m.expanded[m.selectedPkg] && len(m.currentFiles()) > 0 {
+			if m.selectedFile < len(m.currentFiles())-1 {
+				m.selectedFile++
+			}
+		} else if m.selectedPkg < len(m.packages)-1 {
+			m.selectedPkg++
+			m.selectedFile = 0
+		}
+
+	case key.Matches(keyMsg, m.keys.Enter):
+		m.expanded[m.selectedPkg] = !m.expanded[m.selectedPkg]
+		m.selectedFile = 0
+
+	case key.Matches(keyMsg, m.keys.Stow):
+		m.clearErr()
+		return m, m.stowPackage()
+
+	case key.Matches(keyMsg, m.keys.Unstow):
+		m.clearErr()
+		return m, m.unstowPackage()
+
+	case key.Matches(keyMsg, m.keys.Sync):
+		m.clearErr()
+		return m, m.syncRepo()
+
+	case key.Matches(keyMsg, m.keys.Help):
+		m.clearErr()
+		m.activeView = HelpView
+		m.help.ShowAll = true
+
+	case key.Matches(keyMsg, m.keys.Logs):
+		m.clearErr()
+		m.activeView = LogsView
+		return m, loadLogs(m.logLevel)
+
+	case key.Matches(keyMsg, m.keys.Search):
+		m.searching = true
+		m.searchInput.Focus()
+		return m, textinput.Blink
+
+	case key.Matches(keyMsg, m.keys.Push):
+		m.clearErr()
+		return m, m.pushRepo()
+
+	case key.Matches(keyMsg, m.keys.Pull):
+		m.clearErr()
+		return m, m.pullRepo()
+
+	case key.Matches(keyMsg, m.keys.Add):
+		m.clearErr()
+		m.activeView = AddView
+		m.addStep = 0
+		m.addInput.SetValue("")
+		m.addInput.Focus()
+		return m, textinput.Blink
+
+	case key.Matches(keyMsg, m.keys.Diff):
+		m.clearErr()
+		m.activeView = DiffView
+		return m, getDiff(m)
+
+	case key.Matches(keyMsg, m.keys.History):
+		m.clearErr()
+		m.activeView = HistoryView
+		m.commits = nil
+		m.selectedCommit = 0
+		return m, getFileHistory(m)
+
+	case key.Matches(keyMsg, m.keys.Settings):
+		m.clearErr()
+		m.activeView = SettingsView
+		m.settingsStep = 0
 	}
 
 	return m, nil
 }
 
 func (m Model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		switch keyMsg.String() {
 		case "esc":
 			m.searching = false
 			m.searchInput.Blur()
@@ -395,6 +424,7 @@ func (m Model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
 			for i, pkg := range m.packages {
 				if strings.Contains(strings.ToLower(pkg.Name), strings.ToLower(m.searchQuery)) {
 					m.selectedPkg = i
+					m.selectedFile = 0
 					break
 				}
 			}
@@ -408,43 +438,41 @@ func (m Model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateHelp(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch {
-		case key.Matches(msg, m.keys.Esc), key.Matches(msg, m.keys.Help),
-			key.Matches(msg, m.keys.Quit):
+		case key.Matches(keyMsg, m.keys.Esc),
+			key.Matches(keyMsg, m.keys.Help),
+			key.Matches(keyMsg, m.keys.Quit):
 			m.activeView = DashboardView
 			m.help.ShowAll = false
-			return m, nil
 		}
 	}
 	return m, nil
 }
 
 func (m Model) updateLogs(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch {
-		case key.Matches(msg, m.keys.Esc), key.Matches(msg, m.keys.Logs),
-			key.Matches(msg, m.keys.Quit):
+		case key.Matches(keyMsg, m.keys.Esc),
+			key.Matches(keyMsg, m.keys.Logs),
+			key.Matches(keyMsg, m.keys.Quit):
 			m.activeView = DashboardView
 			return m, nil
-		case msg.String() == "1":
-			m.logLevel = "debug"
-		case msg.String() == "2":
-			m.logLevel = "info"
-		case msg.String() == "3":
-			m.logLevel = "warn"
-		case msg.String() == "4":
-			m.logLevel = "error"
-		default:
-			var cmd tea.Cmd
-			m.viewport, cmd = m.viewport.Update(msg)
-			return m, cmd
 		}
-		m.loadLogs()
-		m.viewport.SetContent(strings.Join(m.logs, "\n"))
-		return m, nil
+		switch keyMsg.String() {
+		case "1":
+			m.logLevel = "debug"
+			return m, loadLogs(m.logLevel)
+		case "2":
+			m.logLevel = "info"
+			return m, loadLogs(m.logLevel)
+		case "3":
+			m.logLevel = "warn"
+			return m, loadLogs(m.logLevel)
+		case "4":
+			m.logLevel = "error"
+			return m, loadLogs(m.logLevel)
+		}
 	}
 
 	var cmd tea.Cmd
@@ -452,9 +480,16 @@ func (m Model) updateLogs(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// ─── View ────────────────────────────────────────────────────────────────────
+
 func (m Model) View() string {
 	if m.loading {
-		return fmt.Sprintf("\n  %s Loading packages...\n\n", m.spinner.View())
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center,
+			fmt.Sprintf("%s %s",
+				m.spinner.View(),
+				textStyle.Render("Loading packages…"),
+			),
+		)
 	}
 
 	switch m.activeView {
@@ -474,6 +509,31 @@ func (m Model) View() string {
 		return viewDashboard(m)
 	}
 }
+
+// ─── State helpers ───────────────────────────────────────────────────────────
+
+func (m *Model) clearErr()            { m.err = nil }
+func (m Model) currentFiles() []stow.FileEntry {
+	if m.selectedPkg >= len(m.packages) {
+		return nil
+	}
+	return m.packages[m.selectedPkg].Files
+}
+
+func (m *Model) resetAddState() {
+	m.addStep = 0
+	m.addInput.SetValue("")
+	m.addInput.Blur()
+	m.addPkgName = ""
+	m.addPreview = ""
+	m.addSecrets = nil
+}
+
+func clearStatusAfter(d time.Duration) tea.Cmd {
+	return tea.Tick(d, func(t time.Time) tea.Msg { return tickMsg(t) })
+}
+
+// ─── Commands ────────────────────────────────────────────────────────────────
 
 func discoverPackages(repoDir, homeDir string) tea.Cmd {
 	return func() tea.Msg {
@@ -496,7 +556,21 @@ func (m Model) refreshAll() tea.Cmd {
 	return tea.Batch(
 		discoverPackages(m.repoDir, m.homeDir),
 		fetchGitStatus(m.repoDir),
+		fetchRecentCommits(m.repoDir),
 	)
+}
+
+func fetchRecentCommits(repoDir string) tea.Cmd {
+	return func() tea.Msg {
+		if !git.IsRepo(repoDir) {
+			return recentCommitsMsg{}
+		}
+		commits, err := git.GetFileHistory(repoDir, ".", 6)
+		if err != nil {
+			return recentCommitsMsg{}
+		}
+		return recentCommitsMsg{commits: commits}
+	}
 }
 
 func (m Model) stowPackage() tea.Cmd {
@@ -504,17 +578,17 @@ func (m Model) stowPackage() tea.Cmd {
 		return nil
 	}
 	pkg := m.packages[m.selectedPkg]
-	repoDir := m.repoDir
-	homeDir := m.homeDir
+	repoDir, homeDir := m.repoDir, m.homeDir
 	return func() tea.Msg {
 		result, err := stow.Link(repoDir, homeDir, pkg.Name)
 		if err != nil {
 			return stowResultMsg{err: err}
 		}
-		msg := fmt.Sprintf("Stowed %s: %d linked", pkg.Name, result.Linked)
+		msg := fmt.Sprintf("Stowed %s (%d linked", pkg.Name, result.Linked)
 		if result.Skipped > 0 {
 			msg += fmt.Sprintf(", %d skipped", result.Skipped)
 		}
+		msg += ")"
 		return stowResultMsg{msg: msg}
 	}
 }
@@ -524,15 +598,13 @@ func (m Model) unstowPackage() tea.Cmd {
 		return nil
 	}
 	pkg := m.packages[m.selectedPkg]
-	repoDir := m.repoDir
-	homeDir := m.homeDir
+	repoDir, homeDir := m.repoDir, m.homeDir
 	return func() tea.Msg {
 		result, err := stow.Unlink(repoDir, homeDir, pkg.Name)
 		if err != nil {
 			return stowResultMsg{err: err}
 		}
-		msg := fmt.Sprintf("Unstowed %s: %d unlinked", pkg.Name, result.Unlinked)
-		return stowResultMsg{msg: msg}
+		return stowResultMsg{msg: fmt.Sprintf("Unstowed %s (%d unlinked)", pkg.Name, result.Unlinked)}
 	}
 }
 
@@ -540,8 +612,7 @@ func (m Model) syncRepo() tea.Cmd {
 	repoDir := m.repoDir
 	logger := m.cfg.Logger
 	return func() tea.Msg {
-		err := git.Sync(repoDir, logger)
-		if err != nil {
+		if err := git.Sync(repoDir, logger); err != nil {
 			return syncResultMsg{err: err}
 		}
 		return syncResultMsg{msg: "Synced"}
@@ -551,8 +622,7 @@ func (m Model) syncRepo() tea.Cmd {
 func (m Model) pushRepo() tea.Cmd {
 	repoDir := m.repoDir
 	return func() tea.Msg {
-		err := git.PushWithProgress(repoDir)
-		if err != nil {
+		if err := git.PushWithProgress(repoDir); err != nil {
 			return syncResultMsg{err: err}
 		}
 		return syncResultMsg{msg: "Pushed"}
@@ -562,48 +632,46 @@ func (m Model) pushRepo() tea.Cmd {
 func (m Model) pullRepo() tea.Cmd {
 	repoDir := m.repoDir
 	return func() tea.Msg {
-		err := git.Pull(repoDir)
-		if err != nil {
+		if err := git.Pull(repoDir); err != nil {
 			return stowResultMsg{err: err}
 		}
 		return stowResultMsg{msg: "Pulled"}
 	}
 }
 
-func (m *Model) loadLogs() {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		m.logs = []string{"error: cannot determine home directory"}
-		return
-	}
+// ─── Logs ────────────────────────────────────────────────────────────────────
 
-	logPath := filepath.Join(home, ".dotcor", "logs", "dotcor.log")
-	data, err := os.ReadFile(logPath)
-	if err != nil {
-		m.logs = []string{"no logs found"}
-		return
-	}
-
-	lines := strings.Split(string(data), "\n")
-	var filtered []string
-	for _, line := range lines {
-		if line == "" {
-			continue
+func loadLogs(level string) tea.Cmd {
+	return func() tea.Msg {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return logsLoadedMsg{lines: []string{"error: cannot determine home directory"}}
 		}
-		if matchesLevel(line, m.logLevel) {
-			filtered = append(filtered, line)
+
+		logPath := filepath.Join(home, ".dotcor", "logs", "dotcor.log")
+		data, err := os.ReadFile(logPath)
+		if err != nil {
+			return logsLoadedMsg{lines: []string{"no logs found — run some commands first"}}
 		}
-	}
 
-	if len(filtered) == 0 {
-		filtered = []string{"no log entries matching level: " + m.logLevel}
-	}
+		var filtered []string
+		for _, line := range strings.Split(string(data), "\n") {
+			if line == "" {
+				continue
+			}
+			if matchesLevel(line, level) {
+				filtered = append(filtered, line)
+			}
+		}
 
-	if len(filtered) > 1000 {
-		filtered = filtered[len(filtered)-1000:]
+		if len(filtered) == 0 {
+			filtered = []string{"no log entries at level: " + level}
+		}
+		if len(filtered) > 1000 {
+			filtered = filtered[len(filtered)-1000:]
+		}
+		return logsLoadedMsg{lines: filtered}
 	}
-
-	m.logs = filtered
 }
 
 func matchesLevel(line, level string) bool {
@@ -613,8 +681,7 @@ func matchesLevel(line, level string) bool {
 	case "info":
 		return !strings.Contains(line, "level=debug")
 	case "warn":
-		return strings.Contains(line, "level=warn") ||
-			strings.Contains(line, "level=error")
+		return strings.Contains(line, "level=warn") || strings.Contains(line, "level=error")
 	case "error":
 		return strings.Contains(line, "level=error")
 	default:
