@@ -16,7 +16,9 @@ Before creating a release, ensure:
 
 - [ ] All tests passing: `go test ./...`
 - [ ] Local build successful: `go build ./cmd/dotcor`
-- [ ] Documentation updated (README.md, etc.)
+- [ ] TUI launches correctly: `./dotcor`
+- [ ] First-run init prompt works (test with empty `~/.dotcor/`)
+- [ ] Documentation updated (README.md, SPEC.md, etc.)
 - [ ] All changes committed to main branch
 - [ ] Working tree is clean: `git status`
 
@@ -31,12 +33,12 @@ git pull origin main
 
 # 2. Verify everything is ready
 go test ./...
-go build ./cmd/dotcor
+go build -o dotcor ./cmd/dotcor
 ./dotcor --version
 
 # 3. Create and push version tag
-git tag -a v1.0.0 -m "Release v1.0.0: Brief description of changes"
-git push origin v1.0.0
+git tag -a v2.0.0 -m "Release v2.0.0: Brief description of changes"
+git push origin v2.0.0
 ```
 
 ### What Happens Automatically
@@ -88,6 +90,7 @@ After release completes:
   ```bash
   dotcor --version  # Should show new version
   ```
+- [ ] Verify TUI launches: `dotcor` (should show dashboard)
 - [ ] Test on both Intel and Apple Silicon (if available)
 
 ## Version Numbering
@@ -133,7 +136,7 @@ git push origin main
 
 ### 4. Create Fixed Release
 
-Fix issues, then create a new release with an incremented version (e.g., v1.0.1).
+Fix issues, then create a new release with an incremented version (e.g., v2.0.1).
 
 ## Testing Releases Locally
 
@@ -150,10 +153,10 @@ goreleaser release --snapshot --clean --skip=publish
 ls -lh dist/
 
 # Test Intel binary
-./dist/dotcor_0.0.0-snapshot_darwin_amd64/dotcor --version
+./dist/dotcor_0.0.0-snapshot_darwin_amd64_v8.0/dotcor --version
 
 # Test Apple Silicon binary
-./dist/dotcor_0.0.0-snapshot_darwin_arm64/dotcor --version
+./dist/dotcor_0.0.0-snapshot_darwin_arm64_v8.0/dotcor --version
 
 # Review generated Homebrew formula
 cat dist/homebrew/Formula/dotcor.rb

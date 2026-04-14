@@ -4,6 +4,9 @@ GEMINI.MD
 .claude/
 .claude
 
+# Design and planning docs (local only)
+docs/plans/
+
 # Binaries
 /dotcor
 *.exe

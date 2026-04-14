@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-DotCor is a symlink-based dotfile manager built in Go. It combines the simplicity of GNU Stow with automatic Git commits, enabling users to manage dotfiles across machines with minimal friction.
+DotCor is a symlink-based dotfile manager with a Bubble Tea TUI. It uses GNU Stow-style package directories and automatic Git commits, enabling users to manage dotfiles across machines with minimal friction.
 
 **Core Philosophy:**
 - Edit dotfiles directly; changes instantly appear in the repository via symlinks
@@ -14,101 +14,119 @@ DotCor is a symlink-based dotfile manager built in Go. It combines the simplicit
 
 ### Technology Stack
 
-- **Language:** Go 1.21+
-- **CLI Framework:** Cobra
-- **Configuration:** Viper (YAML)
+- **Language:** Go 1.26
+- **TUI Framework:** Bubble Tea (Charm)
+- **Styling:** Lip Gloss (Rosé Pine theme)
+- **Components:** Bubbles, BubbleZone, Harmonica
+- **Configuration:** YAML (`gopkg.in/yaml.v3`)
 - **Version Control:** Git (via os/exec)
 
 ### Project Structure
 
 ```
 dotcor/
-├── cmd/dotcor/               # CLI commands (Cobra)
-│   ├── main.go               # Entry point, root command
-│   ├── init.go               # dotcor init
-│   ├── add.go                # dotcor add
-│   ├── remove.go             # dotcor remove
-│   ├── list.go               # dotcor list
-│   ├── status.go             # dotcor status
-│   ├── sync.go               # dotcor sync
-│   ├── restore.go            # dotcor restore
-│   ├── history.go            # dotcor history
-│   ├── diff.go               # dotcor diff
-│   ├── adopt.go              # dotcor adopt
-│   ├── doctor.go             # dotcor doctor
-│   ├── rebuild.go            # dotcor rebuild-config
-│   ├── rebuild-links.go      # dotcor rebuild-links (render templates)
-│   ├── clone.go              # dotcor clone
-│   ├── cleanup.go            # dotcor cleanup-backups
-│   ├── test_helpers.go       # Test utilities
-│   └── *_test.go            # Command tests
+├── cmd/dotcor/main.go          # Thin entry point: flags, init prompt, launch TUI
 │
 ├── internal/
-│   ├── config/               # Configuration management
-│   │   ├── config.go         # Config struct, Load/Save
-│   │   ├── paths.go          # Path normalization, glob expansion
-│   │   └── migrate.go        # Config version migrations
+│   ├── config/
+│   │   ├── config.go           # Simplified .dotcorrc load/save
+│   │   └── paths.go            # Path normalization, glob expansion
 │   │
-│   ├── core/                 # Business logic
-│   │   ├── validator.go      # Validation, secret detection
-│   │   ├── backup.go         # Backup/restore operations
-│   │   ├── lock.go           # File-based locking
-│   │   ├── transaction.go    # Transaction/rollback semantics
-│   │   ├── ignore.go         # Ignore pattern matching
-│   │   ├── hooks.go          # Hook system (pre/post operations)
-│   │   └── templates.go      # Simple template substitution
+│   ├── core/
+│   │   ├── backup.go           # Backup/restore operations
+│   │   ├── lock.go             # File-based locking
+│   │   ├── transaction.go      # Transaction/rollback semantics
+│   │   ├── ignore.go           # Ignore pattern matching
+│   │   ├── hooks.go            # Hook system (pre/post operations)
+│   │   └── templates.go        # Simple template substitution
 │   │
- │   ├── fs/                   # File system operations
- │   │   ├── fs.go             # File operations (move, copy)
- │   │   └── symlink.go        # macOS symlink handling
- │   │
-│   ├── git/                  # Git integration
-│   │   └── git.go            # Git command wrapper
+│   ├── fs/
+│   │   ├── fs.go               # File operations (move, copy)
+│   │   └── symlink.go          # macOS symlink handling
 │   │
-│   └── logger/               # Structured logging
-│       └── logger.go         # slog configuration
+│   ├── git/
+│   │   └── git.go              # Git command wrapper
+│   │
+│   ├── logger/
+│   │   └── logger.go           # File logging + rotation
+│   │
+│   └── stow/
+│       ├── package.go          # Package discovery, validation
+│       ├── link.go             # Symlink creation (individual files)
+│       ├── unlink.go           # Symlink removal + empty dir cleanup
+│       └── migrate.go          # v1 → v2 migration
+│
+├── tui/
+│   ├── app.go                  # Root Bubble Tea model
+│   ├── dashboard.go            # Main dashboard view
+│   ├── add_view.go             # Add file flow
+│   ├── diff_view.go            # Diff viewer
+│   ├── history_view.go         # History browser
+│   ├── help_view.go            # Keybinding help
+│   ├── logs_view.go            # Log viewer
+│   ├── settings_view.go        # Settings editor
+│   ├── styles.go               # Rosé Pine Lip Gloss definitions
+│   └── keys.go                 # Keybinding definitions
 │
 ├── tests/
-│   └── integration_test.go    # Integration tests
+│   └── integration_test.go     # Integration tests
 │
 ├── docs/
-│   ├── LOGGING.md            # Logging guide
-│   ├── TESTING.md            # Testing conventions and patterns
-│   ├── RELEASING.md          # Release process
-│   └── PLAN.md               # Implementation plan
+│   ├── SPEC.md                 # Full specification
+│   ├── TESTING.md              # Testing conventions
+│   ├── LOGGING.md              # Logging guide
+│   └── RELEASING.md            # Release process
 │
-├── README.md                 # User documentation
-└── CLAUDE.md                 # This file
+├── README.md                   # User documentation
+└── CLAUDE.md                   # This file
 ```
 
 ### Key Design Decisions
 
-1. **Relative Symlinks:** Use `filepath.Rel()` for portability across machines
-2. **Transaction/Rollback:** Wrap multi-step operations to prevent partial failures
-3. **File-Based Locking:** Prevent concurrent operations with stale lock detection
-4. **Secret Detection:** Scan for API keys, passwords, tokens before adding files
-5. **Versioned Config:** Include version field for future schema migrations
-6. **Structured Logging:** Use `log/slog` with dependency injection, separate from user-facing output
-7. **Hook System:** Pre/post operation hooks in `~/.dotcor/hooks/` for extensibility
-8. **Simple Templates:** Basic `{{ .Hostname }}` substitution via `rebuild-links` command
+1. **Stow-style packages:** Top-level directories in `~/.dotcor/` mirror `$HOME` path structure
+2. **Filesystem-only state:** No managed_files list — packages and symlinks discovered from disk
+3. **Individual file symlinks:** Never symlink directories, always individual files with relative paths
+4. **Transaction/Rollback:** Wrap multi-step operations to prevent partial failures
+5. **File-Based Locking:** Prevent concurrent operations with stale lock detection
+6. **Structured Logging:** File-based (`~/.dotcor/logs/dotcor.log`) with TUI log viewer
+7. **No CLI framework:** No Cobra/Viper — thin `main.go` parses `os.Args`, launches TUI
+
+### Repository Layout (`~/.dotcor/`)
+
+```
+~/.dotcor/
+├── .git/
+├── .dotcorrc                  # Minimal config (git settings, ignore patterns)
+├── logs/dotcor.log            # Rotated, 5MB max
+├── backups/                   # Timestamped backups
+├── zsh/                       # Package: mirrors $HOME
+│   └── .zshrc
+├── nvim/
+│   └── .config/nvim/init.lua
+└── git/
+    └── .gitconfig
+```
+
+Excluded from packages: `.git`, `logs`, `backups`, `.stow-local-ignore`, `.dotcorrc`.
 
 ### Data Flow
 
 ```
-User's dotfile (~/.zshrc)
+User presses 's' on "zsh" package in TUI
         │
-        ▼ dotcor add
+        ▼ stow.Link()
         │
-        ├── Backup original
-        ├── Move to ~/.dotcor/files/shell/zshrc
-        ├── Create relative symlink
-        ├── Update config.yaml
-        └── Git commit
+        ├── Walk zsh/ for files
+        ├── For each file:
+        │   ├── Backup original if exists
+        │   ├── Create parent dirs in $HOME
+        │   └── Create relative symlink
+        ├── git.AutoCommit("stow zsh")
         │
         ▼
-~/.zshrc (symlink) → .dotcor/files/shell/zshrc (actual file)
-                              │
-                              └── Git repository
+~/.zshrc (symlink) → ../.dotcor/zsh/.zshrc (actual file)
+                            │
+                            └── Git repository
 ```
 
 ## Coding Standards
@@ -146,6 +164,7 @@ someOperation()
 - Use table-driven tests for multiple cases
 - Test edge cases: empty inputs, missing files, permission errors
 - Integration tests for multi-step operations
+- TUI tests: call `Update()` with messages, assert state changes
 
 ## Design Principles
 
@@ -158,34 +177,37 @@ someOperation()
 
 ### Fail Gracefully
 
-- Provide clear, actionable error messages
-- Suggest fixes when possible
-- Offer `--force` flags for advanced users, but default to safe behavior
+- Errors appear as status messages in TUI footer
+- Critical errors show centered modals with actionable steps
+- Conflicts (file exists, not a symlink) show resolution options
 
 ### Minimal Surprise
 
 - Follow conventions from similar tools (Stow, Chezmoi)
-- Keep command structure intuitive
+- Keybindings follow vim/lazygit conventions (j/k, ?, q)
 - Default behaviors should be conservative
 
 ## Git Workflow
 
 ### Commit Guidelines
 
-- **Atomic commits:** Each commit addresses a single concern
-- **Never combine** unrelated changes in one commit
+- **Commit per feature:** Each commit covers one complete feature across all its files
+- **Never combine** unrelated features in one commit
 - **Clear messages:** Descriptive, present tense, imperative mood
 
 ```
 # Good commit messages
-fix: handle missing parent directory in symlink creation
-feat: add glob pattern support to add command
-refactor: extract path normalization to separate function
+feat(stow): add package discovery, link, unlink, and v1 migration
+refactor(internal): simplify config, logger, and path references for stow layout
+feat(tui): add bubble tea foundation with dashboard and views
+docs: update documentation, goreleaser, and ci for v2.0
 
 # Bad commit messages
 updates
 fix stuff
 WIP
+feat: add styles.go
+feat: add keys.go
 ```
 
 ### Branch Strategy
@@ -216,16 +238,16 @@ Never include these in commit messages or code comments:
 - Preserve existing style and patterns
 - Test changes locally before committing
 - Keep changes focused and minimal
-- **Commit after completing each task** - don't batch multiple tasks into one commit
+- **Commit after completing each feature** - don't batch multiple features into one commit
 
-### Commit After Every Task
+### Commit After Every Feature
 
 When implementing from a plan:
-- Complete one logical unit of work (e.g., one module, one command)
+- Complete one full feature (may span multiple files and packages)
 - Verify it compiles with `go build ./...`
 - Make a commit with a descriptive message
 - Use conventional commit format: `feat:`, `fix:`, `refactor:`, etc.
-- Keep commits atomic - one concern per commit
+- One commit per feature — not per file, not per session, not per minor task
 
 ### Code Review Mindset
 
@@ -240,15 +262,42 @@ When implementing from a plan:
 # Build
 go build -o dotcor cmd/dotcor/main.go
 
-# Run directly
-go run cmd/dotcor/main.go [command]
+# Run (launches TUI)
+./dotcor
+
+# Check version
+./dotcor --version
 
 # Run tests
 go test ./...
 
 # Run specific package tests
-go test ./internal/config/...
+go test ./internal/stow/...
 ```
+
+### CLI Flags (minimal, before TUI launch)
+
+| Flag | Action |
+|------|--------|
+| `--version` | Print version, exit |
+| `--debug` | Set log level to debug |
+| `--log-level` | Set log level (debug/info/warn/error) |
+
+## TUI Keybindings
+
+| Key | Action |
+|-----|--------|
+| `↑/↓` or `j/k` | Navigate |
+| `s` | Stow (link) selected package |
+| `u` | Unstow (unlink) selected package |
+| `S` | Sync (git commit + push) |
+| `a` | Add file |
+| `d` | Remove file |
+| `D` | View diff |
+| `H` | View history |
+| `L` | Toggle log viewer |
+| `/?` | Search / Help |
+| `q` | Quit |
 
 ## Release Workflow
 
@@ -260,8 +309,8 @@ Releases are triggered by pushing a version tag:
 
 ```bash
 # Create and push tag
-git tag -a v0.2.0 -m "Release v0.2.0: Description"
-git push origin v0.2.0
+git tag -a v2.0.0 -m "Release v2.0.0: Description"
+git push origin v2.0.0
 ```
 
 **GitHub Actions automatically:**
@@ -289,8 +338,8 @@ ls -lh dist/
 
 Binaries get version from git tag via ldflags:
 - `.goreleaser.yaml` configures: `-X main.version={{.Version}}`
-- `cmd/dotcor/main.go` declares: `var version = "0.1.1"`
-- Built binary shows: `dotcor version v0.2.0`
+- `cmd/dotcor/main.go` declares: `var version = "2.0.0"`
+- Built binary shows: `dotcor v2.0.0`
 
 ### For Detailed Instructions
 
@@ -304,29 +353,34 @@ See [docs/RELEASING.md](docs/RELEASING.md) for:
 
 | File | Purpose |
 |------|---------|
-| `PLAN.md` | Detailed implementation plan with code examples |
+| `docs/SPEC.md` | Full specification for v2.0 |
 | `README.md` | User-facing documentation |
 | `docs/TESTING.md` | Testing conventions, patterns, and best practices |
-| `docs/LOGGING.md` | Structured logging guide with level guidelines and examples |
+| `docs/LOGGING.md` | Structured logging guide |
 | `docs/RELEASING.md` | Release process and GoReleaser workflow |
 | `internal/config/config.go` | Config struct and Load/Save operations |
+| `internal/stow/package.go` | Package discovery and file scanning |
+| `internal/stow/link.go` | Stow (symlink creation) |
+| `internal/stow/unlink.go` | Unstow (symlink removal) |
 | `internal/core/transaction.go` | Transaction/rollback semantics |
- | `internal/core/hooks.go` | Hook system for pre/post operations |
- | `internal/core/templates.go` | Template variable substitution |
- | `internal/fs/symlink.go` | macOS symlink handling |
- | `internal/git/git.go` | Git command wrapper |
- | `internal/logger/logger.go` | Structured logging configuration |
+| `internal/core/hooks.go` | Hook system for pre/post operations |
+| `internal/fs/symlink.go` | macOS symlink handling |
+| `internal/git/git.go` | Git command wrapper |
+| `internal/logger/logger.go` | File logging configuration |
+| `tui/app.go` | Root Bubble Tea model |
+| `tui/dashboard.go` | Main dashboard rendering |
+| `tui/styles.go` | Rosé Pine color definitions |
 
 ## Common Patterns
 
 ### Lock Acquisition
 
 ```go
-func runCommand() error {
-    if err := lock.AcquireLock(); err != nil {
+func runCommand(cfg *config.Config) error {
+    if err := lock.AcquireLock(cfg); err != nil {
         return err
     }
-    defer lock.ReleaseLock()
+    defer lock.ReleaseLock(cfg)
 
     // command logic
 }
@@ -335,7 +389,7 @@ func runCommand() error {
 ### Transaction Usage
 
 ```go
-tx := NewTransaction()
+tx := core.NewTransaction(cfg)
 defer func() {
     if r := recover(); r != nil {
         tx.Rollback()
@@ -343,103 +397,54 @@ defer func() {
     }
 }()
 
-if err := tx.Execute(&MoveFileOp{src, dst}); err != nil {
+if err := tx.Execute(&core.MoveFileOp{Src: src, Dst: dst, Config: cfg}); err != nil {
     return err
 }
 
 tx.Commit()
 ```
 
+### Stow/Unstow
+
+```go
+packages, _ := stow.DiscoverPackages(repoDir, homeDir)
+pkg := &packages[0]
+
+result, err := stow.Link(pkg, homeDir)
+// result.Linked, result.Skipped, result.Errors
+
+result, err = stow.Unlink(pkg, homeDir)
+// result.Unlinked, result.Skipped, result.Errors
+```
+
 ### Path Normalization
 
 ```go
-// Always normalize paths for storage
-normalized, err := paths.NormalizePath(absolutePath)
-
-// Always expand paths before file operations
-expanded, err := paths.ExpandPath(normalizedPath)
-```
-
-### Hook Usage
-
-```go
-// Before an operation (e.g., add)
-ctx := core.HookContext{
-    HookType: "pre-add",
-    FilePath: sourcePath,
-}
-core.RunHook(ctx, cfg)  // Gracefully skips if hook doesn't exist
-
-// After an operation (e.g., add)
-ctx = core.HookContext{
-    HookType: "post-add",
-    FilePath: sourcePath,
-    RepoPath: repoPath,
-}
-core.RunHook(ctx, cfg)  // Logs errors but doesn't fail operation
-```
-
-### Template Usage
-
-```go
-// Get template context
-ctx, err := core.GetTemplateContext()
-if err != nil {
-    return err
-}
-
-// Substitute variables in content
-rendered := core.SubstituteTemplate(originalContent, ctx)
-
-// Check if file is a template
-if core.IsTemplateFile(filename) {
-    // Strip .template extension and render
-    actualFile := core.StripTemplateExtension(filename)
-}
+normalized, err := config.NormalizePath(absolutePath)
+expanded, err := config.ExpandPath(normalizedPath, cfg)
 ```
 
 ### Structured Logging
 
-DotCor uses Go 1.21+ `log/slog` for structured logging following these principles:
+File-based logging via `log/slog`:
 
-1. **Inject logger via Config struct** - Logger field in Config, passed to all functions
-2. **Separate user output from logs** - fmt.Printf for UI, slog for system logging
-3. **Use appropriate log levels** - DEBUG (internal), INFO (events), WARN (issues), ERROR (failures)
-4. **Include structured fields** - Key-value pairs for context (op, file, error)
-5. **Test log emission** - Verify logs at correct levels with proper fields
-
-Example:
 ```go
-func BackupFile(path string, cfg *config.Config) error {
-    cfg.Logger.Debug("starting backup", "file", path)
+func SomeOperation(path string, cfg *config.Config) error {
+    cfg.Logger.Debug("starting operation", "file", path)
     // ... implementation
-    cfg.Logger.Info("backup created", "file", path, "backup", backupPath)
+    cfg.Logger.Info("operation complete", "file", path)
     return nil
 }
 ```
 
-#### When to Use cfg.Logger vs fmt.Printf
-
-| Use Case | Method | Example |
-|----------|--------|---------|
-| System logging (operations, decisions) | `cfg.Logger.Debug/Info/Warn/Error` | `cfg.Logger.Debug("validating file", "path", path)` |
-| User-facing UI (banners, tables, prompts) | `fmt.Printf` | `fmt.Printf("✓ Added %s\n", file)` |
+Log output goes to `~/.dotcor/logs/dotcor.log` (not stderr — TUI owns the terminal).
 
 #### Log Level Guidelines
 
 - **DEBUG**: Function entry/exit, internal decisions, intermediate states
-- **INFO**: User-relevant events (file added, backup created, git commits)
+- **INFO**: User-relevant events (package stowed, backup created, git commits)
 - **WARN**: Non-critical issues (hook failures, large files, retries)
 - **ERROR**: Stopping failures (lock held, file not found, permission errors)
-
-#### Common Structured Fields
-
-- `op`: Operation type (backup, add, remove, git)
-- `file`: File being operated on
-- `src`: Source path (shortened from source_path)
-- `repo`: Repository path (shortened from repo_path)
-- `error`: Error object (for ERROR level logs)
-- `duration`: Operation duration (useful for performance tracking)
 
 For detailed logging documentation, see [docs/LOGGING.md](docs/LOGGING.md).
 
@@ -467,12 +472,11 @@ For detailed logging documentation, see [docs/LOGGING.md](docs/LOGGING.md).
 - All new features must have tests
 - Significant changes to existing features need test updates
 - Bug fixes should include regression tests
-- Core packages (config, core, fs, git, logger) require comprehensive coverage (target 85%+)
-- Command tests should cover major CLI commands (init, add, remove, list, status, sync, restore, history, diff, adopt, doctor, rebuild-config, clone, cleanup)
+- Core packages (config, core, fs, git, stow, logger) require comprehensive coverage (target 85%+)
+- TUI model tests: call `Update()` with messages, assert state changes
 
 Testing documentation at docs/TESTING.md includes:
 - testify framework usage (assert/require packages)
 - AAA pattern examples
 - Test naming conventions
-- Helper functions (cmd/dotcor/test_helpers.go)
 - Coverage goals and pre-commit workflow
