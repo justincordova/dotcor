@@ -88,34 +88,6 @@ func ExpandPath(path string, cfg *Config) (string, error) {
 	return expanded, nil
 }
 
-// GetRepoFilePath returns full path to file in repo
-// Example: shell/zshrc -> /Users/you/.dotcor/files/shell/zshrc
-func GetRepoFilePath(config *Config, repoPath string) (string, error) {
-	if config == nil {
-		return "", fmt.Errorf("config is nil")
-	}
-
-	if config.Logger != nil {
-		config.Logger.Debug("getting repo file path", "repo_path", repoPath)
-	}
-
-	expanded, err := ExpandPath(config.RepoPath, config)
-	if err != nil {
-		if config.Logger != nil {
-			config.Logger.Error("failed to expand repo path", "error", err)
-		}
-		return "", fmt.Errorf("expanding repo path: %w", err)
-	}
-
-	fullPath := filepath.Join(expanded, repoPath)
-
-	if config.Logger != nil {
-		config.Logger.Debug("repo file path resolved", "repo_path", repoPath, "full_path", fullPath)
-	}
-
-	return fullPath, nil
-}
-
 // GenerateRepoPath generates repository path for a source file
 // Returns path relative to repository's files directory
 // Example: ~/.zshrc -> .zshrc

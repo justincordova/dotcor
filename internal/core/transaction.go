@@ -8,20 +8,12 @@ import (
 	"github.com/justincordova/dotcor/internal/fs"
 )
 
-// Operation represents a reversible operation
 type Operation interface {
-	Do() error        // Execute the operation
-	Undo() error      // Rollback the operation
-	Describe() string // Human-readable description
+	Do() error
+	Undo() error
+	Describe() string
 }
 
-// Transaction represents a sequence of operations that can be rolled back.
-//
-// Two usage patterns:
-// 1. Direct execution: call Execute(op) for each operation immediately
-// 2. Planned execution: add operations to tx.operations, then call ExecuteAll()
-//
-// Both patterns track executed operations in 'executed' for rollback.
 type Transaction struct {
 	config     *config.Config
 	operations []Operation
@@ -79,7 +71,6 @@ func (t *Transaction) Rollback() error {
 		op := t.executed[i]
 		t.config.Logger.Debug("rolling back operation", "op", op.Describe(), "index", i)
 
-		// Handle panics in undo operations
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -116,19 +107,14 @@ func (t *Transaction) Commit() {
 	t.executed = nil
 }
 
-// IsCommitted returns whether the transaction has been committed
 func (t *Transaction) IsCommitted() bool {
 	return t.committed
 }
 
-// ExecutedCount returns the number of operations executed
 func (t *Transaction) ExecutedCount() int {
 	return len(t.executed)
 }
 
-// Common Operations
-
-// MoveFileOp moves a file from Src to Dst
 type MoveFileOp struct {
 	Src    string
 	Dst    string
@@ -147,7 +133,6 @@ func (op *MoveFileOp) Describe() string {
 	return fmt.Sprintf("move %s to %s", op.Src, op.Dst)
 }
 
-// CopyFileOp copies a file from Src to Dst
 type CopyFileOp struct {
 	Src    string
 	Dst    string
@@ -166,10 +151,9 @@ func (op *CopyFileOp) Describe() string {
 	return fmt.Sprintf("copy %s to %s", op.Src, op.Dst)
 }
 
-// CreateSymlinkOp creates a symlink
 type CreateSymlinkOp struct {
-	Target string // The file the symlink points to
-	Link   string // The symlink path
+	Target string
+	Link   string
 	Config *config.Config
 }
 
@@ -185,16 +169,14 @@ func (op *CreateSymlinkOp) Describe() string {
 	return fmt.Sprintf("create symlink %s -> %s", op.Link, op.Target)
 }
 
-// RemoveSymlinkOp removes a symlink (saves target for undo)
 type RemoveSymlinkOp struct {
 	Link        string
-	savedTarget string // Saved for undo
+	savedTarget string
 	wasRelative bool
 	Config      *config.Config
 }
 
 func (op *RemoveSymlinkOp) Do() error {
-	// Save the target before removing
 	target, err := fs.ReadSymlink(op.Link)
 	if err != nil {
 		return err
@@ -208,7 +190,6 @@ func (op *RemoveSymlinkOp) Do() error {
 }
 
 func (op *RemoveSymlinkOp) Undo() error {
-	// Use safe symlink creation with validation
 	return fs.CreateSymlink(op.savedTarget, op.Link, op.Config)
 }
 
@@ -231,7 +212,6 @@ func (op *RemoveFileOp) Do() error {
 		return fmt.Errorf("backup creation failed - no backup path returned")
 	}
 
-	// Verify backup was actually created
 	if !fs.PathExists(backupPath) {
 		op.config.Logger.Error("backup file does not exist", "path", backupPath)
 		return fmt.Errorf("backup file does not exist: %s", backupPath)
@@ -253,7 +233,6 @@ func (op *RemoveFileOp) Describe() string {
 	return fmt.Sprintf("remove file %s", op.Path)
 }
 
-// CreateDirOp creates a directory
 type CreateDirOp struct {
 	Path   string
 	Config *config.Config
@@ -264,13 +243,12 @@ func (op *CreateDirOp) Do() error {
 }
 
 func (op *CreateDirOp) Undo() error {
-	// Only remove if directory is empty
 	entries, err := os.ReadDir(op.Path)
 	if err != nil {
 		return err
 	}
 	if len(entries) > 0 {
-		return nil // Don't remove non-empty directories
+		return nil
 	}
 	return os.Remove(op.Path)
 }
@@ -279,72 +257,6 @@ func (op *CreateDirOp) Describe() string {
 	return fmt.Sprintf("create directory %s", op.Path)
 }
 
-// AddToConfigOp adds a managed file to config
-type AddToConfigOp struct {
-	Config    *config.Config
-	File      config.ManagedFile
-	fileIndex int // Track index for proper undo
-}
-
-func (op *AddToConfigOp) Do() error {
-	op.Config.ManagedFiles = append(op.Config.ManagedFiles, op.File)
-	op.fileIndex = len(op.Config.ManagedFiles) - 1
-	return op.Config.SaveConfig()
-}
-
-func (op *AddToConfigOp) Undo() error {
-	if op.fileIndex >= 0 && op.fileIndex < len(op.Config.ManagedFiles) {
-		op.Config.ManagedFiles = append(
-			op.Config.ManagedFiles[:op.fileIndex],
-			op.Config.ManagedFiles[op.fileIndex+1:]...,
-		)
-		return op.Config.SaveConfig()
-	}
-	return fmt.Errorf("invalid file index: %d", op.fileIndex)
-}
-
-func (op *AddToConfigOp) Describe() string {
-	return fmt.Sprintf("add %s to config", op.File.SourcePath)
-}
-
-// RemoveFromConfigOp removes a managed file from config
-type RemoveFromConfigOp struct {
-	Config     *config.Config
-	savedFile  config.ManagedFile // Saved for undo
-	sourcePath string
-	fileIndex  int // Track index of removed file
-}
-
-func (op *RemoveFromConfigOp) Do() error {
-	// Find by index instead of source path
-	for i, mf := range op.Config.ManagedFiles {
-		if mf.SourcePath == op.sourcePath {
-			op.savedFile = mf
-			op.fileIndex = i
-			op.Config.ManagedFiles = append(
-				op.Config.ManagedFiles[:i],
-				op.Config.ManagedFiles[i+1:]...,
-			)
-			return op.Config.SaveConfig()
-		}
-	}
-	return fmt.Errorf("managed file not found: %s", op.sourcePath)
-}
-
-func (op *RemoveFromConfigOp) Undo() error {
-	// Insert back at correct position
-	op.Config.ManagedFiles = append(
-		op.Config.ManagedFiles[:op.fileIndex],
-		append([]config.ManagedFile{op.savedFile}, op.Config.ManagedFiles[op.fileIndex:]...)...,
-	)
-	return op.Config.SaveConfig()
-}
-
-func (op *RemoveFromConfigOp) Describe() string {
-	return fmt.Sprintf("remove %s from config", op.sourcePath)
-}
-
-// WriteFileOp writes content to a file (backs up existing for undo)
 type WriteFileOp struct {
 	Path       string
 	Content    []byte
@@ -378,76 +290,6 @@ func (op *WriteFileOp) Describe() string {
 	return fmt.Sprintf("write file %s", op.Path)
 }
 
-// Compound Operations (for convenience)
-
-// AddFileTransaction creates a transaction for adding a file to dotcor.
-// It builds a planned transaction - call ExecuteAll() to run the operations.
-// Steps: move to repo -> create symlink -> add to config
-// Note: Backup is handled separately by the caller (backups are kept regardless of rollback).
-func AddFileTransaction(cfg *config.Config, sourcePath string, repoPath string, mf config.ManagedFile) (*Transaction, error) {
-	// Input validation
-	if cfg == nil {
-		return nil, fmt.Errorf("config cannot be nil")
-	}
-
-	// Validate source path
-	if sourcePath == "" {
-		return nil, fmt.Errorf("source path cannot be empty")
-	}
-
-	// Validate repo path
-	if repoPath == "" {
-		return nil, fmt.Errorf("repo path cannot be empty")
-	}
-
-	// Validate managed file
-	if mf.SourcePath == "" {
-		return nil, fmt.Errorf("managed file source path cannot be empty")
-	}
-	if mf.RepoPath == "" {
-		return nil, fmt.Errorf("managed file repo path cannot be empty")
-	}
-	if mf.AddedAt.IsZero() {
-		return nil, fmt.Errorf("managed file added_at time cannot be zero")
-	}
-
-	tx := NewTransaction(cfg)
-
-	fullRepoPath, err := config.GetRepoFilePath(cfg, repoPath)
-	if err != nil {
-		return nil, err
-	}
-
-	// Expand source path
-	expandedSource, err := config.ExpandPath(sourcePath, cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	// 1. Move file to repo
-	tx.operations = append(tx.operations, &MoveFileOp{
-		Src:    expandedSource,
-		Dst:    fullRepoPath,
-		Config: cfg,
-	})
-
-	// 2. Create symlink
-	tx.operations = append(tx.operations, &CreateSymlinkOp{
-		Target: fullRepoPath,
-		Link:   expandedSource,
-		Config: cfg,
-	})
-
-	// 3. Add to config
-	tx.operations = append(tx.operations, &AddToConfigOp{
-		Config: cfg,
-		File:   mf,
-	})
-
-	return tx, nil
-}
-
-// ExecuteAll executes all operations in the transaction
 func (t *Transaction) ExecuteAll() error {
 	for _, op := range t.operations {
 		if err := t.Execute(op); err != nil {

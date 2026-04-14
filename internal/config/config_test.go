@@ -4,17 +4,14 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestGetDefaultIgnorePatterns(t *testing.T) {
-	// Act
 	patterns := GetDefaultIgnorePatterns()
 
-	// Assert
 	assert.NotEmpty(t, patterns, "GetDefaultIgnorePatterns() returned empty slice")
 
 	expected := []string{"*.key", ".env", "id_rsa", "*.swp", ".DS_Store"}
@@ -31,15 +28,11 @@ func TestGetDefaultIgnorePatterns(t *testing.T) {
 }
 
 func TestNewDefaultConfig(t *testing.T) {
-	// Act
 	cfg, err := NewDefaultConfig()
 
-	// Assert
 	assert.NoError(t, err, "NewDefaultConfig() error")
-	assert.Equal(t, CurrentConfigVersion, cfg.Version, "Version")
 	assert.True(t, cfg.GitEnabled, "GitEnabled should be true by default")
 	assert.NotEmpty(t, cfg.IgnorePatterns, "IgnorePatterns should not be empty")
-	assert.Empty(t, cfg.ManagedFiles, "ManagedFiles should be empty initially")
 }
 
 func TestNewDefaultConfigLoggerNotNil(t *testing.T) {
@@ -54,58 +47,16 @@ func TestNewDefaultConfigLoggerNotNil(t *testing.T) {
 
 func TestSaveConfigWithNilLogger(t *testing.T) {
 	cfg := &Config{
-		Logger:       nil,
-		Version:      CurrentConfigVersion,
-		RepoPath:     t.TempDir(),
-		ManagedFiles: []ManagedFile{},
+		Logger: nil,
 	}
 
-	// Should not panic
 	err := cfg.SaveConfig()
 	if err != nil {
 		t.Logf("SaveConfig returned error: %v", err)
 	}
 }
 
-func TestGetRepoFilePathWithNilLogger(t *testing.T) {
-	cfg := &Config{
-		Logger:       nil,
-		RepoPath:     "/tmp/test",
-		ManagedFiles: []ManagedFile{},
-	}
-
-	// Should not panic
-	_, err := GetRepoFilePath(cfg, "test.txt")
-	if err != nil {
-		t.Logf("GetRepoFilePath returned error: %v", err)
-	}
-}
-
-func TestRemoveManagedFileErrorHandling(t *testing.T) {
-	cfg, _ := NewDefaultConfig()
-
-	// Test that non-existent file returns error
-	err := cfg.RemoveManagedFile("~/.nonexistent")
-	if err == nil {
-		t.Error("Should return error for non-existent file")
-	}
-}
-
-func TestGetManagedFileErrorHandling(t *testing.T) {
-	cfg, _ := NewDefaultConfig()
-
-	// Test that invalid paths return error
-	mf, err := cfg.GetManagedFile("../../../etc/passwd")
-	if err == nil {
-		t.Error("Should return error for path traversal attempt")
-	}
-	if mf != nil {
-		t.Error("Should not return managed file for invalid path")
-	}
-}
-
 func TestExpandGlobErrorHandling(t *testing.T) {
-	// Test that invalid glob patterns return error
 	tests := []string{
 		"",
 		"[",
@@ -119,213 +70,7 @@ func TestExpandGlobErrorHandling(t *testing.T) {
 	}
 }
 
-func TestAddManagedFileValidation(t *testing.T) {
-	cfg, _ := NewDefaultConfig()
-
-	// Test empty paths
-	tests := []ManagedFile{
-		{SourcePath: "", RepoPath: "test", AddedAt: time.Now()},
-		{SourcePath: "~/.test", RepoPath: "", AddedAt: time.Now()},
-		{SourcePath: "~/.test", RepoPath: "test", AddedAt: time.Time{}},
-	}
-
-	for i, mf := range tests {
-		err := cfg.AddManagedFile(mf)
-		if err == nil {
-			t.Errorf("Test %d: Should reject invalid managed file", i)
-		}
-	}
-}
-
-func TestConfigManagedFiles(t *testing.T) {
-	// Arrange
-	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	assert.NoError(t, err, "failed to create temp dir")
-	defer func() {
-		if err := os.RemoveAll(tempDir); err != nil {
-			t.Logf("failed to clean up temp dir: %v", err)
-		}
-	}()
-
-	cfg := &Config{
-		Version:        CurrentConfigVersion,
-		RepoPath:       filepath.Join(tempDir, "files"),
-		GitEnabled:     false,
-		IgnorePatterns: []string{},
-		ManagedFiles:   []ManagedFile{},
-	}
-
-	// Act & Assert
-	assert.False(t, cfg.IsManaged("~/.zshrc"), "IsManaged() should return false for unmanaged file")
-
-	mf := ManagedFile{
-		SourcePath: "~/.zshrc",
-		RepoPath:   "shell/zshrc",
-		AddedAt:    time.Now(),
-	}
-	cfg.ManagedFiles = append(cfg.ManagedFiles, mf)
-
-	assert.True(t, cfg.IsManaged("~/.zshrc"), "IsManaged() should return true for managed file")
-
-	got, err := cfg.GetManagedFile("~/.zshrc")
-	assert.NoError(t, err, "GetManagedFile() error")
-	assert.Equal(t, "shell/zshrc", got.RepoPath, "GetManagedFile().RepoPath")
-
-	_, err = cfg.GetManagedFile("~/.nonexistent")
-	assert.Error(t, err, "GetManagedFile() should return error for non-existent file")
-}
-
-func TestGetUncommittedFiles(t *testing.T) {
-	// Arrange
-	cfg := &Config{
-		Version:    CurrentConfigVersion,
-		RepoPath:   "~/.dotcor/files",
-		GitEnabled: true,
-		ManagedFiles: []ManagedFile{
-			{
-				SourcePath:     "~/.zshrc",
-				RepoPath:       "shell/zshrc",
-				HasUncommitted: false,
-			},
-			{
-				SourcePath:     "~/.bashrc",
-				RepoPath:       "shell/bashrc",
-				HasUncommitted: true,
-			},
-			{
-				SourcePath:     "~/.vimrc",
-				RepoPath:       "vim/vimrc",
-				HasUncommitted: true,
-			},
-		},
-	}
-
-	// Act
-	uncommitted := cfg.GetUncommittedFiles()
-
-	// Assert
-	assert.Equal(t, 2, len(uncommitted), "GetUncommittedFiles() returned wrong number of files")
-
-	for _, f := range uncommitted {
-		assert.True(t, f.HasUncommitted, "GetUncommittedFiles() returned file without uncommitted flag: %s", f.SourcePath)
-	}
-}
-
-func TestMarkAsUncommitted_UpdatesFileFlag(t *testing.T) {
-	// Arrange
-	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	assert.NoError(t, err, "failed to create temp dir")
-	defer func() {
-		if err := os.RemoveAll(tempDir); err != nil {
-			t.Logf("failed to clean up temp dir: %v", err)
-		}
-	}()
-
-	cfg := &Config{
-		Version:        CurrentConfigVersion,
-		RepoPath:       filepath.Join(tempDir, "files"),
-		GitEnabled:     false,
-		IgnorePatterns: []string{},
-		ManagedFiles: []ManagedFile{
-			{
-				SourcePath:     "~/.zshrc",
-				RepoPath:       "shell/zshrc",
-				AddedAt:        time.Now(),
-				HasUncommitted: false,
-			},
-		},
-	}
-
-	// Act
-	err = cfg.MarkAsUncommitted("~/.zshrc")
-
-	// Assert
-	assert.NoError(t, err, "MarkAsUncommitted() should not error")
-
-	mf, err := cfg.GetManagedFile("~/.zshrc")
-	assert.NoError(t, err, "GetManagedFile() should not error")
-	assert.True(t, mf.HasUncommitted, "MarkAsUncommitted() should set HasUncommitted to true")
-}
-
-func TestClearUncommitted_ClearsFileFlag(t *testing.T) {
-	// Arrange
-	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	assert.NoError(t, err, "failed to create temp dir")
-	defer func() {
-		if err := os.RemoveAll(tempDir); err != nil {
-			t.Logf("failed to clean up temp dir: %v", err)
-		}
-	}()
-
-	cfg := &Config{
-		Version:        CurrentConfigVersion,
-		RepoPath:       filepath.Join(tempDir, "files"),
-		GitEnabled:     false,
-		IgnorePatterns: []string{},
-		ManagedFiles: []ManagedFile{
-			{
-				SourcePath:     "~/.zshrc",
-				RepoPath:       "shell/zshrc",
-				AddedAt:        time.Now(),
-				HasUncommitted: true,
-			},
-		},
-	}
-
-	// Act
-	err = cfg.ClearUncommitted("~/.zshrc")
-
-	// Assert
-	assert.NoError(t, err, "ClearUncommitted() should not error")
-
-	mf, err := cfg.GetManagedFile("~/.zshrc")
-	assert.NoError(t, err, "GetManagedFile() should not error")
-	assert.False(t, mf.HasUncommitted, "ClearUncommitted() should set HasUncommitted to false")
-}
-
-func TestGetUncommittedFiles_ReturnsOnlyFlagged(t *testing.T) {
-	// Arrange
-	cfg := &Config{
-		Version:    CurrentConfigVersion,
-		RepoPath:   "~/.dotcor/files",
-		GitEnabled: false,
-		ManagedFiles: []ManagedFile{
-			{
-				SourcePath:     "~/.zshrc",
-				RepoPath:       "shell/zshrc",
-				HasUncommitted: false,
-			},
-			{
-				SourcePath:     "~/.bashrc",
-				RepoPath:       "shell/bashrc",
-				HasUncommitted: true,
-			},
-			{
-				SourcePath:     "~/.vimrc",
-				RepoPath:       "vim/vimrc",
-				HasUncommitted: true,
-			},
-			{
-				SourcePath:     "~/.gitconfig",
-				RepoPath:       "git/gitconfig",
-				HasUncommitted: false,
-			},
-		},
-	}
-
-	// Act
-	uncommitted := cfg.GetUncommittedFiles()
-
-	// Assert
-	assert.Equal(t, 2, len(uncommitted), "GetUncommittedFiles() returned wrong number of files")
-
-	for _, f := range uncommitted {
-		assert.True(t, f.HasUncommitted, "GetUncommittedFiles() returned file without uncommitted flag: %s", f.SourcePath)
-	}
-}
-
 func TestSaveConfig_AtomicWrite(t *testing.T) {
-	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	assert.NoError(t, err, "failed to create temp dir")
 	defer func() {
@@ -335,33 +80,26 @@ func TestSaveConfig_AtomicWrite(t *testing.T) {
 	}()
 
 	configDir := filepath.Join(tempDir, ".dotcor")
-	configPath := filepath.Join(configDir, "config.yaml")
+	configPath := filepath.Join(configDir, ".dotcorrc")
 
 	cfg := &Config{
-		Version:        CurrentConfigVersion,
-		RepoPath:       filepath.Join(tempDir, "files"),
 		GitEnabled:     true,
 		IgnorePatterns: GetDefaultIgnorePatterns(),
-		ManagedFiles:   []ManagedFile{},
 	}
 
 	t.Setenv("HOME", tempDir)
 
-	// Act
 	err = cfg.SaveConfig()
 
-	// Assert
 	assert.NoError(t, err, "SaveConfig() should not error")
 	assert.FileExists(t, configPath, "SaveConfig() should create config file")
 
 	data, err := os.ReadFile(configPath)
 	assert.NoError(t, err, "failed to read config file")
-	assert.Contains(t, string(data), "version:", "SaveConfig() should write version")
-	assert.Contains(t, string(data), "repo_path:", "SaveConfig() should write repo_path")
+	assert.Contains(t, string(data), "git_enabled:", "SaveConfig() should write git_enabled")
 }
 
 func TestLoadConfig_CorruptFile_ReturnsError(t *testing.T) {
-	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	assert.NoError(t, err, "failed to create temp dir")
 	defer func() {
@@ -374,93 +112,19 @@ func TestLoadConfig_CorruptFile_ReturnsError(t *testing.T) {
 	err = os.MkdirAll(configDir, 0755)
 	assert.NoError(t, err, "failed to create config dir")
 
-	configPath := filepath.Join(configDir, "config.yaml")
+	configPath := filepath.Join(configDir, ".dotcorrc")
 	err = os.WriteFile(configPath, []byte("corrupt: yaml: content: [invalid"), 0644)
 	assert.NoError(t, err, "failed to write corrupt config")
 
 	t.Setenv("HOME", tempDir)
 
-	// Act
 	_, err = LoadConfig()
 
-	// Assert
 	assert.Error(t, err, "LoadConfig() should error for corrupt YAML")
 	assert.Contains(t, err.Error(), "parsing config file", "Error should indicate parsing failure")
 }
 
-func TestLoadConfig_VersionMismatch_Migrates(t *testing.T) {
-	// Arrange
-	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	assert.NoError(t, err, "failed to create temp dir")
-	defer func() {
-		if err := os.RemoveAll(tempDir); err != nil {
-			t.Logf("failed to clean up temp dir: %v", err)
-		}
-	}()
-
-	configDir := filepath.Join(tempDir, ".dotcor")
-	err = os.MkdirAll(configDir, 0755)
-	assert.NoError(t, err, "failed to create config dir")
-
-	configPath := filepath.Join(configDir, "config.yaml")
-	oldConfig := "repo_path: ~/.dotcor/files\ngit_enabled: true\n"
-	err = os.WriteFile(configPath, []byte(oldConfig), 0644)
-	assert.NoError(t, err, "failed to write old config (no version)")
-
-	t.Setenv("HOME", tempDir)
-
-	// Act
-	cfg, err := LoadConfig()
-
-	// Assert
-	assert.NoError(t, err, "LoadConfig() should not error")
-	assert.NotNil(t, cfg, "LoadConfig() should return config")
-	assert.Equal(t, CurrentConfigVersion, cfg.Version, "LoadConfig() should migrate empty version to current")
-}
-
-func TestRemoveManagedFile_BySourcePath_Deletes(t *testing.T) {
-	// Arrange
-	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	assert.NoError(t, err, "failed to create temp dir")
-	defer func() {
-		if err := os.RemoveAll(tempDir); err != nil {
-			t.Logf("failed to clean up temp dir: %v", err)
-		}
-	}()
-
-	cfg := &Config{
-		Version:        CurrentConfigVersion,
-		RepoPath:       filepath.Join(tempDir, "files"),
-		GitEnabled:     false,
-		IgnorePatterns: []string{},
-		ManagedFiles: []ManagedFile{
-			{
-				SourcePath: "~/.zshrc",
-				RepoPath:   "shell/zshrc",
-				AddedAt:    time.Now(),
-			},
-			{
-				SourcePath: "~/.bashrc",
-				RepoPath:   "shell/bashrc",
-				AddedAt:    time.Now(),
-			},
-		},
-	}
-
-	// Act
-	err = cfg.RemoveManagedFile("~/.zshrc")
-
-	// Assert
-	assert.NoError(t, err, "RemoveManagedFile() should not error")
-	assert.False(t, cfg.IsManaged("~/.zshrc"), "RemoveManagedFile() should remove file from config")
-	assert.True(t, cfg.IsManaged("~/.bashrc"), "RemoveManagedFile() should keep other files")
-
-	err = cfg.RemoveManagedFile("~/.nonexistent")
-	assert.Error(t, err, "RemoveManagedFile() should error for non-existent file")
-}
-
 func TestLoadConfigFromPath_LoadsCustomPath(t *testing.T) {
-	// Arrange
 	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
 	assert.NoError(t, err, "failed to create temp dir")
 	defer func() {
@@ -470,29 +134,23 @@ func TestLoadConfigFromPath_LoadsCustomPath(t *testing.T) {
 	}()
 
 	customConfigPath := filepath.Join(tempDir, "custom-config.yaml")
-	customConfigContent := "version: 1.0\nrepo_path: /custom/files\ngit_enabled: true\nmanaged_files:\n  - source_path: ~/.zshrc\n"
+	customConfigContent := "git_enabled: true\ngit_remote: git@github.com:user/dotfiles.git\n"
 	err = os.WriteFile(customConfigPath, []byte(customConfigContent), 0644)
 	assert.NoError(t, err, "failed to write custom config")
 
-	// Act
 	cfg, err := LoadConfigFromPath(customConfigPath)
 
-	// Assert
 	assert.NoError(t, err, "LoadConfigFromPath() should not error")
 	assert.NotNil(t, cfg, "LoadConfigFromPath() should return config")
-	assert.Equal(t, "/custom/files", cfg.RepoPath, "LoadConfigFromPath() should load correct repo_path")
 	assert.True(t, cfg.GitEnabled, "LoadConfigFromPath() should load git_enabled")
-	assert.Len(t, cfg.ManagedFiles, 1, "LoadConfigFromPath() should load managed files")
+	assert.Equal(t, "git@github.com:user/dotfiles.git", cfg.GitRemote, "LoadConfigFromPath() should load git_remote")
 }
 
 func TestLoadConfigFromPath_NonExistentPath_ReturnsError(t *testing.T) {
-	// Arrange
 	nonExistentPath := "/tmp/nonexistent-config-12345.yaml"
 
-	// Act
 	_, err := LoadConfigFromPath(nonExistentPath)
 
-	// Assert
 	assert.Error(t, err, "LoadConfigFromPath() should error for non-existent file")
 	assert.Contains(t, err.Error(), "reading config file", "Error should indicate file reading failure")
 }
@@ -520,4 +178,32 @@ func TestConfigFilePermissions(t *testing.T) {
 
 	mode := info.Mode().Perm()
 	assert.Equal(t, os.FileMode(0600), mode, "Config should be owner-only readable")
+}
+
+func TestGetConfigDir(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("HOME", tempDir)
+
+	configDir, err := GetConfigDir()
+	assert.NoError(t, err)
+	assert.Equal(t, filepath.Join(tempDir, ".dotcor"), configDir)
+}
+
+func TestGetConfigPath(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("HOME", tempDir)
+
+	configPath, err := GetConfigPath()
+	assert.NoError(t, err)
+	assert.Equal(t, filepath.Join(tempDir, ".dotcor", ".dotcorrc"), configPath)
+}
+
+func TestLoadConfig_NoFile_ReturnsDefault(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("HOME", tempDir)
+
+	cfg, err := LoadConfig()
+	assert.NoError(t, err)
+	assert.NotNil(t, cfg)
+	assert.True(t, cfg.GitEnabled)
 }

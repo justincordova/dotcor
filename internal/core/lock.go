@@ -205,7 +205,7 @@ func IsStale(lockPath string, cfg *config.Config) (bool, error) {
 	}
 
 	// Check if lock is older than configured timeout
-	if time.Since(info.Timestamp) > cfg.LockTimeout {
+	if time.Since(info.Timestamp) > 5*time.Minute {
 		cfg.Logger.Debug("lock is stale due to age", "pid", info.PID, "age", time.Since(info.Timestamp))
 		return true, nil
 	}

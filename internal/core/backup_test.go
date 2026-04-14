@@ -24,8 +24,7 @@ func TestCreateBackup(t *testing.T) {
 	logger := slog.New(handler)
 
 	cfg := &config.Config{
-		Logger:   logger,
-		RepoPath: t.TempDir(),
+		Logger: logger,
 	}
 
 	sourceContent := []byte("original content")
@@ -51,8 +50,7 @@ func TestCreateBackup(t *testing.T) {
 func TestCreateBackupNonexistent(t *testing.T) {
 	// Arrange
 	cfg := &config.Config{
-		Logger:   slog.Default(),
-		RepoPath: t.TempDir(),
+		Logger: slog.Default(),
 	}
 
 	// Act
@@ -73,8 +71,7 @@ func TestRestoreBackup(t *testing.T) {
 	logger := slog.New(handler)
 
 	cfg := &config.Config{
-		Logger:   logger,
-		RepoPath: t.TempDir(),
+		Logger: logger,
 	}
 
 	backupContent := []byte("backup content")
@@ -107,8 +104,7 @@ func TestRestoreBackupCreatesParentDir(t *testing.T) {
 	logger := slog.New(handler)
 
 	cfg := &config.Config{
-		Logger:   logger,
-		RepoPath: t.TempDir(),
+		Logger: logger,
 	}
 
 	backupFile := filepath.Join(tempDir, "backup.txt")
@@ -130,8 +126,7 @@ func TestRestoreBackupCreatesParentDir(t *testing.T) {
 func TestBackupExists(t *testing.T) {
 	// Arrange
 	cfg := &config.Config{
-		Logger:   slog.Default(),
-		RepoPath: t.TempDir(),
+		Logger: slog.Default(),
 	}
 
 	// Act
@@ -144,8 +139,7 @@ func TestBackupExists(t *testing.T) {
 func TestGetBackupCount(t *testing.T) {
 	// Arrange
 	cfg := &config.Config{
-		Logger:   slog.Default(),
-		RepoPath: t.TempDir(),
+		Logger: slog.Default(),
 	}
 
 	// Act
@@ -159,8 +153,7 @@ func TestGetBackupCount(t *testing.T) {
 func TestGetTotalBackupSize(t *testing.T) {
 	// Arrange
 	cfg := &config.Config{
-		Logger:   slog.Default(),
-		RepoPath: t.TempDir(),
+		Logger: slog.Default(),
 	}
 
 	// Act
@@ -193,8 +186,7 @@ func TestTimestampFormat(t *testing.T) {
 func TestPreviewCleanup(t *testing.T) {
 	// Arrange
 	cfg := &config.Config{
-		Logger:   slog.Default(),
-		RepoPath: t.TempDir(),
+		Logger: slog.Default(),
 	}
 
 	// Act
@@ -230,8 +222,7 @@ func TestCreateBackup_LargeFile(t *testing.T) {
 	logger := slog.New(handler)
 
 	cfg := &config.Config{
-		Logger:   logger,
-		RepoPath: t.TempDir(),
+		Logger: logger,
 	}
 
 	sourceContent := make([]byte, 1024*1024)
@@ -266,8 +257,7 @@ func TestRestoreBackup_OverwritesExisting(t *testing.T) {
 	logger := slog.New(handler)
 
 	cfg := &config.Config{
-		Logger:   logger,
-		RepoPath: t.TempDir(),
+		Logger: logger,
 	}
 
 	backupContent := []byte("backup content")

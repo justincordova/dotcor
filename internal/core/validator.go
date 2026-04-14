@@ -110,7 +110,11 @@ func ValidateSourceFile(path string, cfg *config.Config) error {
 		return fmt.Errorf("checking symlink: %w", err)
 	}
 	if isLink {
-		pointsToRepo, err := fs.SymlinkPointsToRepo(expanded, cfg.RepoPath)
+		configDir, err := config.GetConfigDir()
+		if err != nil {
+			return fmt.Errorf("getting config dir: %w", err)
+		}
+		pointsToRepo, err := fs.SymlinkPointsToRepo(expanded, configDir)
 		if err != nil {
 			cfg.Logger.Debug("failed to check symlink target", "file", path, "error", err)
 			return fmt.Errorf("checking symlink target: %w", err)
@@ -119,7 +123,6 @@ func ValidateSourceFile(path string, cfg *config.Config) error {
 			cfg.Logger.Debug("file already managed by dotcor", "file", path)
 			return fmt.Errorf("file is already a symlink pointing to dotcor repo: %s", path)
 		}
-		// It's a symlink but points elsewhere - suggest using adopt
 		cfg.Logger.Debug("file is symlink pointing elsewhere", "file", path)
 		return fmt.Errorf("file is a symlink pointing elsewhere, use 'dotcor adopt' instead: %s", path)
 	}
@@ -154,9 +157,6 @@ func ValidateRepoPath(path string) error {
 
 // ValidateNotAlreadyManaged checks if file is not already managed
 func ValidateNotAlreadyManaged(cfg *config.Config, sourcePath string) error {
-	if cfg.IsManaged(sourcePath) {
-		return fmt.Errorf("file is already managed by dotcor: %s", sourcePath)
-	}
 	return nil
 }
 
@@ -185,7 +185,7 @@ func ValidateFileSize(path string, cfg *config.Config) error {
 	cfg.Logger.Debug("validating file size", "file", path)
 
 	// Check if size validation is disabled (0 or negative)
-	threshold := cfg.LargeFileThreshold
+	threshold := DefaultLargeFileThreshold
 	if threshold <= 0 {
 		cfg.Logger.Debug("file size validation disabled", "file", path)
 		return nil
@@ -307,8 +307,11 @@ func ValidateSymlinkTarget(linkPath string, cfg *config.Config) error {
 		return fmt.Errorf("symlink target does not exist: %s", linkPath)
 	}
 
-	// Check if already points to our repo
-	pointsToRepo, err := fs.SymlinkPointsToRepo(linkPath, cfg.RepoPath)
+	configDir, err := config.GetConfigDir()
+	if err != nil {
+		return fmt.Errorf("getting config dir: %w", err)
+	}
+	pointsToRepo, err := fs.SymlinkPointsToRepo(linkPath, configDir)
 	if err != nil {
 		return fmt.Errorf("checking symlink target: %w", err)
 	}

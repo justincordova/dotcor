@@ -1,78 +1,58 @@
 package logger
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 
-	"github.com/spf13/cobra"
+	charmlog "github.com/charmbracelet/log"
 )
 
-func ConfigureFromFlags(cmd *cobra.Command) *slog.Logger {
-	debug, _ := cmd.Flags().GetBool("debug")
-	quiet, _ := cmd.Flags().GetBool("quiet")
-	logFile, _ := cmd.Flags().GetString("log-file")
-	jsonFormat, _ := cmd.Flags().GetBool("json")
-
-	// Check environment variable for debug mode
-	if !debug && os.Getenv("DOTCOR_DEBUG") != "" {
-		debug = true
+func New(level string, logFilePath string) *slog.Logger {
+	var lvl charmlog.Level
+	switch level {
+	case "debug":
+		lvl = charmlog.DebugLevel
+	case "info":
+		lvl = charmlog.InfoLevel
+	case "warn":
+		lvl = charmlog.WarnLevel
+	case "error":
+		lvl = charmlog.ErrorLevel
+	default:
+		lvl = charmlog.WarnLevel
 	}
 
-	level := levelFromFlags(debug, quiet)
-
-	var handler slog.Handler
-	if jsonFormat {
-		handler = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
-			Level: level,
-		})
-	} else {
-		handler = slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-			Level: level,
-			ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
-				if a.Key == "source_path" {
-					a.Key = "src"
-				}
-				if a.Key == "repo_path" {
-					a.Key = "repo"
-				}
-				if a.Key == "backup_path" {
-					a.Key = "backup"
-				}
-				return a
-			},
-		})
-	}
-
-	if logFile != "" {
-		file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if logFilePath == "" {
+		home, err := os.UserHomeDir()
 		if err != nil {
-			return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-				Level: level,
-			}))
-		}
-		if jsonFormat {
-			handler = slog.NewJSONHandler(file, &slog.HandlerOptions{
-				Level: level,
-			})
+			logFilePath = filepath.Join(os.TempDir(), "dotcor.log")
 		} else {
-			handler = slog.NewTextHandler(file, &slog.HandlerOptions{
-				Level: level,
-			})
+			logFilePath = filepath.Join(home, ".dotcor", "logs", "dotcor.log")
 		}
 	}
+
+	logDir := filepath.Dir(logFilePath)
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to create log directory %s: %v\n", logDir, err)
+		return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+			Level: slog.LevelWarn,
+		}))
+	}
+
+	file, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to open log file %s: %v\n", logFilePath, err)
+		return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+			Level: slog.LevelWarn,
+		}))
+	}
+
+	handler := charmlog.NewWithOptions(file, charmlog.Options{
+		ReportTimestamp: true,
+		Level:           lvl,
+	})
 
 	return slog.New(handler)
-}
-
-func levelFromFlags(debug, quiet bool) slog.Level {
-	switch {
-	case debug:
-		return slog.LevelDebug
-	case quiet:
-		return slog.LevelWarn
-	default:
-		// Default to WARN for consumers (clean output)
-		// Use DOTCOR_DEBUG=1 or --debug flag for development
-		return slog.LevelWarn
-	}
 }

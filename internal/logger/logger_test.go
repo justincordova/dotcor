@@ -1,60 +1,117 @@
 package logger
 
 import (
-	"bytes"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"testing"
 
-	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestConfigureFromFlags(t *testing.T) {
-	cmd := &cobra.Command{}
-	cmd.PersistentFlags().Bool("debug", false, "")
-	cmd.PersistentFlags().Bool("quiet", false, "")
-	cmd.PersistentFlags().String("log-file", "", "")
-	cmd.PersistentFlags().Bool("json", false, "")
+func TestNew_DefaultLevel(t *testing.T) {
+	tempDir := t.TempDir()
+	logPath := filepath.Join(tempDir, "test.log")
 
-	logger := ConfigureFromFlags(cmd)
-	if logger == nil {
-		t.Fatal("expected non-nil logger")
-	}
+	l := New("", logPath)
+	require.NotNil(t, l)
+
+	l.Warn("test message", "key", "value")
+
+	data, err := os.ReadFile(logPath)
+	require.NoError(t, err)
+	assert.NotEmpty(t, data, "log file should have content")
 }
 
-func TestLevelFromFlags(t *testing.T) {
-	tests := []struct {
-		name     string
-		debug    bool
-		quiet    bool
-		expected slog.Level
-	}{
-		{"default", false, false, slog.LevelWarn},
-		{"debug", true, false, slog.LevelDebug},
-		{"quiet", false, true, slog.LevelWarn},
-		{"debug overrides quiet", true, true, slog.LevelDebug},
-	}
+func TestNew_DebugLevel(t *testing.T) {
+	tempDir := t.TempDir()
+	logPath := filepath.Join(tempDir, "debug.log")
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := levelFromFlags(tt.debug, tt.quiet)
-			if got != tt.expected {
-				t.Errorf("levelFromFlags(%v, %v) = %v, want %v", tt.debug, tt.quiet, got, tt.expected)
-			}
-		})
-	}
+	l := New("debug", logPath)
+	require.NotNil(t, l)
+
+	l.Debug("debug message")
+	l.Info("info message")
+
+	data, err := os.ReadFile(logPath)
+	require.NoError(t, err)
+	content := string(data)
+	assert.Contains(t, content, "debug message")
+	assert.Contains(t, content, "info message")
 }
 
-func TestLogEmission(t *testing.T) {
-	var buf bytes.Buffer
-	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	})
-	logger := slog.New(handler)
+func TestNew_WarnLevel(t *testing.T) {
+	tempDir := t.TempDir()
+	logPath := filepath.Join(tempDir, "warn.log")
 
-	logger.Info("test message", "key", "value")
+	l := New("warn", logPath)
+	require.NotNil(t, l)
 
-	output := buf.String()
-	if len(output) == 0 {
-		t.Fatal("expected log output")
-	}
+	l.Debug("should not appear")
+	l.Warn("should appear")
+
+	data, err := os.ReadFile(logPath)
+	require.NoError(t, err)
+	content := string(data)
+	assert.NotContains(t, content, "should not appear")
+	assert.Contains(t, content, "should appear")
+}
+
+func TestNew_ErrorLevel(t *testing.T) {
+	tempDir := t.TempDir()
+	logPath := filepath.Join(tempDir, "error.log")
+
+	l := New("error", logPath)
+	require.NotNil(t, l)
+
+	l.Warn("should not appear")
+	l.Error("should appear")
+
+	data, err := os.ReadFile(logPath)
+	require.NoError(t, err)
+	content := string(data)
+	assert.NotContains(t, content, "should not appear")
+	assert.Contains(t, content, "should appear")
+}
+
+func TestNew_CreatesLogDirectory(t *testing.T) {
+	tempDir := t.TempDir()
+	logPath := filepath.Join(tempDir, "nested", "dir", "test.log")
+
+	l := New("info", logPath)
+	require.NotNil(t, l)
+
+	l.Info("test")
+
+	_, err := os.Stat(filepath.Dir(logPath))
+	assert.NoError(t, err, "should create log directory")
+}
+
+func TestNew_DefaultLogPath(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("HOME", tempDir)
+
+	l := New("info", "")
+	require.NotNil(t, l)
+
+	l.Info("test message")
+
+	expectedPath := filepath.Join(tempDir, ".dotcor", "logs", "dotcor.log")
+	_, err := os.Stat(expectedPath)
+	assert.NoError(t, err, "should create default log file at ~/.dotcor/logs/dotcor.log")
+}
+
+func TestNew_InvalidPath_Fallback(t *testing.T) {
+	l := New("info", "")
+	assert.NotNil(t, l)
+}
+
+func TestNew_ReturnsSlogLogger(t *testing.T) {
+	tempDir := t.TempDir()
+	logPath := filepath.Join(tempDir, "test.log")
+
+	l := New("info", logPath)
+
+	var _ *slog.Logger = l
 }

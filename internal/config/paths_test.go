@@ -13,11 +13,8 @@ import (
 func testConfig() *Config {
 	return &Config{
 		Logger:         slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})),
-		Version:        CurrentConfigVersion,
-		RepoPath:       "~/.dotcor/files",
 		GitEnabled:     true,
 		IgnorePatterns: GetDefaultIgnorePatterns(),
-		ManagedFiles:   []ManagedFile{},
 	}
 }
 
