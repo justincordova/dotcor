@@ -102,9 +102,11 @@ No `managed_files` list. No `version` field. State is discovered from the filesy
 |---------|---------|
 | `github.com/charmbracelet/bubbletea` | TUI framework |
 | `github.com/charmbracelet/lipgloss` | Styling and layout |
-| `github.com/charmbracelet/bubbles` | List, table, viewport, textinput, help, spinner |
+| `github.com/charmbracelet/bubbles` | List, viewport, textinput, help, spinner, progress, table |
 | `github.com/erikgeiser/bubblezone` | Mouse click and scroll zones |
 | `github.com/charmbracelet/harmonica` | Smooth animations (spinners, progress) |
+| `github.com/aymanbagabas/go-osc52/v2` | Clipboard support (copy paths, diff content) |
+| `github.com/charmbracelet/log` | Charm-native structured logger (replaces custom slog setup) |
 
 ### Color Scheme: Rosé Pine
 
