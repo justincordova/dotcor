@@ -6,25 +6,26 @@ import (
 )
 
 type keyMap struct {
-	Up      key.Binding
-	Down    key.Binding
-	Enter   key.Binding
-	Tab     key.Binding
-	Esc     key.Binding
-	Stow    key.Binding
-	Unstow  key.Binding
-	Sync    key.Binding
-	Add     key.Binding
-	Remove  key.Binding
-	Diff    key.Binding
-	History key.Binding
-	Logs    key.Binding
-	Help    key.Binding
-	Search  key.Binding
-	Push    key.Binding
-	Pull    key.Binding
-	Restore key.Binding
-	Quit    key.Binding
+	Up       key.Binding
+	Down     key.Binding
+	Enter    key.Binding
+	Tab      key.Binding
+	Esc      key.Binding
+	Stow     key.Binding
+	Unstow   key.Binding
+	Sync     key.Binding
+	Add      key.Binding
+	Remove   key.Binding
+	Diff     key.Binding
+	History  key.Binding
+	Logs     key.Binding
+	Help     key.Binding
+	Search   key.Binding
+	Push     key.Binding
+	Pull     key.Binding
+	Restore  key.Binding
+	Settings key.Binding
+	Quit     key.Binding
 }
 
 func newKeyMap() keyMap {
@@ -101,6 +102,10 @@ func newKeyMap() keyMap {
 			key.WithKeys("r"),
 			key.WithHelp("r", "restore"),
 		),
+		Settings: key.NewBinding(
+			key.WithKeys("g"),
+			key.WithHelp("g", "settings"),
+		),
 		Quit: key.NewBinding(
 			key.WithKeys("q"),
 			key.WithHelp("q", "quit"),
@@ -120,7 +125,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 		{k.Stow, k.Unstow, k.Add, k.Remove},
 		{k.Sync, k.Push, k.Pull, k.Diff},
 		{k.History, k.Restore, k.Logs, k.Search},
-		{k.Help, k.Esc, k.Quit},
+		{k.Settings, k.Help, k.Esc, k.Quit},
 	}
 }
 

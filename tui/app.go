@@ -15,6 +15,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/justincordova/dotcor/internal/config"
+	"github.com/justincordova/dotcor/internal/core"
 	"github.com/justincordova/dotcor/internal/git"
 	"github.com/justincordova/dotcor/internal/stow"
 )
@@ -88,6 +89,19 @@ type Model struct {
 	logLevel     string
 	loading      bool
 	expanded     map[int]bool
+
+	addInput   textinput.Model
+	addStep    int
+	addPkgName string
+	addPreview string
+	addSecrets []string
+
+	commits        []git.CommitInfo
+	selectedCommit int
+
+	settingsStep  int
+	settingsInput textinput.Model
+	backups       []core.BackupInfo
 }
 
 func NewModel(cfg *config.Config) Model {
@@ -102,24 +116,34 @@ func NewModel(cfg *config.Config) Model {
 	si.Placeholder = "search packages..."
 	si.CharLimit = 50
 
+	ai := textinput.New()
+	ai.Placeholder = "~/.config/app/config"
+	ai.CharLimit = 200
+
+	sti := textinput.New()
+	sti.Placeholder = "https://github.com/..."
+	sti.CharLimit = 200
+
 	vp := viewport.New(80, 20)
 
 	keys := newKeyMap()
 
 	return Model{
-		cfg:         cfg,
-		repoDir:     repoDir,
-		homeDir:     homeDir,
-		spinner:     sp,
-		help:        newHelpModel(),
-		keys:        keys,
-		searchInput: si,
-		viewport:    vp,
-		expanded:    make(map[int]bool),
-		logLevel:    "info",
-		loading:     true,
-		width:       80,
-		height:      24,
+		cfg:           cfg,
+		repoDir:       repoDir,
+		homeDir:       homeDir,
+		spinner:       sp,
+		help:          newHelpModel(),
+		keys:          keys,
+		searchInput:   si,
+		addInput:      ai,
+		settingsInput: sti,
+		viewport:      vp,
+		expanded:      make(map[int]bool),
+		logLevel:      "info",
+		loading:       true,
+		width:         80,
+		height:        24,
 	}
 }
 
@@ -206,6 +230,50 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmds = append(cmds, fetchGitStatus(m.repoDir))
 		return m, tea.Batch(cmds...)
+
+	case addResultMsg:
+		if msg.err != nil {
+			m.err = msg.err
+		} else {
+			m.statusMsg = msg.msg
+			m.addStep = 0
+			m.addInput.SetValue("")
+			m.addInput.Blur()
+			m.addPkgName = ""
+			m.addPreview = ""
+			m.addSecrets = nil
+			m.activeView = DashboardView
+			cmds = append(cmds, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+				return tickMsg(t)
+			}))
+		}
+		cmds = append(cmds, m.refreshAll())
+		return m, tea.Batch(cmds...)
+
+	case diffMsg:
+		return m.updateDiff(msg)
+
+	case historyMsg:
+		return m.updateHistory(msg)
+
+	case settingsMsg:
+		if msg.err != nil {
+			m.err = msg.err
+		} else {
+			m.statusMsg = msg.msg
+			cmds = append(cmds, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+				return tickMsg(t)
+			}))
+		}
+		return m, tea.Batch(cmds...)
+
+	case backupsMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		m.backups = msg.backups
+		return m, nil
 	}
 
 	if m.searching {
@@ -217,6 +285,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateHelp(msg)
 	case LogsView:
 		return m.updateLogs(msg)
+	case AddView:
+		return m.updateAdd(msg)
+	case DiffView:
+		return m.updateDiff(msg)
+	case HistoryView:
+		return m.updateHistory(msg)
+	case SettingsView:
+		return m.updateSettings(msg)
 	}
 
 	return m.updateDashboard(msg)
@@ -273,6 +349,28 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, m.keys.Pull):
 			return m, m.pullRepo()
+
+		case key.Matches(msg, m.keys.Add):
+			m.activeView = AddView
+			m.addStep = 0
+			m.addInput.SetValue("")
+			m.addInput.Focus()
+			return m, textinput.Blink
+
+		case key.Matches(msg, m.keys.Diff):
+			m.activeView = DiffView
+			return m, getDiff(m)
+
+		case key.Matches(msg, m.keys.History):
+			m.activeView = HistoryView
+			m.commits = nil
+			m.selectedCommit = 0
+			return m, getFileHistory(m)
+
+		case key.Matches(msg, m.keys.Settings):
+			m.activeView = SettingsView
+			m.settingsStep = 0
+			return m, nil
 		}
 	}
 
@@ -363,6 +461,14 @@ func (m Model) View() string {
 		return viewHelp(m)
 	case LogsView:
 		return viewLogs(m)
+	case AddView:
+		return viewAdd(m)
+	case DiffView:
+		return viewDiff(m)
+	case HistoryView:
+		return viewHistory(m)
+	case SettingsView:
+		return viewSettings(m)
 	default:
 		return viewDashboard(m)
 	}
