@@ -10,146 +10,89 @@ make binary
 # Or directly
 go build -o bin/dotcor ./cmd/dotcor
 
-# Then use it
+# Then run the TUI
 ./bin/dotcor
 ```
 
-### Install to PATH
+### Run with Test Environment
 ```bash
-make install
-# Now you can run: dotcor from anywhere
+# Use DOTCOR_DIR env var to test with isolated environment
+DOTCOR_DIR=/tmp/dotcor-test ./bin/dotcor
 ```
 
 ---
 
-## Testing Commands Safely
+## TUI Testing
 
-## Quick Start
+### Interactive Mode
+The TUI launches automatically when running `./bin/dotcor`. Use keyboard navigation:
 
-### Build the Binary
+- `j/k` or arrow keys — navigate up/down
+- `Enter` — select/open
+- `?` — toggle help
+- `q` — quit
+
+### Test with Isolated Environment
+
 ```bash
-# Using Makefile (recommended)
-make binary
+# Create test directory with packages
+mkdir -p /tmp/dotcor-test/git /tmp/dotcor-test/nvim /tmp/dotcor-test/starship /tmp/dotcor-test/tmux /tmp/dotcor-test/zsh
 
-# Or directly
-go build -o bin/dotcor ./cmd/dotcor
+# Add test files to each package
+echo "git config" > /tmp/dotcor-test/git/config
+echo "nvim config" > /tmp/dotcor-test/nvim/init.lua
+echo "starship config" > /tmp/dotcor-test/starship/config.toml
+echo "tmux config" > /tmp/dotcor-test/tmux/config
+echo "zsh config" > /tmp/dotcor-test/zshrc
 
-# Then use it
-./bin/dotcor
+# Run with test environment
+DOTCOR_DIR=/tmp/dotcor-test ./bin/dotcor
 ```
 
-### Install to PATH
-```bash
-make install
-# Now you can run: dotcor from anywhere
-```
+The TUI should show 5 packages in the left sidebar.
 
 ---
 
-## Testing Commands Safely
+## Debug Mode
 
-The project includes a dedicated manual testing environment in **`.manual-test/`** (in project root). This directory is gitignored so test files won't be committed.
-
-### Option 1: Interactive Testing (Recommended!)
+### Enable Debug Output
 ```bash
-make test-interactive
-# This opens a shell with:
-#   - HOME set to .manual-test/
-#   - PATH includes bin/ (so 'dotcor' uses v0.7.3)
-#   - Test environment isolated from real dotfiles
+# Check startup messages in footer
+DOTCOR_DIR=/tmp/dotcor-test ./bin/dotcor
 ```
 
-Now you can run commands normally:
-```bash
-dotcor init          # Uses built binary (v0.7.3)
-dotcor status
-dotcor add ~/.testrc
-```
+The footer shows: `repo: <repoDir>, home: <homeDir>`
 
-**Important:** In interactive mode, `dotcor` uses the built binary from `bin/` (not system version).
+### Check Config Resolution
+```go
+// In internal/config/config.go - GetConfigDir() checks:
+// 1. DOTCOR_DIR environment variable (for testing)
+// 2. ~/.dotcor/ directory
+```
 
 ---
 
 ## Common Manual Test Scenarios
 
-### 1. Test Init Flow
+### 1. Test Package Discovery
 ```bash
-# Create test directory
-mkdir -p /tmp/test-dotcor
-cd /tmp/test-dotcor
+# Ensure test packages exist
+ls /tmp/dotcor-test/
 
-# Initialize
-./bin/dotcor init
-
-# Check what was created
-ls -la ~/.dotcor/
+# Run and check if packages appear in TUI
+DOTCOR_DIR=/tmp/dotcor-test ./bin/dotcor
 ```
 
-### 2. Test Adding Files
+### 2. Test Link Operation
 ```bash
-# Create a test file
-echo "export TEST_VAR='hello'" > ~/.testrc
-
-# Add it
-./bin/dotcor add ~/.testrc
-
-# Verify symlink created
-ls -la ~/.testrc
-
-# Check list
-./bin/dotcor list
+# Select a package in TUI and press 'l' to link
+# Should create symlinks in home directory
 ```
 
-### 3. Test Status
+### 3. Test Unlink Operation
 ```bash
-# Check status of all files
-./bin/dotcor status
-
-# Check quick status
-./bin/dotcor status --quick
-
-# Check specific file
-./bin/dotcor status ~/.testrc
-```
-
-### 4. Test Editing Files (Symlink Magic)
-```bash
-# Edit the file normally
-echo "export NEW_VAR='world'" >> ~/.testrc
-
-# Changes are immediately in repo!
-./bin/dotcor status
-
-# Commit the changes
-./bin/dotcor sync
-```
-
-### 5. Test Removing Files
-```bash
-# Stop managing a file
-./bin/dotcor remove ~/.testrc
-
-# Choose options interactively
-# Keep file? y
-# Delete from repo? n
-```
-
-### 6. Test History/Restore
-```bash
-# View history
-./bin/dotcor history ~/.testrc
-
-# Restore from specific commit
-./bin/dotcor restore ~/.testrc --to=HEAD~1
-```
-
-### 7. Test Backup/Restore
-```bash
-# View backups
-./bin/dotcor list-backups
-
-# See diff from backup
-./bin/dotcor backup-diff ~/.testrc
+# Select a linked package and press 'u' to unlink
+# Should remove symlinks
 ```
 
 ---
@@ -158,165 +101,44 @@ echo "export NEW_VAR='world'" >> ~/.testrc
 
 ### Complete E2E Test
 ```bash
-# 1. Clean slate
-rm -rf ~/.dotcor
-rm -f ~/.testrc ~/.config/nvim/*
+# 1. Create test packages
+mkdir -p /tmp/dotcor-test/git /tmp/dotcor-test/nvim /tmp/dotcor-test/zsh
 
-# 2. Initialize
-./bin/dotcor init
+# 2. Add test files
+echo "[user]" > /tmp/dotcor-test/git/config
+echo "name = Test" >> /tmp/dotcor-test/git/config
+echo "set nocompatible" > /tmp/dotcor-test/nvim/init.lua
+echo "export ZSH=\"$HOME/.oh-my-zsh\"" > /tmp/dotcor-test/zshrc
 
-# 3. Create test files
-mkdir -p ~/.config/nvim
-echo "vim config" > ~/.config/nvim/init.lua
-echo "zsh config" > ~/.zshrc
+# 3. Run TUI
+DOTCOR_DIR=/tmp/dotcor-test ./bin/dotcor
 
-# 4. Add files
-./bin/dotcor add ~/.zshrc
-./bin/dotcor add ~/.config/nvim/*.lua
-
-# 5. Check status
-./bin/dotcor status
-./bin/dotcor list
-
-# 6. Edit file (symlink magic test)
-echo "new line" >> ~/.zshrc
-./bin/dotcor status  # Should show uncommitted
-
-# 7. Sync
-./bin/dotcor sync
-
-# 8. History
-./bin/dotcor history ~/.zshrc
-
-# 9. Restore
-./bin/dotcor restore ~/.zshrc --to=HEAD~1
-
-# 10. Remove
-./bin/dotcor remove ~/.zshrc
-```
-
----
-
-## Testing Specific Features
-
-### Test Glob Patterns
-```bash
-mkdir -p ~/.config/nvim
-echo "1" > ~/.config/nvim/a.lua
-echo "2" > ~/.config/nvim/b.lua
-echo "3" > ~/.config/nvim/c.lua
-
-# Add all at once
-./bin/dotcor add ~/.config/nvim/*.lua
-```
-
-### Test Dry Run
-```bash
-# See what would happen without making changes
-./bin/dotcor add ~/.testrc --dry-run
-./bin/dotcor remove ~/.testrc --dry-run
-```
-
-### Test Categories
-```bash
-# List grouped by category
-./bin/dotcor list --category
-
-# Show count per category
-./bin/dotcor list --categories
-```
-
-### Test Doctor
-```bash
-# Check health
-./bin/dotcor doctor
-
-# Auto-fix issues
-./bin/dotcor doctor --fix
+# 4. Navigate to package, press 'l' to link
+# 5. Verify symlinks created in home
+ls -la ~/
 ```
 
 ---
 
 ## Debugging Manual Tests
 
-### Enable Debug Logging
+### Check Package Discovery
 ```bash
-./bin/dotcor status --debug
+# Add debug logging in internal/stow/package.go
+# DiscoverPackages() function
 ```
 
-### Write Logs to File
-```bash
-./bin/dotcor add ~/.testrc --log-file=/tmp/dotcor-debug.log
-cat /tmp/dotcor-debug.log
+### Check Config
+```go
+// Verify config.GetConfigDir() returns correct path
+// Priority: DOTCOR_DIR env > ~/.dotcor/
 ```
 
-### Check Lock Issues
-```bash
-# View lock status
-cat ~/.dotcor/.lock
-
-# Force remove stale lock
-rm ~/.dotcor/.lock
+### Check Exclusions
+```go
+// isExcluded() in internal/stow/package.go
+// Excludes: .git, .cache, node_modules, .dotcorrc, and any path starting with .
 ```
-
----
-
-## Testing with Git Integration
-
-### Setup Test Git Repo
-```bash
-# Initialize with git remote
-cd ~/.dotcor/files
-git init
-git remote add origin git@github.com:you/test-repo.git
-
-# Test sync
-cd ~
-./bin/dotcor init
-./bin/dotcor add ~/.testrc
-./bin/dotcor sync  # Should commit and push
-```
-
----
-
-## Performance Testing
-
-### Add Many Files
-```bash
-# Create 100 test files
-for i in {1..100}; do
-  echo "content $i" > ~/.test-file-$i
-  ./bin/dotcor add ~/.test-file-$i
-done
-
-# Check performance
-time ./bin/dotcor status
-```
-
----
-
-## Cleanup After Testing
-
-```bash
-# Remove all test files and dotcor
-rm -rf ~/.dotcor
-rm -f ~/.testrc ~/.test-file-*
-rm -rf ~/.config/nvim
-
-# Verify clean
-ls -la ~/.dotcor  # Should fail - directory doesn't exist
-```
-
----
-
-## Tips for Manual Testing
-
-1. **Use tab completion**: `dotcor <TAB>` shows available commands
-2. **Check --help**: Every command has `--help` for options
-3. **Test with empty repo**: Verify empty state handling
-4. **Test with corrupted data**: Try missing files, broken symlinks
-5. **Test edge cases**: Empty files, large files, special characters
-6. **Test with actual tools**: `vim ~/.zshrc` and verify sync works
 
 ---
 
@@ -324,16 +146,24 @@ ls -la ~/.dotcor  # Should fail - directory doesn't exist
 
 ```bash
 # Edit code
-vim cmd/dotcor/status.go
+vim internal/stow/package.go
 
 # Rebuild
 make binary
 
 # Test immediately
-./bin/dotcor status
+DOTCOR_DIR=/tmp/dotcor-test ./bin/dotcor
 
 # Quick test cycle
-make binary && ./bin/dotcor status
+make binary && DOTCOR_DIR=/tmp/dotcor-test ./bin/dotcor
 ```
 
-This rapid edit-build-test cycle is the main advantage of building a binary over `go run`.
+---
+
+## Tips for Manual Testing
+
+1. **Use DOTCOR_DIR** — isolates test environment from real ~/.dotcor/
+2. **Check footer** — shows repoDir and homeDir for debugging
+3. **Test with empty packages** — verify empty state handling
+4. **Test with excluded dirs** — verify .git, .cache are not shown as packages
+5. **Test link/unlink** — verify symlinks created and removed correctly

@@ -46,13 +46,14 @@ var excludedDirs = map[string]bool{
 	"logs":               true,
 	"backups":            true,
 	".stow-local-ignore": true,
+	".dotcorrc":          true,
 }
 
 func isExcluded(name string) bool {
 	if excludedDirs[name] {
 		return true
 	}
-	if strings.HasPrefix(name, ".") {
+	if strings.HasPrefix(name, ".") && name != ".dotcorrc" {
 		return true
 	}
 	return false

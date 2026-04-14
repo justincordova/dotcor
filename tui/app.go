@@ -106,7 +106,7 @@ type Model struct {
 
 func NewModel(cfg *config.Config) Model {
 	homeDir, _ := os.UserHomeDir()
-	repoDir := homeDir
+	repoDir, _ := config.GetConfigDir()
 
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
@@ -148,6 +148,7 @@ func NewModel(cfg *config.Config) Model {
 }
 
 func (m Model) Init() tea.Cmd {
+	m.statusMsg = fmt.Sprintf("repo: %s, home: %s", m.repoDir, m.homeDir)
 	return tea.Batch(
 		m.spinner.Tick,
 		discoverPackages(m.repoDir, m.homeDir),

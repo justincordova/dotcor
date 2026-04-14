@@ -35,6 +35,9 @@ func GetDefaultIgnorePatterns() []string {
 }
 
 func GetConfigDir() (string, error) {
+	if dir := os.Getenv("DOTCOR_DIR"); dir != "" {
+		return dir, nil
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("getting home directory: %w", err)

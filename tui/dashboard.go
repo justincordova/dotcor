@@ -54,10 +54,19 @@ func renderMain(m Model) string {
 	left := renderPackageList(m, leftWidth)
 	right := renderFileDetail(m, rightWidth)
 
-	leftStyled := boxStyle.Width(leftWidth - 2).Render(left)
-	rightStyled := activeBoxStyle.Width(rightWidth - 2).Render(right)
+	leftStyled := boxStyle.Width(leftWidth - 2).Height(m.height - 10).Render(left)
+	rightStyled := activeBoxStyle.Width(rightWidth - 2).Height(m.height - 10).Render(right)
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, leftStyled, rightStyled)
+	main := lipgloss.JoinHorizontal(lipgloss.Top, leftStyled, rightStyled)
+
+	linesNeeded := m.height - 10
+	currentLines := strings.Count(main, "\n") + 1
+	if currentLines < linesNeeded {
+		padding := strings.Repeat("\n", linesNeeded-currentLines)
+		main = main + padding
+	}
+
+	return main
 }
 
 func renderPackageList(m Model, width int) string {
