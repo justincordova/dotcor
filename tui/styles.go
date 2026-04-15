@@ -89,7 +89,6 @@ var (
 
 	statusBarStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(colText)).
-			Background(lipgloss.Color(colMantle)).
 			Padding(0, 1)
 
 	// Panels

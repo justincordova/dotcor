@@ -14,10 +14,16 @@ import (
 func viewDashboard(m Model) string {
 	header := renderHeader(m)
 	stats := renderStatsStrip(m)
-	main := renderMain(m)
 	activity := renderActivityStrip(m)
 	gitBar := renderGitBar(m)
 	footer := renderFooter(m)
+
+	fixedHeight := lipgloss.Height(header) + lipgloss.Height(stats) + lipgloss.Height(activity) + lipgloss.Height(gitBar) + lipgloss.Height(footer)
+	mainHeight := m.height - fixedHeight
+	if mainHeight < 10 {
+		mainHeight = 10
+	}
+	main := renderMainWithHeight(m, mainHeight)
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -49,7 +55,6 @@ func renderHeader(m Model) string {
 
 	return lipgloss.NewStyle().
 		Width(m.width).
-		Background(lipgloss.Color(colMantle)).
 		Padding(0, 1).
 		Render(row)
 }
@@ -158,13 +163,7 @@ func statInline(label, value, valueColor string) string {
 
 // ─── Main (packages + detail) ────────────────────────────────────────────────
 
-func renderMain(m Model) string {
-	// Budget: header(1) + stats(1) + activity(7) + gitbar(1) + footer(1) = 11
-	mainHeight := m.height - 11
-	if mainHeight < 10 {
-		mainHeight = 10
-	}
-
+func renderMainWithHeight(m Model, mainHeight int) string {
 	leftWidth := m.width * 2 / 5
 	if leftWidth < 36 {
 		leftWidth = 36
@@ -212,7 +211,7 @@ func renderPackageList(m Model, width, maxLines int) string {
 
 	// Each card is 3 lines + 1 spacer; show as many as fit.
 	cardLines := 2
-	perCard := cardLines + 1
+	perCard := cardLines
 	maxCards := maxLines / perCard
 	if maxCards < 1 {
 		maxCards = 1
@@ -378,34 +377,19 @@ func renderFileDetail(m Model, width, maxLines int) string {
 // ─── Activity strip ──────────────────────────────────────────────────────────
 
 func renderActivityStrip(m Model) string {
-	const rows = 5
 	titleLine := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(colLavender)).
 		Bold(true).
 		Render("Recent activity")
 
-	var lines []string
+	var body string
 	if len(m.recentCommits) == 0 {
-		lines = append(lines,
-			dimStyle.Render("No commits yet. Press ")+kbd("S", "sync")+dimStyle.Render(" to commit your changes."),
-		)
+		body = dimStyle.Render("No commits yet — press ") + kbd("S", "sync") + dimStyle.Render(" to commit changes")
 	} else {
-		maxAuthor := 0
-		n := rows
+		var lines []string
+		n := 3
 		if n > len(m.recentCommits) {
 			n = len(m.recentCommits)
-		}
-		for i := 0; i < n; i++ {
-			w := lipgloss.Width(m.recentCommits[i].Author)
-			if w > maxAuthor {
-				maxAuthor = w
-			}
-		}
-		if maxAuthor > 14 {
-			maxAuthor = 14
-		}
-		if maxAuthor < 6 {
-			maxAuthor = 6
 		}
 
 		for i := 0; i < n; i++ {
@@ -415,18 +399,17 @@ func renderActivityStrip(m Model) string {
 				shortHash = shortHash[:7]
 			}
 			hash := lipgloss.NewStyle().Foreground(lipgloss.Color(colPeach)).Render(shortHash)
-			author := dimStyle.Render(padRight(truncate(c.Author, maxAuthor), maxAuthor))
-			subjectBudget := m.width - 12 - maxAuthor - 14
+			subjectBudget := m.width - 28
 			if subjectBudget < 10 {
 				subjectBudget = 10
 			}
 			subject := textStyle.Render(truncate(c.Message, subjectBudget))
-			when := dimStyle.Render(formatRelativeTime(c.Date))
-			lines = append(lines, fmt.Sprintf("%s  %s  %s  %s", hash, author, subject, when))
+			when := dimStyle.Render(padRight(formatRelativeTime(c.Date), 10))
+			lines = append(lines, fmt.Sprintf("  %s  %s  %s", hash, when, subject))
 		}
+		body = strings.Join(lines, "\n")
 	}
 
-	body := strings.Join(lines, "\n")
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		titleLine,
 		subtleStyle.Render(strings.Repeat("─", max(m.width-4, 4))),
@@ -450,20 +433,18 @@ func max(a, b int) int {
 
 func renderGitBar(m Model) string {
 	if m.err != nil {
-		return statusBarStyle.
+		return lipgloss.NewStyle().
 			Width(m.width).
-			Background(lipgloss.Color(colRed)).
-			Foreground(lipgloss.Color(colBase)).
+			Foreground(lipgloss.Color(colRed)).
 			Bold(true).
-			Render(fmt.Sprintf(" ✗ %v", m.err))
+			Render(fmt.Sprintf("  ✗ %v", m.err))
 	}
 	if m.statusMsg != "" {
-		return statusBarStyle.
+		return lipgloss.NewStyle().
 			Width(m.width).
-			Background(lipgloss.Color(colGreen)).
-			Foreground(lipgloss.Color(colBase)).
+			Foreground(lipgloss.Color(colGreen)).
 			Bold(true).
-			Render(fmt.Sprintf(" ✓ %s", m.statusMsg))
+			Render(fmt.Sprintf("  ✓ %s", m.statusMsg))
 	}
 
 	var parts []string
@@ -491,28 +472,23 @@ func renderGitBar(m Model) string {
 		parts = append(parts, dimStyle.Render("no git repository"))
 	}
 
-	loc := dimStyle.Render(collapseHome(m.repoDir, m.homeDir))
-
-	row := strings.Join(parts, " ")
-	leftW := lipgloss.Width(row)
-	rightW := lipgloss.Width(loc)
+	left := "  " + strings.Join(parts, " ")
+	right := dimStyle.Render(collapseHome(m.repoDir, m.homeDir))
+	leftW := lipgloss.Width(left)
+	rightW := lipgloss.Width(right)
 	gap := m.width - leftW - rightW - 2
-	if gap < 1 {
-		gap = 1
+	if gap < 2 {
+		gap = 2
 	}
 
-	return statusBarStyle.
-		Width(m.width).
-		Render(row + strings.Repeat(" ", gap) + loc)
+	return lipgloss.NewStyle().Width(m.width).Render(left + strings.Repeat(" ", gap) + right + " ")
 }
 
 func renderFooter(m Model) string {
 	if m.searching {
 		return lipgloss.NewStyle().
 			Width(m.width).
-			Padding(0, 1).
-			Background(lipgloss.Color(colMantle)).
-			Render(accentStyle.Render("/") + " " + m.searchInput.View())
+			Render("  " + accentStyle.Render("/") + " " + m.searchInput.View())
 	}
 
 	hints := joinHints(
@@ -526,11 +502,13 @@ func renderFooter(m Model) string {
 		kbd("q", "quit"),
 	)
 
-	return lipgloss.NewStyle().
-		Width(m.width).
-		Padding(0, 1).
-		Background(lipgloss.Color(colMantle)).
-		Render(hints)
+	hintsW := lipgloss.Width(hints)
+	gap := (m.width - hintsW) / 2
+	if gap < 2 {
+		gap = 2
+	}
+
+	return lipgloss.NewStyle().Width(m.width).Render(strings.Repeat(" ", gap) + hints)
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
