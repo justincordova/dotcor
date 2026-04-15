@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -41,7 +42,8 @@ func viewAdd(m Model) string {
 		footer := subviewFooter(m.width,
 			kbd("↑/k", "up"), kbd("↓/j", "down"),
 			kbd("space", "select"), kbd("enter", "expand/confirm"),
-			kbd("h", "collapse"), kbd("esc", "cancel"),
+			kbd("h", "collapse"), kbd("/", "jump to path"),
+			kbd("esc", "cancel"),
 		)
 		return lipgloss.JoinVertical(lipgloss.Left,
 			header,
@@ -120,6 +122,14 @@ func renderAddStep0(m Model) string {
 	b.WriteString("\n")
 	b.WriteString(subtleStyle.Render(strings.Repeat("─", max(m.width-8, 4))))
 	b.WriteString("\n")
+
+	if m.browserJumping {
+		b.WriteString("\n")
+		b.WriteString("  " + accentStyle.Render("/") + " " + m.browserJumpInput.View())
+		b.WriteString("\n")
+		b.WriteString(dimStyle.Render(strings.Repeat("─", max(m.width-8, 4))))
+		b.WriteString("\n")
+	}
 
 	items := m.buildBrowserItems()
 
@@ -535,6 +545,10 @@ func (m Model) step1HandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) browserHandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.browserJumping {
+		return m.browserHandleJumpKey(keyMsg)
+	}
+
 	items := m.buildBrowserItems()
 	switch keyMsg.String() {
 	case "up", "k":
@@ -580,9 +594,66 @@ func (m Model) browserHandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+
+	case "/":
+		m.browserJumping = true
+		m.browserJumpInput.Placeholder = "~/.config/nvim"
+		m.browserJumpInput.SetValue("")
+		m.browserJumpInput.Focus()
+		return m, textinput.Blink
 	}
 
 	return m, nil
+}
+
+func (m Model) browserHandleJumpKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch keyMsg.String() {
+	case "enter":
+		raw := m.browserJumpInput.Value()
+		m.browserJumping = false
+		m.browserJumpInput.Blur()
+
+		targetPath := expandBrowserPath(raw, m.homeDir)
+		info, err := os.Stat(targetPath)
+		if err != nil || !info.IsDir() {
+			m.err = fmt.Errorf("directory not found: %s", raw)
+			return m, nil
+		}
+
+		m.browserExpanded = make(map[string]bool)
+		rel, relErr := filepath.Rel(m.homeDir, targetPath)
+		if relErr == nil && !strings.HasPrefix(rel, "..") {
+			parts := strings.Split(rel, string(filepath.Separator))
+			current := m.homeDir
+			for _, p := range parts {
+				current = filepath.Join(current, p)
+				m.browserExpanded[current] = true
+			}
+		}
+		m.browserItems = nil
+		m.browserEntries = make(map[string][]os.DirEntry)
+		m.err = nil
+		return m, nil
+
+	case "esc":
+		m.browserJumping = false
+		m.browserJumpInput.Blur()
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.browserJumpInput, cmd = m.browserJumpInput.Update(keyMsg)
+	return m, cmd
+}
+
+func expandBrowserPath(raw, homeDir string) string {
+	if strings.HasPrefix(raw, "~/") {
+		return filepath.Join(homeDir, raw[2:])
+	}
+	if !filepath.IsAbs(raw) {
+		return filepath.Join(homeDir, raw)
+	}
+	return raw
 }
 
 func (m Model) confirmBrowserSelection() (tea.Model, tea.Cmd) {
