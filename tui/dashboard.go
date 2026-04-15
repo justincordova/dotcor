@@ -11,6 +11,19 @@ import (
 )
 
 func viewDashboard(m Model) string {
+	base := renderDashboardBase(m)
+	if m.confirmOpen {
+		return lipgloss.Place(m.width, m.height,
+			lipgloss.Center, lipgloss.Center,
+			confirmModal(m),
+			lipgloss.WithWhitespaceChars(" "),
+			lipgloss.WithWhitespaceForeground(lipgloss.Color(colBase)),
+		)
+	}
+	return base
+}
+
+func renderDashboardBase(m Model) string {
 	header := renderHeader(m)
 	stats := renderStatsStrip(m)
 	activity := renderActivityPanel(m)
@@ -457,31 +470,6 @@ func max(a, b int) int {
 // ─── Git + footer ────────────────────────────────────────────────────────────
 
 func renderGitBar(m Model) string {
-	if m.confirmAction != "" {
-		target := m.confirmTarget
-		var verb string
-		switch m.confirmAction {
-		case "stow":
-			verb = "Stow"
-		case "unstow":
-			verb = "Unstow"
-		case "stow-all":
-			verb = "Stow all"
-		case "delete":
-			verb = "Delete"
-		case "remove":
-			verb = "Remove from"
-		}
-		return lipgloss.NewStyle().
-			Width(m.width).
-			Foreground(lipgloss.Color(colYellow)).
-			Bold(true).
-			Render(fmt.Sprintf("  %s %s? %s %s %s",
-				verb, target,
-				kbd("enter", "confirm"), dimStyle.Render("·"), kbd("any key", "cancel"),
-			))
-	}
-
 	if m.initStep == 1 {
 		return lipgloss.NewStyle().
 			Width(m.width).

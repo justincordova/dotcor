@@ -126,8 +126,13 @@ type Model struct {
 
 	initStep int
 
+	confirmOpen   bool
 	confirmAction string
 	confirmTarget string
+	confirmTitle  string
+	confirmBody   string
+	confirmHint   string
+	confirmDanger bool
 }
 
 func NewModel(cfg *config.Config, version string) Model {
@@ -344,18 +349,17 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if m.confirmAction != "" {
+	if m.confirmOpen {
 		switch {
 		case key.Matches(keyMsg, m.keys.Enter):
 			action := m.confirmAction
 			target := m.confirmTarget
 			m.clearConfirm()
+			_ = target
 			switch action {
 			case "stow":
-				_ = target
 				return m, m.stowPackage()
 			case "unstow":
-				_ = target
 				return m, m.unstowPackage()
 			case "stow-all":
 				return m, m.stowAllPackages()
@@ -402,8 +406,14 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.clearErr()
 		if m.selectedPkg < len(m.packages) {
 			pkg := m.packages[m.selectedPkg]
+			linked, total := countLinked(pkg.Files)
+			m.confirmOpen = true
 			m.confirmAction = "stow"
 			m.confirmTarget = pkg.Name
+			m.confirmTitle = fmt.Sprintf("Stow %s?", pkg.Name)
+			m.confirmBody = fmt.Sprintf("%d files to link, %d already linked", total-linked, linked)
+			m.confirmHint = "enter confirm · any key cancel"
+			m.confirmDanger = false
 		}
 		return m, nil
 
@@ -411,22 +421,34 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.clearErr()
 		if m.selectedPkg < len(m.packages) {
 			pkg := m.packages[m.selectedPkg]
+			linked, _ := countLinked(pkg.Files)
+			m.confirmOpen = true
 			m.confirmAction = "unstow"
 			m.confirmTarget = pkg.Name
+			m.confirmTitle = fmt.Sprintf("Unstow %s?", pkg.Name)
+			m.confirmBody = fmt.Sprintf("%d symlinks to remove", linked)
+			m.confirmHint = "enter confirm · any key cancel"
+			m.confirmDanger = false
 		}
 		return m, nil
 
 	case key.Matches(keyMsg, m.keys.StowAll):
 		m.clearErr()
-		unlinked := 0
+		var count, totalFiles int
 		for _, pkg := range m.packages {
 			if pkg.Status != stow.StatusLinked {
-				unlinked++
+				count++
+				totalFiles += len(pkg.Files)
 			}
 		}
-		if unlinked > 0 {
+		if count > 0 {
+			m.confirmOpen = true
 			m.confirmAction = "stow-all"
-			m.confirmTarget = fmt.Sprintf("%d unlinked packages", unlinked)
+			m.confirmTarget = fmt.Sprintf("%d unlinked packages", count)
+			m.confirmTitle = "Stow all?"
+			m.confirmBody = fmt.Sprintf("%d packages, %d total files", count, totalFiles)
+			m.confirmHint = "enter confirm · any key cancel"
+			m.confirmDanger = false
 		} else {
 			m.statusMsg = "All packages already stowed"
 			return m, clearStatusAfter(3 * time.Second)
@@ -437,8 +459,13 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.clearErr()
 		if m.selectedPkg < len(m.packages) {
 			pkg := m.packages[m.selectedPkg]
+			m.confirmOpen = true
 			m.confirmAction = "delete"
 			m.confirmTarget = pkg.Name
+			m.confirmTitle = fmt.Sprintf("Delete %s?", pkg.Name)
+			m.confirmBody = fmt.Sprintf("Permanently removes %d tracked files.\nThis cannot be undone.", len(pkg.Files))
+			m.confirmHint = "enter confirm · any key cancel"
+			m.confirmDanger = true
 		}
 		return m, nil
 
@@ -446,8 +473,13 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.clearErr()
 		if m.selectedPkg < len(m.packages) && m.expanded[m.selectedPkg] && m.selectedFile < len(m.packages[m.selectedPkg].Files) {
 			f := m.packages[m.selectedPkg].Files[m.selectedFile]
+			m.confirmOpen = true
 			m.confirmAction = "remove"
 			m.confirmTarget = fmt.Sprintf("%s from %s", f.RelPath, m.packages[m.selectedPkg].Name)
+			m.confirmTitle = fmt.Sprintf("Remove %s?", f.RelPath)
+			m.confirmBody = fmt.Sprintf("Removes from package %s.\nFile stays on disk.", m.packages[m.selectedPkg].Name)
+			m.confirmHint = "enter confirm · any key cancel"
+			m.confirmDanger = false
 		}
 		return m, nil
 
@@ -695,8 +727,23 @@ func (m Model) View() string {
 
 func (m *Model) clearErr() { m.err = nil }
 func (m *Model) clearConfirm() {
+	m.confirmOpen = false
 	m.confirmAction = ""
 	m.confirmTarget = ""
+	m.confirmTitle = ""
+	m.confirmBody = ""
+	m.confirmHint = ""
+	m.confirmDanger = false
+}
+
+func countLinked(files []stow.FileEntry) (linked, total int) {
+	total = len(files)
+	for _, f := range files {
+		if f.IsLinked {
+			linked++
+		}
+	}
+	return
 }
 func (m Model) currentFiles() []stow.FileEntry {
 	if m.selectedPkg >= len(m.packages) {
