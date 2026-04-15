@@ -962,22 +962,51 @@ func (m Model) deletePackage() tea.Cmd {
 	pkg := m.packages[m.selectedPkg]
 	repoDir := m.repoDir
 	homeDir := m.homeDir
+	backupDir := filepath.Join(repoDir, "backups")
 	logger := m.cfg.Logger
+
 	return func() tea.Msg {
 		result, err := stow.Unlink(repoDir, homeDir, pkg.Name)
 		if err != nil {
 			return stowResultMsg{err: fmt.Errorf("unstow before delete failed: %w", err)}
 		}
+
 		pkgDir := filepath.Join(repoDir, pkg.Name)
+		ts := time.Now().Format("2006-01-02_15-04-05")
+		backupPath := filepath.Join(backupDir, "pre-delete-"+ts, pkg.Name)
+		_ = os.MkdirAll(filepath.Dir(backupPath), 0755)
+		_ = copyDir(pkgDir, backupPath)
+
 		if err := os.RemoveAll(pkgDir); err != nil {
 			return stowResultMsg{err: fmt.Errorf("removing package directory: %w", err)}
 		}
 		if logger != nil {
-			logger.Info("deleted package", "name", pkg.Name, "unlinked", result.Unlinked)
+			logger.Info("deleted package", "name", pkg.Name, "unlinked", result.Unlinked, "backup", backupPath)
 		}
-		return stowResultMsg{msg: fmt.Sprintf("Deleted %s (%d unlinked, dir removed)", pkg.Name, result.Unlinked)}
+		return stowResultMsg{msg: fmt.Sprintf("Deleted %s (%d unlinked, backup saved)", pkg.Name, result.Unlinked)}
 	}
 }
+func copyDir(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, relErr := filepath.Rel(src, path)
+		if relErr != nil {
+			return relErr
+		}
+		target := filepath.Join(dst, rel)
+		if info.IsDir() {
+			return os.MkdirAll(target, info.Mode().Perm())
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		return os.WriteFile(target, data, info.Mode().Perm())
+	})
+}
+
 func (m Model) removeFileFromPackage() tea.Cmd {
 	if m.selectedPkg >= len(m.packages) {
 		return nil
@@ -1003,7 +1032,12 @@ func (m Model) removeFileFromPackage() tea.Cmd {
 			if err := os.Remove(file.TargetPath); err != nil {
 				return stowResultMsg{err: fmt.Errorf("removing symlink: %w", err)}
 			}
-			if err := os.WriteFile(file.TargetPath, data, 0644); err != nil {
+			repoInfo, statErr := os.Stat(repoFilePath)
+			perm := os.FileMode(0644)
+			if statErr == nil {
+				perm = repoInfo.Mode().Perm()
+			}
+			if err := os.WriteFile(file.TargetPath, data, perm); err != nil {
 				return stowResultMsg{err: fmt.Errorf("restoring file: %w", err)}
 			}
 		}
