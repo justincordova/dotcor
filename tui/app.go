@@ -598,20 +598,20 @@ func (m Model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			m.searching = false
 			m.searchInput.Blur()
-			m.searchQuery = m.searchInput.Value()
-			for i, pkg := range m.packages {
-				if fuzzyMatch(m.searchQuery, pkg.Name) {
-					m.selectedPkg = i
-					m.selectedFile = 0
-					break
-				}
-			}
 			return m, nil
 		}
 	}
 
 	var cmd tea.Cmd
 	m.searchInput, cmd = m.searchInput.Update(msg)
+	m.searchQuery = m.searchInput.Value()
+	for i, pkg := range m.packages {
+		if fuzzyMatch(m.searchQuery, pkg.Name) {
+			m.selectedPkg = i
+			m.selectedFile = 0
+			break
+		}
+	}
 	return m, cmd
 }
 

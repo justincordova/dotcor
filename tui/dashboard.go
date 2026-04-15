@@ -218,11 +218,9 @@ func renderPackageList(m Model, width, maxLines int) string {
 	}
 
 	if m.searching {
-		query := m.searchInput.Value()
-
 		var filtered []int
 		for i, pkg := range m.packages {
-			if fuzzyMatch(query, pkg.Name) {
+			if fuzzyMatch(m.searchQuery, pkg.Name) {
 				filtered = append(filtered, i)
 			}
 		}
@@ -348,7 +346,7 @@ func renderSearchInput(m Model, width int) string {
 	return fmt.Sprintf("%s %s\n\n%s",
 		prompt,
 		m.searchInput.View(),
-		dimStyle.Render("enter to jump · esc to cancel"),
+		dimStyle.Render("esc to clear"),
 	)
 }
 
