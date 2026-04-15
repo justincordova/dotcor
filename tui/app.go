@@ -114,6 +114,8 @@ type Model struct {
 	settingsInput textinput.Model
 	backups       []core.BackupInfo
 
+	initStep int
+
 	confirmAction string
 	confirmTarget string
 }
@@ -301,6 +303,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateSearch(msg)
 	}
 
+	if m.initStep > 0 {
+		return m.updateInit(msg)
+	}
+
 	switch m.activeView {
 	case HelpView:
 		return m.updateHelp(msg)
@@ -401,6 +407,15 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.clearErr()
 		return m, m.syncRepo()
 
+	case key.Matches(keyMsg, m.keys.Init):
+		m.clearErr()
+		if git.IsRepo(m.repoDir) {
+			m.statusMsg = "git already initialized"
+			return m, clearStatusAfter(3 * time.Second)
+		}
+		m.initStep = 1
+		return m, nil
+
 	case key.Matches(keyMsg, m.keys.Help):
 		m.clearErr()
 		m.activeView = HelpView
@@ -480,6 +495,66 @@ func (m Model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.searchInput, cmd = m.searchInput.Update(msg)
 	return m, cmd
+}
+
+func (m Model) updateInit(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch m.initStep {
+	case 1:
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			switch {
+			case key.Matches(keyMsg, m.keys.Enter):
+				if err := git.InitRepo(m.repoDir); err != nil {
+					m.err = err
+					m.initStep = 0
+					return m, nil
+				}
+				m.initStep = 2
+				m.settingsInput.SetValue("")
+				m.settingsInput.Focus()
+				return m, textinput.Blink
+			case key.Matches(keyMsg, m.keys.Esc):
+				m.initStep = 0
+				return m, nil
+			}
+		}
+		return m, nil
+
+	case 2:
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			switch {
+			case key.Matches(keyMsg, m.keys.Enter):
+				url := m.settingsInput.Value()
+				m.settingsInput.Blur()
+				m.initStep = 0
+				if url != "" {
+					if err := git.SetRemote(m.repoDir, "origin", url); err != nil {
+						m.err = err
+						return m, nil
+					}
+				}
+				cmds := []tea.Cmd{
+					m.refreshAll(),
+					clearStatusAfter(3 * time.Second),
+				}
+				if url != "" {
+					m.statusMsg = "git initialized + remote configured"
+				} else {
+					m.statusMsg = "git initialized"
+				}
+				return m, tea.Batch(cmds...)
+			case key.Matches(keyMsg, m.keys.Esc):
+				m.settingsInput.Blur()
+				m.initStep = 0
+				cmds := []tea.Cmd{m.refreshAll(), clearStatusAfter(3 * time.Second)}
+				m.statusMsg = "git initialized"
+				return m, tea.Batch(cmds...)
+			}
+		}
+		var cmd tea.Cmd
+		m.settingsInput, cmd = m.settingsInput.Update(msg)
+		return m, cmd
+	}
+	return m, nil
 }
 
 func (m Model) updateHelp(msg tea.Msg) (tea.Model, tea.Cmd) {

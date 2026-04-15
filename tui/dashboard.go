@@ -445,6 +445,22 @@ func renderGitBar(m Model) string {
 			))
 	}
 
+	if m.initStep == 1 {
+		return lipgloss.NewStyle().
+			Width(m.width).
+			Foreground(lipgloss.Color(colYellow)).
+			Bold(true).
+			Render(fmt.Sprintf("  Initialize git in %s? %s %s %s",
+				collapseHome(m.repoDir, m.homeDir),
+				kbd("enter", "confirm"), dimStyle.Render("·"), kbd("esc", "cancel"),
+			))
+	}
+	if m.initStep == 2 {
+		return lipgloss.NewStyle().
+			Width(m.width).
+			Render("  " + accentStyle.Render("Remote URL") + " " + m.settingsInput.View() + dimStyle.Render(" (leave empty to skip)"))
+	}
+
 	if m.err != nil {
 		return lipgloss.NewStyle().
 			Width(m.width).
