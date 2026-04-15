@@ -45,6 +45,7 @@ func viewAdd(m Model) string {
 		)
 		return lipgloss.JoinVertical(lipgloss.Left,
 			header,
+			renderStepper(m.width, m.addStep),
 			subviewContent(m.width, m.height-4, body),
 			footer,
 		)
@@ -87,7 +88,7 @@ func stepLabel(step int) string {
 }
 
 func renderStepper(width, step int) string {
-	steps := []string{"Path", "Package", "Preview"}
+	steps := []string{"Select", "Package", "Review"}
 	var parts []string
 	for i, s := range steps {
 		num := fmt.Sprintf("%d", i+1)
@@ -425,7 +426,7 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.err = nil
 				return m, nil
 			}
-			m.addStep = 0
+			m.addStep--
 			m.err = nil
 			return m, nil
 
