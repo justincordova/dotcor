@@ -12,7 +12,6 @@ import (
 
 type Config struct {
 	Logger         *slog.Logger `yaml:"-"`
-	GitEnabled     bool         `yaml:"git_enabled"`
 	GitRemote      string       `yaml:"git_remote"`
 	IgnorePatterns []string     `yaml:"ignore_patterns"`
 }
@@ -106,7 +105,6 @@ func NewDefaultConfig() (*Config, error) {
 
 	return &Config{
 		Logger:         logger,
-		GitEnabled:     true,
 		IgnorePatterns: GetDefaultIgnorePatterns(),
 	}, nil
 }

@@ -77,7 +77,7 @@ func RunPreflightValidation(cfg *config.Config, operation string, files []string
 		}
 	}
 
-	if cfg.GitEnabled {
+	{
 		configDir, err := config.GetConfigDir()
 		if err == nil {
 			hasChanges, _ := git.HasChanges(configDir)

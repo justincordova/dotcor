@@ -44,12 +44,6 @@ func viewSettingsMain(m Model) string {
 	b.WriteString(subtleStyle.Render(strings.Repeat("─", 40)))
 	b.WriteString("\n\n")
 
-	gitPill := pill("disabled", colBase, colRed)
-	if m.cfg.GitEnabled {
-		gitPill = pill("enabled", colBase, colGreen)
-	}
-	b.WriteString("  " + padRight(textStyle.Render("Status"), 12) + "  " + gitPill + "\n")
-
 	remote := m.cfg.GitRemote
 	if remote == "" {
 		remote = dimStyle.Render("(not configured)")
@@ -74,7 +68,6 @@ func viewSettingsMain(m Model) string {
 	body := subviewContent(m.width, m.height-3, b.String())
 	footer := subviewFooter(m.width,
 		kbd("e", "edit remote"),
-		kbd("t", "toggle git"),
 		kbd("b", "backups"),
 		kbd("esc", "back"),
 	)
@@ -155,19 +148,6 @@ func updateSettingsMain(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.settingsInput.SetValue(m.cfg.GitRemote)
 			m.settingsInput.Focus()
 			return m, textinput.Blink
-
-		case "t":
-			m.cfg.GitEnabled = !m.cfg.GitEnabled
-			if err := m.cfg.SaveConfig(); err != nil {
-				m.err = err
-				return m, nil
-			}
-			state := "disabled"
-			if m.cfg.GitEnabled {
-				state = "enabled"
-			}
-			m.statusMsg = "Git " + state
-			return m, clearStatusAfter(3 * time.Second)
 
 		case "b":
 			m.settingsStep = 3

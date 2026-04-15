@@ -31,7 +31,6 @@ func TestNewDefaultConfig(t *testing.T) {
 	cfg, err := NewDefaultConfig()
 
 	assert.NoError(t, err, "NewDefaultConfig() error")
-	assert.True(t, cfg.GitEnabled, "GitEnabled should be true by default")
 	assert.NotEmpty(t, cfg.IgnorePatterns, "IgnorePatterns should not be empty")
 }
 
@@ -79,11 +78,7 @@ func TestSaveConfig_AtomicWrite(t *testing.T) {
 		}
 	}()
 
-	configDir := filepath.Join(tempDir, ".dotcor")
-	configPath := filepath.Join(configDir, ".dotcorrc")
-
 	cfg := &Config{
-		GitEnabled:     true,
 		IgnorePatterns: GetDefaultIgnorePatterns(),
 	}
 
@@ -92,11 +87,14 @@ func TestSaveConfig_AtomicWrite(t *testing.T) {
 	err = cfg.SaveConfig()
 
 	assert.NoError(t, err, "SaveConfig() should not error")
+
+	configDir := filepath.Join(tempDir, ".dotcor")
+	configPath := filepath.Join(configDir, ".dotcorrc")
 	assert.FileExists(t, configPath, "SaveConfig() should create config file")
 
 	data, err := os.ReadFile(configPath)
 	assert.NoError(t, err, "failed to read config file")
-	assert.Contains(t, string(data), "git_enabled:", "SaveConfig() should write git_enabled")
+	assert.Contains(t, string(data), "ignore_patterns:", "SaveConfig() should write ignore_patterns")
 }
 
 func TestLoadConfig_CorruptFile_ReturnsError(t *testing.T) {
@@ -134,7 +132,7 @@ func TestLoadConfigFromPath_LoadsCustomPath(t *testing.T) {
 	}()
 
 	customConfigPath := filepath.Join(tempDir, "custom-config.yaml")
-	customConfigContent := "git_enabled: true\ngit_remote: git@github.com:user/dotfiles.git\n"
+	customConfigContent := "git_remote: git@github.com:user/dotfiles.git\n"
 	err = os.WriteFile(customConfigPath, []byte(customConfigContent), 0644)
 	assert.NoError(t, err, "failed to write custom config")
 
@@ -142,7 +140,6 @@ func TestLoadConfigFromPath_LoadsCustomPath(t *testing.T) {
 
 	assert.NoError(t, err, "LoadConfigFromPath() should not error")
 	assert.NotNil(t, cfg, "LoadConfigFromPath() should return config")
-	assert.True(t, cfg.GitEnabled, "LoadConfigFromPath() should load git_enabled")
 	assert.Equal(t, "git@github.com:user/dotfiles.git", cfg.GitRemote, "LoadConfigFromPath() should load git_remote")
 }
 
@@ -205,5 +202,4 @@ func TestLoadConfig_NoFile_ReturnsDefault(t *testing.T) {
 	cfg, err := LoadConfig()
 	assert.NoError(t, err)
 	assert.NotNil(t, cfg)
-	assert.True(t, cfg.GitEnabled)
 }

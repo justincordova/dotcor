@@ -13,7 +13,6 @@ import (
 func testConfig() *Config {
 	return &Config{
 		Logger:         slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})),
-		GitEnabled:     true,
 		IgnorePatterns: GetDefaultIgnorePatterns(),
 	}
 }
