@@ -24,10 +24,17 @@ func viewDashboard(m Model) string {
 	return base
 }
 
+func shouldShowActivity(m Model) bool {
+	return m.height >= 30
+}
+
 func renderDashboardBase(m Model) string {
 	header := renderHeader(m)
 	stats := renderStatsStrip(m)
-	activity := renderActivityPanel(m)
+	activity := ""
+	if shouldShowActivity(m) {
+		activity = renderActivityPanel(m)
+	}
 	gitBar := renderGitBar(m)
 	footer := renderFooter(m)
 
