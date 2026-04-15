@@ -131,6 +131,8 @@ type Model struct {
 
 	initStep int
 
+	sortMode int
+
 	confirmOpen       bool
 	confirmAction     string
 	confirmTarget     string
@@ -400,6 +402,10 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch {
+	case key.Matches(keyMsg, m.keys.Tab):
+		m.sortMode = (m.sortMode + 1) % 3
+		return m, nil
+
 	case key.Matches(keyMsg, m.keys.Quit):
 		return m, tea.Quit
 

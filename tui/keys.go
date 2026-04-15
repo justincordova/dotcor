@@ -35,7 +35,7 @@ func newKeyMap() keyMap {
 		Up:       key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
 		Down:     key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
 		Enter:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "expand / confirm")),
-		Tab:      key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next")),
+		Tab:      key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "sort")),
 		Esc:      key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back / cancel")),
 		Stow:     key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "stow")),
 		Unstow:   key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "unstow")),

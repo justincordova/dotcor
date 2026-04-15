@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -188,8 +189,39 @@ func renderMainWithHeight(m Model, mainHeight int) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 }
 
+func sortedPackages(m Model) []int {
+	indices := make([]int, len(m.packages))
+	for i := range indices {
+		indices[i] = i
+	}
+	switch m.sortMode {
+	case 0:
+		sort.Slice(indices, func(a, b int) bool {
+			return m.packages[indices[a]].Name < m.packages[indices[b]].Name
+		})
+	case 1:
+		sort.Slice(indices, func(a, b int) bool {
+			return m.packages[indices[a]].Status < m.packages[indices[b]].Status
+		})
+	case 2:
+		sort.Slice(indices, func(a, b int) bool {
+			aTime, _ := os.Stat(m.packages[indices[a]].Path)
+			bTime, _ := os.Stat(m.packages[indices[b]].Path)
+			if aTime == nil {
+				return false
+			}
+			if bTime == nil {
+				return true
+			}
+			return aTime.ModTime().After(bTime.ModTime())
+		})
+	}
+	return indices
+}
+
 func renderPackagePanel(m Model, width, height int) string {
-	title := fmt.Sprintf(" Packages %s", dimStyle.Render(fmt.Sprintf("(%d)", len(m.packages))))
+	sortLabels := []string{"alpha", "status", "recent"}
+	title := fmt.Sprintf(" Packages %s %s", dimStyle.Render(fmt.Sprintf("(%d)", len(m.packages))), dimStyle.Render("↑"+sortLabels[m.sortMode]))
 	body := renderPackageList(m, width-4, height-4)
 	return panel(title, body, width, height, !m.searching)
 }
@@ -270,11 +302,21 @@ func renderPackageList(m Model, width, maxLines int) string {
 		maxCards = 1
 	}
 
-	start, end := visibleRange(m.selectedPkg, len(m.packages), maxCards)
+	indices := sortedPackages(m)
+
+	selPos := 0
+	for i, idx := range indices {
+		if idx == m.selectedPkg {
+			selPos = i
+			break
+		}
+	}
+
+	start, end := visibleRange(selPos, len(indices), maxCards)
 
 	var parts []string
 	for i := start; i < end; i++ {
-		parts = append(parts, renderPackageCard(m, i, width))
+		parts = append(parts, renderPackageCard(m, indices[i], width))
 	}
 
 	return strings.Join(parts, "\n")
@@ -545,6 +587,7 @@ func renderFooter(m Model) string {
 
 	hints := joinHints(
 		kbd("↑↓/jk", "nav"),
+		kbd("tab", "sort"),
 		kbd("s", "stow"),
 		kbd("u", "unstow"),
 		kbd("A", "stow-all"),
