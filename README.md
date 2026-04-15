@@ -112,20 +112,23 @@ Each top-level directory is a **package**. Excluded: `.git`, `logs`, `backups`, 
 |-----|--------|
 | `↑/↓` or `j/k` | Navigate |
 | `Enter` | Expand / select |
-| `a` | Add file (opens add flow) |
-| `d` | Remove / unlink selected file |
 | `s` | Stow (link) selected package |
 | `u` | Unstow (unlink) selected package |
+| `A` | Stow all packages |
+| `a` | Add file (opens add flow) |
+| `d` | Remove / unlink selected file |
+| `x` | Delete package |
+| `i` | Initialize git in repo |
 | `S` | Sync (git commit + push) |
+| `p` | Push |
+| `P` | Pull |
 | `D` | View diff for selected |
 | `H` | View history for selected |
 | `L` | Toggle log viewer |
+| `,` | Settings |
 | `/` | Search packages and files |
 | `?` | Full keybinding help |
 | `q` | Quit |
-| `p` | Push |
-| `P` | Pull |
-| `r` | Restore from git |
 
 ### Screens
 
@@ -146,7 +149,6 @@ Each top-level directory is a **package**. Excluded: `.git`, `logs`, `backups`, 
 Config stored in `~/.dotcor/.dotcorrc`:
 
 ```yaml
-git_enabled: true
 git_remote: ""
 ignore_patterns:
   - "*.key"
