@@ -145,12 +145,22 @@ func renderAddStep0(m Model) string {
 
 	for i := start; i < end; i++ {
 		e := entries[i]
-		icon := "○"
 		name := e.Name()
+
+		var icon string
+		var styledName string
 		if e.IsDir() {
 			icon = "▸"
+			styledName = textStyle.Render(name)
+		} else if isSymlink(filepath.Join(m.browserPath, name)) {
+			icon = "◆"
+			styledName = dimStyle.Render(name)
+		} else {
+			icon = "○"
+			styledName = textStyle.Render(name)
 		}
-		line := fmt.Sprintf("  %s %s", icon, name)
+
+		line := fmt.Sprintf("  %s %s", icon, styledName)
 		if i == m.browserCursor {
 			line = selectedRowStyle.Width(m.width - 8).Render(line)
 		}
@@ -190,6 +200,14 @@ func loadBrowserDir(path string) []os.DirEntry {
 		return strings.ToLower(filtered[i].Name()) < strings.ToLower(filtered[j].Name())
 	})
 	return filtered
+}
+
+func isSymlink(path string) bool {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeSymlink != 0
 }
 
 func (m *Model) browserVisibleEntries() []os.DirEntry {
