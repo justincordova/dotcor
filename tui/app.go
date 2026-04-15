@@ -412,6 +412,15 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case key.Matches(keyMsg, m.keys.Remove):
+		m.clearErr()
+		if m.selectedPkg < len(m.packages) && m.expanded[m.selectedPkg] && m.selectedFile < len(m.packages[m.selectedPkg].Files) {
+			f := m.packages[m.selectedPkg].Files[m.selectedFile]
+			m.confirmAction = "remove"
+			m.confirmTarget = fmt.Sprintf("%s from %s", f.RelPath, m.packages[m.selectedPkg].Name)
+		}
+		return m, nil
+
 	case key.Matches(keyMsg, m.keys.Sync):
 		m.clearErr()
 		return m, m.syncRepo()
@@ -773,7 +782,46 @@ func (m Model) deletePackage() tea.Cmd {
 		return stowResultMsg{msg: fmt.Sprintf("Deleted %s (%d unlinked, dir removed)", pkg.Name, result.Unlinked)}
 	}
 }
-func (m Model) removeFileFromPackage() tea.Cmd { return nil }
+func (m Model) removeFileFromPackage() tea.Cmd {
+	if m.selectedPkg >= len(m.packages) {
+		return nil
+	}
+	pkg := m.packages[m.selectedPkg]
+	if !m.expanded[m.selectedPkg] || m.selectedFile >= len(pkg.Files) {
+		return nil
+	}
+	file := pkg.Files[m.selectedFile]
+	repoDir := m.repoDir
+	pkgName := pkg.Name
+	logger := m.cfg.Logger
+
+	return func() tea.Msg {
+		pkgDir := filepath.Join(repoDir, pkgName)
+		repoFilePath := filepath.Join(pkgDir, file.RelPath)
+
+		if file.IsLinked {
+			data, err := os.ReadFile(repoFilePath)
+			if err != nil {
+				return stowResultMsg{err: fmt.Errorf("reading repo file: %w", err)}
+			}
+			if err := os.Remove(file.TargetPath); err != nil {
+				return stowResultMsg{err: fmt.Errorf("removing symlink: %w", err)}
+			}
+			if err := os.WriteFile(file.TargetPath, data, 0644); err != nil {
+				return stowResultMsg{err: fmt.Errorf("restoring file: %w", err)}
+			}
+		}
+
+		if err := os.Remove(repoFilePath); err != nil {
+			return stowResultMsg{err: fmt.Errorf("removing from repo: %w", err)}
+		}
+
+		if logger != nil {
+			logger.Info("removed file from package", "file", file.RelPath, "package", pkgName)
+		}
+		return stowResultMsg{msg: fmt.Sprintf("Removed %s from %s", file.RelPath, pkgName)}
+	}
+}
 
 func (m Model) syncRepo() tea.Cmd {
 	repoDir := m.repoDir
