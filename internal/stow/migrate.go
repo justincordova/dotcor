@@ -98,7 +98,7 @@ func ExecuteMigration(repoDir string, steps []MigrationStep) error {
 	filesDir := filepath.Join(repoDir, "files")
 	entries, err := os.ReadDir(filesDir)
 	if err == nil && len(entries) == 0 {
-		os.RemoveAll(filesDir)
+		_ = os.RemoveAll(filesDir)
 	}
 
 	return nil
@@ -106,7 +106,11 @@ func ExecuteMigration(repoDir string, steps []MigrationStep) error {
 
 func cleanEmptyParents(dir, stopAt string) {
 	for {
-		if dir == "" || dir == stopAt || dir == filepath.Dir(dir) {
+		if dir == "" || dir == stopAt {
+			break
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
 			break
 		}
 
@@ -118,8 +122,7 @@ func cleanEmptyParents(dir, stopAt string) {
 			break
 		}
 
-		parent := filepath.Dir(dir)
-		os.Remove(dir)
+		_ = os.Remove(dir)
 		dir = parent
 	}
 }

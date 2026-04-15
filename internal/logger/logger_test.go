@@ -113,5 +113,5 @@ func TestNew_ReturnsSlogLogger(t *testing.T) {
 
 	l := New("info", logPath)
 
-	var _ *slog.Logger = l
+	var _ *slog.Logger = l //nolint:staticcheck
 }
