@@ -231,25 +231,14 @@ func renderPackageCard(m Model, i, width int) string {
 	pkg := m.packages[i]
 	selected := i == m.selectedPkg
 
-	// Left accent bar.
 	barStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colSurface1))
 	if selected {
 		barStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colMauve)).Bold(true)
 	}
 	bar := barStyle.Render("▌")
 
-	// Selection indicator: filled circle when selected, empty otherwise.
-	var circle string
-	if selected {
-		circle = lipgloss.NewStyle().Foreground(lipgloss.Color(colMauve)).Bold(true).Render("●")
-	} else {
-		circle = lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay0)).Render("○")
-	}
-
-	// Line-1 prefix is bar + space + circle + space (4 cols).
-	// Lines 2/3 align to that: bar + 3 spaces.
-	indent := bar + "   "
-	contentWidth := width - 4
+	indent := bar + "  "
+	contentWidth := width - 3
 	if contentWidth < 20 {
 		contentWidth = 20
 	}
@@ -271,7 +260,7 @@ func renderPackageCard(m Model, i, width int) string {
 	if gap < 1 {
 		gap = 1
 	}
-	line1 := bar + " " + circle + " " + name + strings.Repeat(" ", gap) + tag
+	line1 := bar + " " + name + strings.Repeat(" ", gap) + tag
 
 	var progress string
 	switch {
