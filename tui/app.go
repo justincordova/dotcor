@@ -1057,10 +1057,21 @@ func (m Model) syncRepo() tea.Cmd {
 	repoDir := m.repoDir
 	logger := m.cfg.Logger
 	return func() tea.Msg {
-		if err := git.Sync(repoDir, logger); err != nil {
+		result, err := git.SyncDetailed(repoDir, logger)
+		if err != nil {
 			return syncResultMsg{err: err}
 		}
-		return syncResultMsg{msg: "Synced"}
+		var parts []string
+		if result.Committed {
+			parts = append(parts, fmt.Sprintf("%d files changed", result.FilesChanged))
+		}
+		if result.Pushed {
+			parts = append(parts, "pushed to "+result.Branch)
+		}
+		if len(parts) == 0 {
+			return syncResultMsg{msg: "Nothing to sync — repo is clean"}
+		}
+		return syncResultMsg{msg: "Synced: " + strings.Join(parts, ", ")}
 	}
 }
 

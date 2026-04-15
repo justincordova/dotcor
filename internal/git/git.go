@@ -148,6 +148,57 @@ func AutoCommitFiles(repoPath string, files []string, message string) error {
 	return nil
 }
 
+type SyncResult struct {
+	Committed    bool
+	FilesChanged int
+	Pushed       bool
+	Branch       string
+}
+
+func SyncDetailed(repoPath string, logger *slog.Logger) (SyncResult, error) {
+	result := SyncResult{}
+
+	status, err := GetStatus(repoPath)
+	if err != nil {
+		return result, err
+	}
+	result.Branch = status.Branch
+
+	if status.HasUncommitted {
+		message := fmt.Sprintf("Sync dotfiles - %s", time.Now().Format("2006-01-02 15:04"))
+		if err := AutoCommit(repoPath, message, logger); err != nil {
+			return result, err
+		}
+		result.Committed = true
+		result.FilesChanged = len(status.ChangedFiles)
+	}
+
+	remoteURL, _ := GetRemoteURL(repoPath)
+	if remoteURL == "" {
+		return result, nil
+	}
+
+	branch := status.Branch
+	if branch == "" {
+		return result, nil
+	}
+
+	hasUpstream := exec.Command("git", "config", fmt.Sprintf("branch.%s.remote", branch)).Run() == nil
+
+	var pushCmd *exec.Cmd
+	if hasUpstream {
+		pushCmd = exec.Command("git", "push")
+	} else {
+		pushCmd = exec.Command("git", "push", "-u", "origin", branch)
+	}
+	pushCmd.Dir = repoPath
+	if output, err := pushCmd.CombinedOutput(); err != nil {
+		return result, fmt.Errorf("git push failed: %s: %w", string(output), err)
+	}
+	result.Pushed = true
+	return result, nil
+}
+
 // Sync commits all changes and pushes to remote (if configured)
 func Sync(repoPath string, logger *slog.Logger) error {
 	// Generate commit message with timestamp
