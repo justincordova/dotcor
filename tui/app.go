@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -268,6 +269,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMsg = msg.msg
 			m.err = nil
 			cmds = append(cmds, clearStatusAfter(3*time.Second))
+			cmds = append(cmds, m.autoCommitCmd("stow: "+msg.msg))
 		}
 		cmds = append(cmds, m.refreshAll())
 		return m, tea.Batch(cmds...)
@@ -292,6 +294,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.resetAddState()
 			m.activeView = DashboardView
 			cmds = append(cmds, clearStatusAfter(3*time.Second))
+			cmds = append(cmds, m.autoCommitCmd("add: "+msg.msg))
 		}
 		cmds = append(cmds, m.refreshAll())
 		return m, tea.Batch(cmds...)
@@ -787,6 +790,23 @@ func (m *Model) resetAddState() {
 
 func clearStatusAfter(d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(t time.Time) tea.Msg { return tickMsg(t) })
+}
+
+func (m Model) autoCommitCmd(message string) tea.Cmd {
+	repoDir := m.repoDir
+	var logger *slog.Logger
+	if m.cfg != nil {
+		logger = m.cfg.Logger
+	}
+	return func() tea.Msg {
+		if !git.IsRepo(repoDir) {
+			return nil
+		}
+		if err := git.AutoCommit(repoDir, message, logger); err != nil && logger != nil {
+			logger.Warn("auto-commit failed", "error", err)
+		}
+		return nil
+	}
 }
 
 // ─── Commands ────────────────────────────────────────────────────────────────
