@@ -369,7 +369,6 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 			action := m.confirmAction
 			target := m.confirmTarget
 			m.clearConfirm()
-			_ = target
 			switch action {
 			case "stow":
 				return m, m.stowPackage()
@@ -382,7 +381,7 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "remove":
 				return m, m.removeFileFromPackage()
 			case "resolve-conflicts":
-				return m, m.resolveConflicts()
+				return m, m.resolveConflicts(target)
 			}
 		default:
 			m.clearConfirm()
@@ -856,8 +855,7 @@ func (m Model) stowPackage() tea.Cmd {
 	}
 }
 
-func (m Model) resolveConflicts() tea.Cmd {
-	pkgName := m.confirmTarget
+func (m Model) resolveConflicts(pkgName string) tea.Cmd {
 	repoDir := m.repoDir
 	homeDir := m.homeDir
 	backupDir := filepath.Join(repoDir, "backups")
