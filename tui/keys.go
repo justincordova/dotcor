@@ -23,6 +23,10 @@ type keyMap struct {
 	Push     key.Binding
 	Pull     key.Binding
 	Settings key.Binding
+	Init     key.Binding
+	Delete   key.Binding
+	StowAll  key.Binding
+	Remove   key.Binding
 	Quit     key.Binding
 }
 
@@ -30,9 +34,9 @@ func newKeyMap() keyMap {
 	return keyMap{
 		Up:       key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
 		Down:     key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
-		Enter:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "expand")),
+		Enter:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "expand / confirm")),
 		Tab:      key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next")),
-		Esc:      key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
+		Esc:      key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back / cancel")),
 		Stow:     key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "stow")),
 		Unstow:   key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "unstow")),
 		Sync:     key.NewBinding(key.WithKeys("S"), key.WithHelp("S", "sync")),
@@ -44,19 +48,24 @@ func newKeyMap() keyMap {
 		Search:   key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
 		Push:     key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "push")),
 		Pull:     key.NewBinding(key.WithKeys("P"), key.WithHelp("P", "pull")),
-		Settings: key.NewBinding(key.WithKeys("g"), key.WithHelp("g", "settings")),
+		Settings: key.NewBinding(key.WithKeys(","), key.WithHelp(",", "settings")),
+		Init:     key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "init git")),
+		Delete:   key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "delete pkg")),
+		StowAll:  key.NewBinding(key.WithKeys("A"), key.WithHelp("A", "stow all")),
+		Remove:   key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "remove file")),
 		Quit:     key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 	}
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Help, k.Add, k.Stow, k.Unstow, k.Sync, k.Search, k.Quit}
+	return []key.Binding{k.Help, k.Add, k.Stow, k.Unstow, k.Init, k.Sync, k.Search, k.Quit}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Enter, k.Esc},
-		{k.Stow, k.Unstow, k.Add, k.Sync},
+		{k.Stow, k.Unstow, k.StowAll, k.Sync},
+		{k.Add, k.Remove, k.Delete, k.Init},
 		{k.Push, k.Pull, k.Diff, k.History},
 		{k.Logs, k.Settings, k.Search, k.Help},
 		{k.Quit},

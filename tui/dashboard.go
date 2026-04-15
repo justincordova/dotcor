@@ -78,7 +78,7 @@ func renderNav() string {
 		kbd("D", "diff"),
 		kbd("H", "history"),
 		kbd("L", "logs"),
-		kbd("g", "settings"),
+		kbd(",", "settings"),
 		kbd("?", "help"),
 	}
 	return strings.Join(items, dimStyle.Render("  "))

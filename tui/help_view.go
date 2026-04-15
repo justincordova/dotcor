@@ -17,9 +17,9 @@ func viewHelp(m Model) string {
 			bindings: []string{
 				formatBinding("↑/k", "move up"),
 				formatBinding("↓/j", "move down"),
-				formatBinding("enter", "expand/collapse package"),
+				formatBinding("enter", "expand / confirm"),
 				formatBinding("/", "search packages"),
-				formatBinding("esc", "back"),
+				formatBinding("esc", "back / cancel"),
 			},
 		},
 		{
@@ -27,12 +27,16 @@ func viewHelp(m Model) string {
 			bindings: []string{
 				formatBinding("s", "stow package"),
 				formatBinding("u", "unstow package"),
-				formatBinding("a", "add new file"),
+				formatBinding("A", "stow all"),
+				formatBinding("a", "add file (browser)"),
+				formatBinding("d", "remove file"),
+				formatBinding("x", "delete package"),
 			},
 		},
 		{
 			title: "Git",
 			bindings: []string{
+				formatBinding("i", "init git"),
 				formatBinding("S", "sync (commit + push)"),
 				formatBinding("p", "push to remote"),
 				formatBinding("P", "pull from remote"),
@@ -44,7 +48,7 @@ func viewHelp(m Model) string {
 			title: "System",
 			bindings: []string{
 				formatBinding("L", "view logs"),
-				formatBinding("g", "settings"),
+				formatBinding(",", "settings"),
 				formatBinding("?", "toggle help"),
 				formatBinding("q", "quit"),
 			},
