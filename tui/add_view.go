@@ -610,15 +610,20 @@ func detectPackageName(path string) string {
 
 	parts := strings.Split(rel, string(filepath.Separator))
 
-	if len(parts) >= 3 && parts[0] == ".config" {
-		return parts[1]
+	if len(parts) >= 2 && parts[0] == ".config" {
+		name := parts[1]
+		if idx := strings.LastIndex(name, "."); idx > 0 {
+			name = name[:idx]
+		}
+		if name != "" {
+			return name
+		}
 	}
 
 	if len(parts) >= 1 {
 		name := strings.TrimPrefix(parts[0], ".")
-		if strings.Contains(name, "rc") {
-			name = strings.ReplaceAll(name, "rc", "")
-		}
+		name = strings.TrimSuffix(name, "rc")
+		name = strings.TrimSuffix(name, "config")
 		if name != "" {
 			return name
 		}
