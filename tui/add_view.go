@@ -173,7 +173,9 @@ func renderAddStep0(m Model) string {
 			} else {
 				icon = "◆"
 			}
-			styledName = dimStyle.Render(name)
+			target, _ := os.Readlink(item.path)
+			display := truncate(filepath.Base(target), 20)
+			styledName = dimStyle.Render(name + " → " + display)
 		} else {
 			if m.browserSelected[item.path] {
 				icon = "●"
@@ -719,6 +721,20 @@ func (m *Model) toggleDirSelection(dirPath string) {
 }
 
 func (m Model) browserSelectFile(fullPath string) (tea.Model, tea.Cmd) {
+	if isSymlink(fullPath) {
+		target, _ := os.Readlink(fullPath)
+		if filepath.IsAbs(target) {
+			// keep
+		} else {
+			target = filepath.Join(filepath.Dir(fullPath), target)
+		}
+		target = filepath.Clean(target)
+		if strings.HasPrefix(target, m.repoDir) {
+			m.err = fmt.Errorf("already managed by dotcor — file lives in %s", collapseHome(target, m.homeDir))
+			return m, nil
+		}
+	}
+
 	if _, err := os.Stat(fullPath); err != nil {
 		m.err = fmt.Errorf("file not found: %s", fullPath)
 		return m, nil
