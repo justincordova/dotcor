@@ -403,6 +403,15 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case key.Matches(keyMsg, m.keys.Delete):
+		m.clearErr()
+		if m.selectedPkg < len(m.packages) {
+			pkg := m.packages[m.selectedPkg]
+			m.confirmAction = "delete"
+			m.confirmTarget = pkg.Name
+		}
+		return m, nil
+
 	case key.Matches(keyMsg, m.keys.Sync):
 		m.clearErr()
 		return m, m.syncRepo()
@@ -740,8 +749,30 @@ func (m Model) unstowPackage() tea.Cmd {
 	}
 }
 
-func (m Model) stowAllPackages() tea.Cmd       { return nil }
-func (m Model) deletePackage() tea.Cmd         { return nil }
+func (m Model) stowAllPackages() tea.Cmd { return nil }
+func (m Model) deletePackage() tea.Cmd {
+	if m.selectedPkg >= len(m.packages) {
+		return nil
+	}
+	pkg := m.packages[m.selectedPkg]
+	repoDir := m.repoDir
+	homeDir := m.homeDir
+	logger := m.cfg.Logger
+	return func() tea.Msg {
+		result, err := stow.Unlink(repoDir, homeDir, pkg.Name)
+		if err != nil {
+			return stowResultMsg{err: fmt.Errorf("unstow before delete failed: %w", err)}
+		}
+		pkgDir := filepath.Join(repoDir, pkg.Name)
+		if err := os.RemoveAll(pkgDir); err != nil {
+			return stowResultMsg{err: fmt.Errorf("removing package directory: %w", err)}
+		}
+		if logger != nil {
+			logger.Info("deleted package", "name", pkg.Name, "unlinked", result.Unlinked)
+		}
+		return stowResultMsg{msg: fmt.Sprintf("Deleted %s (%d unlinked, dir removed)", pkg.Name, result.Unlinked)}
+	}
+}
 func (m Model) removeFileFromPackage() tea.Cmd { return nil }
 
 func (m Model) syncRepo() tea.Cmd {
