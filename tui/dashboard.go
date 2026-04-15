@@ -704,12 +704,7 @@ func dirSize(path string) int64 {
 
 func collapseHome(path, home string) string {
 	if home != "" && strings.HasPrefix(path, home) {
-		rest := strings.TrimPrefix(path, home)
-		realHome, _ := os.UserHomeDir()
-		if home == realHome {
-			return "~" + rest
-		}
-		return filepath.Base(home) + rest
+		return "~" + strings.TrimPrefix(path, home)
 	}
 	return path
 }
