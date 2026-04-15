@@ -449,11 +449,19 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(keyMsg, m.keys.Diff):
 		m.clearErr()
+		if !git.IsRepo(m.repoDir) {
+			m.err = fmt.Errorf("git not initialized — press i to set up git")
+			return m, nil
+		}
 		m.activeView = DiffView
 		return m, getDiff(m)
 
 	case key.Matches(keyMsg, m.keys.History):
 		m.clearErr()
+		if !git.IsRepo(m.repoDir) {
+			m.err = fmt.Errorf("git not initialized — press i to set up git")
+			return m, nil
+		}
 		m.activeView = HistoryView
 		m.commits = nil
 		m.selectedCommit = 0
@@ -749,6 +757,17 @@ func (m Model) syncRepo() tea.Cmd {
 
 func (m Model) pushRepo() tea.Cmd {
 	repoDir := m.repoDir
+	if !git.IsRepo(repoDir) {
+		return func() tea.Msg {
+			return syncResultMsg{err: fmt.Errorf("git not initialized — press i to set up git")}
+		}
+	}
+	remoteURL, _ := git.GetRemoteURL(repoDir)
+	if remoteURL == "" {
+		return func() tea.Msg {
+			return syncResultMsg{err: fmt.Errorf("no remote configured — press i to set up git")}
+		}
+	}
 	return func() tea.Msg {
 		if err := git.PushWithProgress(repoDir); err != nil {
 			return syncResultMsg{err: err}
@@ -759,6 +778,11 @@ func (m Model) pushRepo() tea.Cmd {
 
 func (m Model) pullRepo() tea.Cmd {
 	repoDir := m.repoDir
+	if !git.IsRepo(repoDir) {
+		return func() tea.Msg {
+			return syncResultMsg{err: fmt.Errorf("git not initialized — press i to set up git")}
+		}
+	}
 	return func() tea.Msg {
 		if err := git.Pull(repoDir); err != nil {
 			return syncResultMsg{err: err}
