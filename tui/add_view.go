@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -242,15 +241,8 @@ func renderAddStep1(m Model) string {
 	var b strings.Builder
 
 	if m.addPkgEditing {
-		b.WriteString(textStyle.Render("New package name:"))
-		b.WriteString("\n\n")
-		b.WriteString(m.addInput.View())
-		b.WriteString("\n\n")
-		b.WriteString(dimStyle.Render(fmt.Sprintf("adding %s", preview)))
-	} else {
 		b.WriteString(textStyle.Render("Select package:"))
 		b.WriteString("\n\n")
-
 		for i, name := range m.addPkgChoices {
 			line := fmt.Sprintf("  ○ %s", name)
 			if i == m.addPkgIdx {
@@ -259,14 +251,17 @@ func renderAddStep1(m Model) string {
 			b.WriteString(line)
 			b.WriteString("\n")
 		}
-
-		newLabel := "  ○ + New package…"
-		newIdx := len(m.addPkgChoices)
-		if m.addPkgIdx == newIdx {
-			newLabel = selectedRowStyle.Width(m.width - 8).Render(" ▸ + New package…")
-		}
-		b.WriteString(newLabel)
+		b.WriteString("\n")
+		b.WriteString(dimStyle.Render(fmt.Sprintf("adding %s", preview)))
+	} else {
+		b.WriteString(textStyle.Render("Package name:"))
 		b.WriteString("\n\n")
+		b.WriteString(m.addInput.View())
+		b.WriteString("\n\n")
+		if len(m.addPkgChoices) > 0 {
+			b.WriteString(dimStyle.Render("tab to pick from existing packages"))
+			b.WriteString("\n")
+		}
 		b.WriteString(dimStyle.Render(fmt.Sprintf("adding %s", preview)))
 	}
 
@@ -322,9 +317,13 @@ func addFooterHints(m Model) []string {
 	switch m.addStep {
 	case 1:
 		if m.addPkgEditing {
-			return []string{kbd("enter", "confirm"), kbd("esc", "back")}
+			return []string{kbd("↑/k", "up"), kbd("↓/j", "down"), kbd("enter", "select"), kbd("esc", "back")}
 		}
-		return []string{kbd("↑/k", "up"), kbd("↓/j", "down"), kbd("enter", "select"), kbd("e", "edit name"), kbd("esc", "back")}
+		hints := []string{kbd("enter", "confirm"), kbd("esc", "back")}
+		if len(m.addPkgChoices) > 0 {
+			hints = append(hints, kbd("tab", "existing packages"))
+		}
+		return hints
 	case 2:
 		return []string{kbd("enter", "confirm"), kbd("esc", "back")}
 	default:
@@ -363,28 +362,26 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			case 1:
 				if m.addPkgEditing {
-					pkgName := m.addInput.Value()
-					if pkgName == "" {
+					if m.addPkgIdx < len(m.addPkgChoices) {
+						m.addPkgName = m.addPkgChoices[m.addPkgIdx]
+						m.addStep = 2
 						return m, nil
 					}
-					if err := validatePackageName(pkgName); err != nil {
-						m.err = err
-						return m, nil
-					}
-					m.addPkgName = pkgName
-					m.addInput.Blur()
-					m.addStep = 2
+					m.addPkgEditing = false
 					return m, nil
 				}
-				if m.addPkgIdx < len(m.addPkgChoices) {
-					m.addPkgName = m.addPkgChoices[m.addPkgIdx]
-					m.addStep = 2
+				pkgName := m.addInput.Value()
+				if pkgName == "" {
 					return m, nil
 				}
-				m.addPkgEditing = true
-				m.addInput.SetValue("")
-				m.addInput.Focus()
-				return m, textinput.Blink
+				if err := validatePackageName(pkgName); err != nil {
+					m.err = err
+					return m, nil
+				}
+				m.addPkgName = pkgName
+				m.addInput.Blur()
+				m.addStep = 2
+				return m, nil
 
 			case 2:
 				m.addStep = 3
@@ -392,8 +389,16 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case key.Matches(keyMsg, m.keys.Tab) && m.addStep == 1:
-			m.addInput.SetValue(m.addPkgName)
-			m.addInput.SetCursor(len(m.addPkgName))
+			if !m.addPkgEditing && len(m.addPkgChoices) > 0 {
+				m.addPkgEditing = true
+				m.addPkgIdx = 0
+				return m, nil
+			} else if m.addPkgEditing {
+				m.addPkgEditing = false
+				m.addInput.SetValue(m.addPkgName)
+				m.addInput.SetCursor(len(m.addPkgName))
+				return m, nil
+			}
 			return m, nil
 		}
 
@@ -402,6 +407,12 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if m.addStep == 1 && !m.addPkgEditing {
+			var cmd tea.Cmd
+			m.addInput, cmd = m.addInput.Update(msg)
+			return m, cmd
+		}
+
+		if m.addStep == 1 && m.addPkgEditing {
 			return m.step1HandleKey(keyMsg)
 		}
 	}
@@ -419,7 +430,7 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) step1HandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	maxIdx := len(m.addPkgChoices)
+	maxIdx := len(m.addPkgChoices) - 1
 	switch keyMsg.String() {
 	case "up", "k":
 		if m.addPkgIdx > 0 {
@@ -431,10 +442,6 @@ func (m Model) step1HandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.addPkgIdx++
 		}
 		return m, nil
-	case "e":
-		m.addPkgEditing = true
-		m.addInput.Focus()
-		return m, textinput.Blink
 	}
 	return m, nil
 }
@@ -531,6 +538,8 @@ func (m Model) browserSelectEntry() (tea.Model, tea.Cmd) {
 	m.addPkgName = detected
 	m.addInput.SetValue(detected)
 	m.addInput.SetCursor(len(detected))
+	m.addInput.Focus()
+	m.addPkgEditing = false
 	m.addStep = 1
 	return m, nil
 }
@@ -593,6 +602,8 @@ func (m Model) browserSelectDir() (tea.Model, tea.Cmd) {
 	m.addPkgName = detected
 	m.addInput.SetValue(detected)
 	m.addInput.SetCursor(len(detected))
+	m.addInput.Focus()
+	m.addPkgEditing = false
 	m.addStep = 1
 	return m, nil
 }
