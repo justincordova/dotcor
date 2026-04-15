@@ -39,12 +39,16 @@ func viewAdd(m Model) string {
 	if m.addStep == 0 {
 		header := subviewHeader(m.width, "Add File", []string{"browse"})
 		body := renderAddStep0(m) + errLine
-		footer := subviewFooter(m.width,
+		footerHints := []string{
 			kbd("↑/k", "up"), kbd("↓/j", "down"),
 			kbd("space", "select"), kbd("enter", "expand/confirm"),
 			kbd("h", "collapse"), kbd("/", "jump to path"),
 			kbd("esc", "cancel"),
-		)
+		}
+		if sc := selectionCount(m.browserSelected); sc != "" {
+			footerHints = append(footerHints, sc)
+		}
+		footer := subviewFooter(m.width, footerHints...)
 		return lipgloss.JoinVertical(lipgloss.Left,
 			header,
 			renderStepper(m.width, m.addStep),
@@ -159,14 +163,23 @@ func renderAddStep0(m Model) string {
 		var styledName string
 		if item.isDir {
 			selected := m.browserSelected[item.path]
-			if m.browserExpanded[item.path] {
+			expanded := m.browserExpanded[item.path]
+			if expanded {
 				icon = "▾"
 			} else if selected {
 				icon = "●"
 			} else {
 				icon = "▸"
 			}
-			styledName = accentStyle.Render(name + "/")
+			if selected {
+				styledName = successStyle.Render(name + "/")
+			} else {
+				styledName = accentStyle.Render(name + "/")
+			}
+			if selected && !expanded {
+				count := countFilesRecursive(item.path)
+				styledName += dimStyle.Render(fmt.Sprintf(" (%d files)", count))
+			}
 		} else if isSymlink(item.path) {
 			if m.browserSelected[item.path] {
 				icon = "●"
@@ -773,6 +786,31 @@ func (m Model) browserSelectFile(fullPath string) (tea.Model, tea.Cmd) {
 	m.addInput.Focus()
 	m.addStep = 1
 	return m, nil
+}
+
+func countFilesRecursive(dir string) int {
+	count := 0
+	_ = filepath.Walk(dir, func(_ string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || isSymlink(dir) {
+			return nil
+		}
+		count++
+		return nil
+	})
+	return count
+}
+
+func selectionCount(selected map[string]bool) string {
+	n := 0
+	for _, v := range selected {
+		if v {
+			n++
+		}
+	}
+	if n == 0 {
+		return ""
+	}
+	return dimStyle.Render(fmt.Sprintf("%d selected", n))
 }
 
 func countFiles(dir string) int {
