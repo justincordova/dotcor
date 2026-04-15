@@ -33,7 +33,7 @@ func viewAdd(m Model) string {
 		body := renderAddStep0(m) + errLine
 		footer := subviewFooter(m.width,
 			kbd("↑/k", "up"), kbd("↓/j", "down"),
-			kbd("l", "open dir"), kbd("enter", "select"),
+			kbd("enter", "add"), kbd("l", "open dir"),
 			kbd("h", "back"), kbd("esc", "cancel"),
 		)
 		return lipgloss.JoinVertical(lipgloss.Left,
@@ -151,7 +151,7 @@ func renderAddStep0(m Model) string {
 		var styledName string
 		if e.IsDir() {
 			icon = "▸"
-			styledName = textStyle.Render(name)
+			styledName = accentStyle.Render(name + "/")
 		} else if isSymlink(filepath.Join(m.browserPath, name)) {
 			icon = "◆"
 			styledName = dimStyle.Render(name)
