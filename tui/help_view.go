@@ -29,7 +29,7 @@ func viewHelp(m Model) string {
 				formatBinding("u", "unstow package"),
 				formatBinding("A", "stow all"),
 				formatBinding("a", "add file (browser)"),
-				formatBinding("d", "remove file"),
+				formatBinding("r", "remove file"),
 				formatBinding("x", "delete package"),
 			},
 		},

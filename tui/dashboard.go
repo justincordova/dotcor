@@ -549,7 +549,7 @@ func renderFooter(m Model) string {
 		kbd("u", "unstow"),
 		kbd("A", "stow-all"),
 		kbd("a", "add"),
-		kbd("d", "remove"),
+		kbd("r", "remove"),
 		kbd("x", "delete"),
 		kbd("i", "init git"),
 		kbd("S", "sync"),

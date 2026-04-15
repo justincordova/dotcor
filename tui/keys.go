@@ -52,7 +52,7 @@ func newKeyMap() keyMap {
 		Init:     key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "init git")),
 		Delete:   key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "delete pkg")),
 		StowAll:  key.NewBinding(key.WithKeys("A"), key.WithHelp("A", "stow all")),
-		Remove:   key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "remove file")),
+		Remove:   key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "remove file")),
 		Quit:     key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 	}
 }
