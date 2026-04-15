@@ -55,8 +55,10 @@ func (e errMsg) Error() string { return e.err.Error() }
 type tickMsg time.Time
 
 type stowResultMsg struct {
-	msg string
-	err error
+	msg       string
+	err       error
+	conflicts []string
+	pkgName   string
 }
 
 type syncResultMsg struct {
@@ -250,6 +252,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stowResultMsg:
 		if msg.err != nil {
 			m.err = msg.err
+		} else if len(msg.conflicts) > 0 {
+			m.confirmOpen = true
+			m.confirmAction = "resolve-conflicts"
+			m.confirmTarget = msg.pkgName
+			m.confirmTitle = fmt.Sprintf("%d conflicts detected", len(msg.conflicts))
+			var lines []string
+			for _, c := range msg.conflicts {
+				lines = append(lines, "  • "+c)
+			}
+			m.confirmBody = strings.Join(lines, "\n") + "\n\nBackup originals and replace with symlinks?"
+			m.confirmHint = "enter confirm · esc cancel"
+			m.confirmDanger = false
 		} else {
 			m.statusMsg = msg.msg
 			m.err = nil
@@ -367,6 +381,8 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.deletePackage()
 			case "remove":
 				return m, m.removeFileFromPackage()
+			case "resolve-conflicts":
+				return m, m.resolveConflicts()
 			}
 		default:
 			m.clearConfirm()
@@ -825,11 +841,32 @@ func (m Model) stowPackage() tea.Cmd {
 		if err != nil {
 			return stowResultMsg{err: err}
 		}
+		if len(result.Conflicts) > 0 {
+			return stowResultMsg{
+				conflicts: result.Conflicts,
+				pkgName:   pkg.Name,
+			}
+		}
 		msg := fmt.Sprintf("Stowed %s (%d linked", pkg.Name, result.Linked)
 		if result.Skipped > 0 {
 			msg += fmt.Sprintf(", %d skipped", result.Skipped)
 		}
 		msg += ")"
+		return stowResultMsg{msg: msg}
+	}
+}
+
+func (m Model) resolveConflicts() tea.Cmd {
+	pkgName := m.confirmTarget
+	repoDir := m.repoDir
+	homeDir := m.homeDir
+	backupDir := filepath.Join(repoDir, "backups")
+	return func() tea.Msg {
+		result, err := stow.LinkWithBackup(repoDir, homeDir, pkgName, backupDir)
+		if err != nil {
+			return stowResultMsg{err: err}
+		}
+		msg := fmt.Sprintf("Resolved %d conflicts in %s", result.Linked, pkgName)
 		return stowResultMsg{msg: msg}
 	}
 }

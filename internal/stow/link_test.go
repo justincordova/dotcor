@@ -250,6 +250,75 @@ func TestLink_RelativeSymlinkPath(t *testing.T) {
 	assert.Contains(t, linkTarget, "..")
 }
 
+func TestLinkWithBackup_ConflictRegularFile_BacksUpAndLinks(t *testing.T) {
+	tmpDir := t.TempDir()
+	repoDir := filepath.Join(tmpDir, "repo")
+	homeDir := filepath.Join(tmpDir, "home")
+	backupDir := filepath.Join(tmpDir, "backups")
+	pkgDir := filepath.Join(repoDir, "zsh")
+	require.NoError(t, os.MkdirAll(pkgDir, 0755))
+	require.NoError(t, os.MkdirAll(homeDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".zshrc"), []byte("repo"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".zshrc"), []byte("existing"), 0600))
+
+	result, err := LinkWithBackup(repoDir, homeDir, "zsh", backupDir)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Linked)
+	assert.Equal(t, 0, result.Skipped)
+
+	content, readErr := os.ReadFile(filepath.Join(homeDir, ".zshrc"))
+	require.NoError(t, readErr)
+	assert.Equal(t, "repo", string(content))
+
+	entries, readErr := os.ReadDir(backupDir)
+	require.NoError(t, readErr)
+	assert.GreaterOrEqual(t, len(entries), 1)
+}
+
+func TestLinkWithBackup_NoConflicts_ReturnsOriginalResult(t *testing.T) {
+	tmpDir := t.TempDir()
+	repoDir := filepath.Join(tmpDir, "repo")
+	homeDir := filepath.Join(tmpDir, "home")
+	backupDir := filepath.Join(tmpDir, "backups")
+	pkgDir := filepath.Join(repoDir, "zsh")
+	require.NoError(t, os.MkdirAll(pkgDir, 0755))
+	require.NoError(t, os.MkdirAll(homeDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".zshrc"), []byte("repo"), 0644))
+
+	result, err := LinkWithBackup(repoDir, homeDir, "zsh", backupDir)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Linked)
+	assert.Equal(t, 0, result.Skipped)
+	assert.Empty(t, result.Conflicts)
+
+	entries, readErr := os.ReadDir(backupDir)
+	if readErr == nil {
+		assert.Equal(t, 0, len(entries))
+	}
+}
+
+func TestLinkWithBackup_MixedConflictAndClean(t *testing.T) {
+	tmpDir := t.TempDir()
+	repoDir := filepath.Join(tmpDir, "repo")
+	homeDir := filepath.Join(tmpDir, "home")
+	backupDir := filepath.Join(tmpDir, "backups")
+	pkgDir := filepath.Join(repoDir, "tmux")
+	require.NoError(t, os.MkdirAll(pkgDir, 0755))
+	require.NoError(t, os.MkdirAll(homeDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".tmux.conf"), []byte("tmux"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".tmux.theme.conf"), []byte("theme"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".tmux.conf"), []byte("existing"), 0644))
+
+	result, err := LinkWithBackup(repoDir, homeDir, "tmux", backupDir)
+
+	require.NoError(t, err)
+	assert.Equal(t, 2, result.Linked)
+	assert.Equal(t, 0, result.Skipped)
+	assert.Empty(t, result.Conflicts)
+}
+
 func TestLink_AutoDetectedFiles_CopiesToRepoAndLinks(t *testing.T) {
 	tmpDir := t.TempDir()
 	repoDir := filepath.Join(tmpDir, "repo")

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 func Link(repoDir, homeDir, packageName string) (*LinkResult, error) {
@@ -199,4 +200,59 @@ func (r *LinkResult) linkFile(path, relPath, targetPath, relSymlink string) {
 
 	r.Conflicts = append(r.Conflicts, relPath)
 	r.Skipped++
+}
+
+func LinkWithBackup(repoDir, homeDir, packageName, backupDir string) (*LinkResult, error) {
+	result, err := Link(repoDir, homeDir, packageName)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(result.Conflicts) == 0 {
+		return result, nil
+	}
+
+	pkgDir := filepath.Join(repoDir, packageName)
+	for _, relPath := range result.Conflicts {
+		targetPath := filepath.Join(homeDir, relPath)
+		repoPath := filepath.Join(pkgDir, relPath)
+
+		srcData, readErr := os.ReadFile(targetPath)
+		if readErr != nil {
+			continue
+		}
+
+		srcInfo, statErr := os.Lstat(targetPath)
+		srcPerm := os.FileMode(0644)
+		if statErr == nil {
+			srcPerm = srcInfo.Mode().Perm()
+		}
+
+		ts := time.Now().Format("2006-01-02_15-04-05")
+		backupPath := filepath.Join(backupDir, ts, relPath)
+		if mkdirErr := os.MkdirAll(filepath.Dir(backupPath), 0755); mkdirErr != nil {
+			continue
+		}
+		if writeErr := os.WriteFile(backupPath, srcData, srcPerm); writeErr != nil {
+			continue
+		}
+
+		if removeErr := os.Remove(targetPath); removeErr != nil {
+			continue
+		}
+
+		relSymlink, symErr := filepath.Rel(filepath.Dir(targetPath), repoPath)
+		if symErr != nil {
+			continue
+		}
+		if symErr = os.Symlink(relSymlink, targetPath); symErr != nil {
+			continue
+		}
+
+		result.Linked++
+		result.Skipped--
+	}
+
+	result.Conflicts = nil
+	return result, nil
 }
