@@ -48,7 +48,7 @@ func viewSettingsMain(m Model) string {
 	if m.cfg.GitEnabled {
 		gitPill = pill("enabled", colBase, colGreen)
 	}
-	b.WriteString(fmt.Sprintf("  %s  %s\n", padRight(textStyle.Render("Status"), 12), gitPill))
+	b.WriteString("  " + padRight(textStyle.Render("Status"), 12) + "  " + gitPill + "\n")
 
 	remote := m.cfg.GitRemote
 	if remote == "" {
@@ -56,7 +56,7 @@ func viewSettingsMain(m Model) string {
 	} else {
 		remote = textStyle.Render(remote)
 	}
-	b.WriteString(fmt.Sprintf("  %s  %s\n", padRight(textStyle.Render("Remote"), 12), remote))
+	b.WriteString("  " + padRight(textStyle.Render("Remote"), 12) + "  " + remote + "\n")
 
 	b.WriteString("\n")
 	b.WriteString(accentStyle.Render("Ignore Patterns"))
@@ -67,7 +67,7 @@ func viewSettingsMain(m Model) string {
 		b.WriteString(dimStyle.Render("  (none)\n"))
 	} else {
 		for _, p := range m.cfg.IgnorePatterns {
-			b.WriteString(fmt.Sprintf("  %s %s\n", dimStyle.Render("•"), textStyle.Render(p)))
+			fmt.Fprintf(&b, "  %s %s\n", dimStyle.Render("•"), textStyle.Render(p))
 		}
 	}
 
@@ -104,10 +104,10 @@ func viewSettingsBackups(m Model) string {
 	if len(m.backups) == 0 {
 		b.WriteString(dimStyle.Render("No backups found."))
 	} else {
-		b.WriteString(fmt.Sprintf("%s %s\n\n",
+		fmt.Fprintf(&b, "%s %s\n\n",
 			dimStyle.Render("Total:"),
 			accentStyle.Render(fmt.Sprintf("%d backups", len(m.backups))),
-		))
+		)
 		maxDisplay := 20
 		for i, backup := range m.backups {
 			if i >= maxDisplay {
@@ -117,7 +117,7 @@ func viewSettingsBackups(m Model) string {
 			ts := dimStyle.Render(backup.Timestamp.Format("2006-01-02 15:04"))
 			src := textStyle.Render(truncate(backup.SourcePath, m.width-40))
 			size := dimStyle.Render(fmt.Sprintf("%d B", backup.Size))
-			b.WriteString(fmt.Sprintf("  %s  %s  %s\n", ts, src, size))
+			fmt.Fprintf(&b, "  %s  %s  %s\n", ts, src, size)
 		}
 	}
 

@@ -80,6 +80,18 @@ go test ./...                            # Run all tests
 go test ./internal/stow/...              # Run specific package
 ```
 
+### Linting
+
+**IMPORTANT:** The `rtk` wrapper for golangci-lint filters/suppresses some issues.
+Always run the direct binary to get accurate results:
+
+```bash
+/Users/justincordova/go/bin/golangci-lint run    # correct — shows all issues
+rtk golangci-lint run                             # WRONG — misses issues
+```
+
+Do NOT commit until `/Users/justincordova/go/bin/golangci-lint run` reports 0 issues.
+
 ## Common Patterns
 
 ### Lock Acquisition

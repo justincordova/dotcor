@@ -501,19 +501,6 @@ func renderFooter(m Model) string {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-func statusGlyph(s stow.PackageStatus) string {
-	switch s {
-	case stow.StatusLinked:
-		return successStyle.Render("●")
-	case stow.StatusPartial:
-		return warningStyle.Render("◐")
-	case stow.StatusUnlinked:
-		return errorStyle.Render("○")
-	default:
-		return dimStyle.Render("·")
-	}
-}
-
 func fileBadge(f stow.FileEntry) string {
 	switch {
 	case f.IsLinked:

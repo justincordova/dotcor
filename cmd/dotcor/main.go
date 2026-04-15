@@ -59,7 +59,7 @@ func main() {
 	if _, err := os.Stat(configDir); os.IsNotExist(err) {
 		fmt.Printf("Not initialized. Create %s? (y/N): ", configDir)
 		var response string
-		fmt.Scanln(&response)
+		_, _ = fmt.Scanln(&response)
 		if strings.ToLower(response) != "y" {
 			return
 		}
@@ -79,7 +79,7 @@ func main() {
 	if stow.DetectV1Layout(configDir) {
 		fmt.Printf("Found v1.x layout in %s/files/. Migrate to v2.0? (y/N): ", configDir)
 		var response string
-		fmt.Scanln(&response)
+		_, _ = fmt.Scanln(&response)
 		if strings.ToLower(response) == "y" {
 			steps, err := stow.PlanMigration(configDir)
 			if err != nil {

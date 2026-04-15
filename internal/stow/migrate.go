@@ -105,10 +105,7 @@ func ExecuteMigration(repoDir string, steps []MigrationStep) error {
 }
 
 func cleanEmptyParents(dir, stopAt string) {
-	for {
-		if dir == "" || dir == stopAt {
-			break
-		}
+	for dir != "" && dir != stopAt {
 		parent := filepath.Dir(dir)
 		if parent == dir {
 			break

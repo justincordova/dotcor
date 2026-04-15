@@ -34,66 +34,25 @@ const (
 	colFlamingo = "#f2cdcd"
 )
 
-// Legacy aliases kept so older call-sites in styles references still work.
-var (
-	muted   = colOverlay0
-	iris    = colMauve
-	foam    = colSky
-	pine    = colGreen
-	gold    = colYellow
-	love    = colRed
-	rose    = colPink
-	overlay = colSurface0
-	surface = colMantle
-	base    = colBase
-)
-
 // Semantic style tokens.
 var (
 	// Text
-	titleStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color(colMauve)).Bold(true)
-	subtitleStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color(colSubtext0))
-	textStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color(colText))
-	dimStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay0))
-	subtleStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color(colSurface2))
-	highlightStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colLavender))
+	subtitleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colSubtext0))
+	textStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color(colText))
+	dimStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color(colOverlay0))
+	subtleStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(colSurface2))
 
 	accentStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color(colPink)).Bold(true)
 	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colGreen))
 	warningStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colYellow))
 	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(colRed))
-	infoStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color(colBlue))
 
-	// Selection
-	selectedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(colBase)).
-			Background(lipgloss.Color(colMauve)).
-			Bold(true)
 	selectedRowStyle = lipgloss.NewStyle().
 				Background(lipgloss.Color(colSurface0)).
 				Bold(true)
 
-	// Help / keys
 	keyStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color(colLavender)).Bold(true)
 	descStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colSubtext0))
-
-	// Chrome
-	headerStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(colMauve)).
-			Bold(true).
-			Padding(0, 1)
-
-	footerStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(colSubtext0)).
-			Padding(0, 1)
-
-	statusBarStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(colText)).
-			Padding(0, 1)
-
-	// Panels
-	borderStyle = lipgloss.NewStyle().
-			BorderForeground(lipgloss.Color(colSurface1))
 
 	boxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
@@ -104,11 +63,6 @@ var (
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color(colMauve)).
 			Padding(0, 1)
-
-	// Git indicators
-	gitCleanStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colGreen))
-	gitDirtyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colYellow))
-	gitAheadStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colLavender))
 )
 
 // ─── Reusable components ─────────────────────────────────────────────────────
@@ -120,38 +74,6 @@ func pill(label string, fg, bg string) string {
 		Background(lipgloss.Color(bg)).
 		Padding(0, 1).
 		Render(label)
-}
-
-// outlinedPill renders a label with only a colored border — lighter-weight than pill.
-func outlinedPill(label string, fg string) string {
-	return lipgloss.NewStyle().
-		Foreground(lipgloss.Color(fg)).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(fg)).
-		Padding(0, 1).
-		Render(label)
-}
-
-// tabItem renders a single tab — active variant uses filled background.
-func tabItem(label string, active bool) string {
-	if active {
-		return lipgloss.NewStyle().
-			Foreground(lipgloss.Color(colBase)).
-			Background(lipgloss.Color(colMauve)).
-			Bold(true).
-			Padding(0, 2).
-			Render(label)
-	}
-	return lipgloss.NewStyle().
-		Foreground(lipgloss.Color(colSubtext0)).
-		Padding(0, 2).
-		Render(label)
-}
-
-// renderTabs joins a sequence of tabItems with a subtle separator.
-func renderTabs(items ...string) string {
-	sep := dimStyle.Render(" · ")
-	return strings.Join(items, sep)
 }
 
 // panel wraps content in a titled, bordered box. When active, the border color

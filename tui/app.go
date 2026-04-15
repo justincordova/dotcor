@@ -91,7 +91,6 @@ type Model struct {
 	spinner      spinner.Model
 	help         help.Model
 	keys         keyMap
-	showHelp     bool
 	searchInput  textinput.Model
 	searching    bool
 	searchQuery  string

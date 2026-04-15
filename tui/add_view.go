@@ -113,19 +113,19 @@ func renderAddStep2(m Model) string {
 	path := collapseHome(m.addPreview, m.homeDir)
 	repoPath := filepath.Join(m.repoDir, m.addPkgName, filepath.Base(m.addPreview))
 
-	b.WriteString(fmt.Sprintf("  %s  %s\n", padRight(textStyle.Render("File"), 12), textStyle.Render(path)))
-	b.WriteString(fmt.Sprintf("  %s  %s\n", padRight(textStyle.Render("Package"), 12), accentStyle.Render(m.addPkgName)))
-	b.WriteString(fmt.Sprintf("  %s  %s\n", padRight(textStyle.Render("Destination"), 12), dimStyle.Render(collapseHome(repoPath, m.homeDir))))
+	b.WriteString("  " + padRight(textStyle.Render("File"), 12) + "  " + textStyle.Render(path) + "\n")
+	b.WriteString("  " + padRight(textStyle.Render("Package"), 12) + "  " + accentStyle.Render(m.addPkgName) + "\n")
+	b.WriteString("  " + padRight(textStyle.Render("Destination"), 12) + "  " + dimStyle.Render(collapseHome(repoPath, m.homeDir)) + "\n")
 
 	if len(m.addSecrets) > 0 {
 		b.WriteString("\n")
 		b.WriteString(pill(" SECRETS DETECTED ", colBase, colRed))
 		b.WriteString("\n")
 		for _, s := range m.addSecrets {
-			b.WriteString(fmt.Sprintf("  %s %s\n",
+			fmt.Fprintf(&b, "  %s %s\n",
 				errorStyle.Render("⚠"),
 				warningStyle.Render(truncate(s, 80)),
-			))
+			)
 		}
 		b.WriteString("\n")
 		b.WriteString(warningStyle.Render("Review before committing — these may be sensitive."))
@@ -332,10 +332,7 @@ func detectPackageName(path string) string {
 	}
 
 	if len(parts) >= 1 {
-		name := parts[0]
-		if strings.HasPrefix(name, ".") {
-			name = name[1:]
-		}
+		name := strings.TrimPrefix(parts[0], ".")
 		if strings.Contains(name, "rc") {
 			name = strings.ReplaceAll(name, "rc", "")
 		}
