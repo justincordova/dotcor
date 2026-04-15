@@ -386,15 +386,15 @@ func renderFileDetail(m Model, width, maxLines int) string {
 		statusBadge := fileBadge(f)
 		rel := truncate(f.RelPath, width/2-4)
 		target := truncate(collapseHome(f.TargetPath, m.homeDir), width/2-2)
-		arrow := dimStyle.Render("→")
+		arrow := "→"
 
-		line := fmt.Sprintf("%s %s %s %s", statusBadge, textStyle.Render(rel), arrow, dimStyle.Render(target))
 		if selected {
-			line = selectedRowStyle.Width(width).Render("▸ " + line)
+			line := fmt.Sprintf("%s %s %s %s", statusBadge, rel, arrow, target)
+			b.WriteString(selectedRowStyle.Width(width).Render("▸ " + line))
 		} else {
-			line = "  " + line
+			line := fmt.Sprintf("%s %s %s %s", statusBadge, textStyle.Render(rel), dimStyle.Render(arrow), dimStyle.Render(target))
+			b.WriteString("  " + line)
 		}
-		b.WriteString(line)
 		b.WriteString("\n")
 	}
 
