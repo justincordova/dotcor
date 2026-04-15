@@ -109,10 +109,11 @@ type Model struct {
 	addPkgIdx     int
 	addPkgEditing bool
 
-	browserEntries map[string][]os.DirEntry
-	browserPath    string
-	browserCursor  int
-	browserScroll  int
+	browserEntries  map[string][]os.DirEntry
+	browserExpanded map[string]bool
+	browserCursor   int
+	browserScroll   int
+	browserItems    []browserItem
 
 	commits        []git.CommitInfo
 	selectedCommit int
@@ -158,24 +159,24 @@ func NewModel(cfg *config.Config, version string) Model {
 	vp := viewport.New(80, 20)
 
 	return Model{
-		cfg:            cfg,
-		version:        version,
-		repoDir:        repoDir,
-		homeDir:        homeDir,
-		spinner:        sp,
-		help:           newHelpModel(),
-		keys:           newKeyMap(),
-		searchInput:    si,
-		addInput:       ai,
-		settingsInput:  sti,
-		viewport:       vp,
-		expanded:       make(map[int]bool),
-		logLevel:       "info",
-		loading:        true,
-		width:          80,
-		height:         24,
-		browserEntries: make(map[string][]os.DirEntry),
-		browserPath:    homeDir,
+		cfg:             cfg,
+		version:         version,
+		repoDir:         repoDir,
+		homeDir:         homeDir,
+		spinner:         sp,
+		help:            newHelpModel(),
+		keys:            newKeyMap(),
+		searchInput:     si,
+		addInput:        ai,
+		settingsInput:   sti,
+		viewport:        vp,
+		expanded:        make(map[int]bool),
+		logLevel:        "info",
+		loading:         true,
+		width:           80,
+		height:          24,
+		browserEntries:  make(map[string][]os.DirEntry),
+		browserExpanded: make(map[string]bool),
 	}
 }
 
@@ -489,10 +490,11 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.activeView = AddView
 		m.addStep = 0
 		m.addInput.SetValue("")
-		m.browserPath = m.homeDir
+		m.browserExpanded = make(map[string]bool)
 		m.browserCursor = 0
 		m.browserScroll = 0
 		m.browserEntries = make(map[string][]os.DirEntry)
+		m.browserItems = nil
 		return m, nil
 
 	case key.Matches(keyMsg, m.keys.Diff):
@@ -710,10 +712,11 @@ func (m *Model) resetAddState() {
 	m.addPkgChoices = nil
 	m.addPkgIdx = 0
 	m.addPkgEditing = false
-	m.browserPath = m.homeDir
+	m.browserExpanded = make(map[string]bool)
 	m.browserCursor = 0
 	m.browserScroll = 0
 	m.browserEntries = make(map[string][]os.DirEntry)
+	m.browserItems = nil
 }
 
 func clearStatusAfter(d time.Duration) tea.Cmd {

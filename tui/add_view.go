@@ -22,6 +22,13 @@ type addResultMsg struct {
 	err error
 }
 
+type browserItem struct {
+	path   string
+	name   string
+	isDir  bool
+	indent int
+}
+
 func viewAdd(m Model) string {
 	errLine := ""
 	if m.err != nil {
@@ -33,8 +40,8 @@ func viewAdd(m Model) string {
 		body := renderAddStep0(m) + errLine
 		footer := subviewFooter(m.width,
 			kbd("↑/k", "up"), kbd("↓/j", "down"),
-			kbd("enter", "add"), kbd("l", "open dir"),
-			kbd("h", "back"), kbd("esc", "cancel"),
+			kbd("enter", "expand/add"), kbd("h", "collapse"),
+			kbd("esc", "cancel"),
 		)
 		return lipgloss.JoinVertical(lipgloss.Left,
 			header,
@@ -104,55 +111,49 @@ func renderStepper(width, step int) string {
 func renderAddStep0(m Model) string {
 	var b strings.Builder
 
-	displayPath := collapseHome(m.browserPath, m.homeDir)
+	displayPath := collapseHome(m.homeDir, m.homeDir)
 	if displayPath == "" {
-		displayPath = m.browserPath
+		displayPath = m.homeDir
 	}
 	b.WriteString(accentStyle.Render("  " + displayPath))
 	b.WriteString("\n")
 	b.WriteString(subtleStyle.Render(strings.Repeat("─", max(m.width-8, 4))))
 	b.WriteString("\n")
 
-	entries := m.browserVisibleEntries()
+	items := m.buildBrowserItems()
 
-	if m.browserPath != m.homeDir {
-		b.WriteString("  ")
-		b.WriteString(dimStyle.Render("▸"))
-		b.WriteString(" ")
-		b.WriteString(dimStyle.Render(".."))
-		b.WriteString("\n")
-	}
-
-	if len(entries) == 0 {
+	if len(items) == 0 {
 		b.WriteString("\n")
 		b.WriteString(dimStyle.Render("  (empty directory)"))
 		return b.String()
 	}
 
-	contentHeight := m.height - 8
-	if m.browserPath != m.homeDir {
-		contentHeight--
-	}
+	contentHeight := m.height - 6
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
 
 	start := m.browserScroll
 	end := start + contentHeight
-	if end > len(entries) {
-		end = len(entries)
+	if end > len(items) {
+		end = len(items)
 	}
 
 	for i := start; i < end; i++ {
-		e := entries[i]
-		name := e.Name()
+		item := items[i]
+		indent := strings.Repeat("  ", item.indent)
+		name := item.name
 
 		var icon string
 		var styledName string
-		if e.IsDir() {
-			icon = "▸"
+		if item.isDir {
+			if m.browserExpanded[item.path] {
+				icon = "▾"
+			} else {
+				icon = "▸"
+			}
 			styledName = accentStyle.Render(name + "/")
-		} else if isSymlink(filepath.Join(m.browserPath, name)) {
+		} else if isSymlink(item.path) {
 			icon = "◆"
 			styledName = dimStyle.Render(name)
 		} else {
@@ -160,7 +161,7 @@ func renderAddStep0(m Model) string {
 			styledName = textStyle.Render(name)
 		}
 
-		line := fmt.Sprintf("  %s %s", icon, styledName)
+		line := fmt.Sprintf("  %s%s %s", indent, icon, styledName)
 		if i == m.browserCursor {
 			line = selectedRowStyle.Width(m.width - 8).Render(line)
 		}
@@ -168,8 +169,8 @@ func renderAddStep0(m Model) string {
 		b.WriteString("\n")
 	}
 
-	if end < len(entries) {
-		b.WriteString(dimStyle.Render(fmt.Sprintf("  … %d more", len(entries)-end)))
+	if end < len(items) {
+		b.WriteString(dimStyle.Render(fmt.Sprintf("  … %d more", len(items)-end)))
 		b.WriteString("\n")
 	}
 
@@ -210,20 +211,39 @@ func isSymlink(path string) bool {
 	return info.Mode()&os.ModeSymlink != 0
 }
 
-func (m *Model) browserVisibleEntries() []os.DirEntry {
-	entries, ok := m.browserEntries[m.browserPath]
-	if !ok {
-		entries = loadBrowserDir(m.browserPath)
-		m.browserEntries[m.browserPath] = entries
+func (m *Model) buildBrowserItems() []browserItem {
+	if m.browserItems != nil {
+		return m.browserItems
 	}
-	return entries
+	var items []browserItem
+	m.walkBrowserDir(m.homeDir, 0, &items)
+	m.browserItems = items
+	return items
+}
+
+func (m *Model) walkBrowserDir(dir string, indent int, items *[]browserItem) {
+	entries, ok := m.browserEntries[dir]
+	if !ok {
+		entries = loadBrowserDir(dir)
+		m.browserEntries[dir] = entries
+	}
+
+	for _, e := range entries {
+		fullPath := filepath.Join(dir, e.Name())
+		*items = append(*items, browserItem{
+			path:   fullPath,
+			name:   e.Name(),
+			isDir:  e.IsDir(),
+			indent: indent,
+		})
+		if e.IsDir() && m.browserExpanded[fullPath] {
+			m.walkBrowserDir(fullPath, indent+1, items)
+		}
+	}
 }
 
 func (m *Model) browserAdjustScroll() {
-	contentHeight := m.height - 8
-	if m.browserPath != m.homeDir {
-		contentHeight--
-	}
+	contentHeight := m.height - 6
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
@@ -354,11 +374,17 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(keyMsg, m.keys.Enter):
 			switch m.addStep {
 			case 0:
-				entries := m.browserVisibleEntries()
-				if m.browserCursor >= 0 && m.browserCursor < len(entries) && entries[m.browserCursor].IsDir() {
-					return m.browserSelectDir()
+				items := m.buildBrowserItems()
+				if m.browserCursor < 0 || m.browserCursor >= len(items) {
+					return m, nil
 				}
-				return m.browserSelectEntry()
+				item := items[m.browserCursor]
+				if item.isDir {
+					m.browserExpanded[item.path] = !m.browserExpanded[item.path]
+					m.browserItems = nil
+					return m, nil
+				}
+				return m.browserSelectFile(item.path)
 
 			case 1:
 				if m.addPkgEditing {
@@ -447,6 +473,7 @@ func (m Model) step1HandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) browserHandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	items := m.buildBrowserItems()
 	switch keyMsg.String() {
 	case "up", "k":
 		if m.browserCursor > 0 {
@@ -456,53 +483,35 @@ func (m Model) browserHandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "down", "j":
-		entries := m.browserVisibleEntries()
-		if m.browserCursor < len(entries)-1 {
+		if m.browserCursor < len(items)-1 {
 			m.browserCursor++
 		}
 		m.browserAdjustScroll()
 		return m, nil
 
 	case "h":
-		parent := filepath.Dir(m.browserPath)
-		if parent != m.browserPath && parent != filepath.Dir(m.homeDir) {
-			m.browserPath = parent
-			m.browserCursor = 0
-			m.browserScroll = 0
+		if m.browserCursor >= 0 && m.browserCursor < len(items) {
+			item := items[m.browserCursor]
+			if item.isDir && m.browserExpanded[item.path] {
+				m.browserExpanded[item.path] = false
+				m.browserItems = nil
+				return m, nil
+			}
+			for dir := range m.browserExpanded {
+				if strings.HasPrefix(item.path, dir+string(filepath.Separator)) {
+					m.browserExpanded[dir] = false
+					m.browserItems = nil
+					return m, nil
+				}
+			}
 		}
 		return m, nil
-
-	case "l":
-		entries := m.browserVisibleEntries()
-		if m.browserCursor >= 0 && m.browserCursor < len(entries) && entries[m.browserCursor].IsDir() {
-			fullPath := filepath.Join(m.browserPath, entries[m.browserCursor].Name())
-			m.browserPath = fullPath
-			m.browserCursor = 0
-			m.browserScroll = 0
-			return m, nil
-		}
-		return m.browserSelectEntry()
 	}
 
 	return m, nil
 }
 
-func (m Model) browserSelectEntry() (tea.Model, tea.Cmd) {
-	entries := m.browserVisibleEntries()
-	if m.browserCursor < 0 || m.browserCursor >= len(entries) {
-		return m, nil
-	}
-
-	e := entries[m.browserCursor]
-	fullPath := filepath.Join(m.browserPath, e.Name())
-
-	if e.IsDir() {
-		m.browserPath = fullPath
-		m.browserCursor = 0
-		m.browserScroll = 0
-		return m, nil
-	}
-
+func (m Model) browserSelectFile(fullPath string) (tea.Model, tea.Cmd) {
 	if _, err := os.Stat(fullPath); err != nil {
 		m.err = fmt.Errorf("file not found: %s", fullPath)
 		return m, nil
@@ -539,71 +548,6 @@ func (m Model) browserSelectEntry() (tea.Model, tea.Cmd) {
 	m.addInput.SetValue(detected)
 	m.addInput.SetCursor(len(detected))
 	m.addInput.Focus()
-	m.addPkgEditing = false
-	m.addStep = 1
-	return m, nil
-}
-
-func (m Model) browserSelectDir() (tea.Model, tea.Cmd) {
-	entries := m.browserVisibleEntries()
-	if m.browserCursor < 0 || m.browserCursor >= len(entries) {
-		return m, nil
-	}
-
-	e := entries[m.browserCursor]
-	if !e.IsDir() {
-		return m.browserSelectEntry()
-	}
-
-	fullPath := filepath.Join(m.browserPath, e.Name())
-
-	if _, err := os.Stat(fullPath); err != nil {
-		m.err = fmt.Errorf("directory not found: %s", fullPath)
-		return m, nil
-	}
-	m.err = nil
-	m.addPreview = fullPath
-
-	var warnings []string
-	_ = filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return nil
-		}
-		if isSymlink(path) {
-			return nil
-		}
-		w, detectErr := core.DetectSecrets(path)
-		if detectErr == nil {
-			warnings = append(warnings, w...)
-		}
-		return nil
-	})
-	m.addSecrets = warnings
-
-	seen := make(map[string]bool)
-	var choices []string
-	for _, pkg := range m.packages {
-		if !seen[pkg.Name] {
-			seen[pkg.Name] = true
-			choices = append(choices, pkg.Name)
-		}
-	}
-	m.addPkgChoices = choices
-	m.addPkgIdx = 0
-	m.addPkgEditing = false
-
-	detected := detectPackageName(fullPath)
-	for i, name := range choices {
-		if name == detected {
-			m.addPkgIdx = i
-			break
-		}
-	}
-	m.addPkgName = detected
-	m.addInput.SetValue(detected)
-	m.addInput.SetCursor(len(detected))
-	m.addInput.Focus()
-	m.addPkgEditing = false
 	m.addStep = 1
 	return m, nil
 }
