@@ -5,9 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -21,12 +23,25 @@ type addResultMsg struct {
 }
 
 func viewAdd(m Model) string {
+	if m.addStep == 0 {
+		header := subviewHeader(m.width, "Add File", []string{"browse"})
+		body := renderAddStep0(m)
+		footer := subviewFooter(m.width,
+			kbd("↑/k", "up"), kbd("↓/j", "down"),
+			kbd("enter", "select"), kbd("h", "back"),
+			kbd("esc", "cancel"),
+		)
+		return lipgloss.JoinVertical(lipgloss.Left,
+			header,
+			subviewContent(m.width, m.height-4, body),
+			footer,
+		)
+	}
+
 	header := subviewHeader(m.width, "Add File", []string{stepLabel(m.addStep)})
 
 	var body string
 	switch m.addStep {
-	case 0:
-		body = renderAddStep0(m)
 	case 1:
 		body = renderAddStep1(m)
 	case 2:
@@ -82,13 +97,120 @@ func renderStepper(width, step int) string {
 }
 
 func renderAddStep0(m Model) string {
-	return strings.Join([]string{
-		textStyle.Render("Enter the path to a dotfile:"),
-		"",
-		m.addInput.View(),
-		"",
-		dimStyle.Render("e.g. ~/.config/nvim/init.lua  or  ~/.zshrc"),
-	}, "\n")
+	var b strings.Builder
+
+	displayPath := collapseHome(m.browserPath, m.homeDir)
+	if displayPath == "" {
+		displayPath = m.browserPath
+	}
+	b.WriteString(accentStyle.Render("  " + displayPath))
+	b.WriteString("\n")
+	b.WriteString(subtleStyle.Render(strings.Repeat("─", max(m.width-8, 4))))
+	b.WriteString("\n")
+
+	entries := m.browserVisibleEntries()
+
+	if m.browserPath != m.homeDir {
+		b.WriteString("  ")
+		b.WriteString(dimStyle.Render("▸"))
+		b.WriteString(" ")
+		b.WriteString(dimStyle.Render(".."))
+		b.WriteString("\n")
+	}
+
+	if len(entries) == 0 {
+		b.WriteString("\n")
+		b.WriteString(dimStyle.Render("  (empty directory)"))
+		return b.String()
+	}
+
+	contentHeight := m.height - 8
+	if m.browserPath != m.homeDir {
+		contentHeight--
+	}
+	if contentHeight < 1 {
+		contentHeight = 1
+	}
+
+	start := m.browserScroll
+	end := start + contentHeight
+	if end > len(entries) {
+		end = len(entries)
+	}
+
+	for i := start; i < end; i++ {
+		e := entries[i]
+		icon := "○"
+		name := e.Name()
+		if e.IsDir() {
+			icon = "▸"
+		}
+		line := fmt.Sprintf("  %s %s", icon, name)
+		if i == m.browserCursor {
+			line = selectedRowStyle.Width(m.width - 8).Render(line)
+		}
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+
+	if end < len(entries) {
+		b.WriteString(dimStyle.Render(fmt.Sprintf("  … %d more", len(entries)-end)))
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+var browserSkipDirs = map[string]bool{
+	".git": true, "node_modules": true, ".cache": true, "__pycache__": true,
+	"Library": true, ".Trash": true, ".dotcor": true,
+}
+
+func loadBrowserDir(path string) []os.DirEntry {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil
+	}
+	var filtered []os.DirEntry
+	for _, e := range entries {
+		if e.IsDir() && browserSkipDirs[e.Name()] {
+			continue
+		}
+		filtered = append(filtered, e)
+	}
+	sort.Slice(filtered, func(i, j int) bool {
+		if filtered[i].IsDir() != filtered[j].IsDir() {
+			return filtered[i].IsDir()
+		}
+		return strings.ToLower(filtered[i].Name()) < strings.ToLower(filtered[j].Name())
+	})
+	return filtered
+}
+
+func (m *Model) browserVisibleEntries() []os.DirEntry {
+	entries, ok := m.browserEntries[m.browserPath]
+	if !ok {
+		entries = loadBrowserDir(m.browserPath)
+		m.browserEntries[m.browserPath] = entries
+	}
+	return entries
+}
+
+func (m *Model) browserAdjustScroll() {
+	contentHeight := m.height - 8
+	if m.browserPath != m.homeDir {
+		contentHeight--
+	}
+	if contentHeight < 1 {
+		contentHeight = 1
+	}
+
+	if m.browserCursor < m.browserScroll {
+		m.browserScroll = m.browserCursor
+	}
+	if m.browserCursor >= m.browserScroll+contentHeight {
+		m.browserScroll = m.browserCursor - contentHeight + 1
+	}
 }
 
 func renderAddStep1(m Model) string {
@@ -140,12 +262,12 @@ func renderAddStep3(m Model) string {
 
 func addFooterHints(m Model) []string {
 	switch m.addStep {
-	case 0, 1:
-		return []string{kbd("enter", "next"), kbd("esc", "cancel")}
+	case 1:
+		return []string{kbd("enter", "next"), kbd("esc", "back")}
 	case 2:
-		return []string{kbd("enter", "confirm"), kbd("esc", "cancel")}
+		return []string{kbd("enter", "confirm"), kbd("esc", "back")}
 	default:
-		return []string{kbd("esc", "cancel")}
+		return []string{kbd("esc", "back")}
 	}
 }
 
@@ -153,35 +275,20 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch {
 		case key.Matches(keyMsg, m.keys.Esc):
-			m.activeView = DashboardView
-			m.resetAddState()
+			if m.addStep == 0 {
+				m.activeView = DashboardView
+				m.resetAddState()
+				m.err = nil
+				return m, nil
+			}
+			m.addStep = 0
 			m.err = nil
 			return m, nil
 
 		case key.Matches(keyMsg, m.keys.Enter):
 			switch m.addStep {
 			case 0:
-				path := expandHome(m.addInput.Value())
-				if path == "" {
-					return m, nil
-				}
-				if _, err := os.Stat(path); err != nil {
-					m.err = fmt.Errorf("file not found: %s", path)
-					return m, nil
-				}
-				warnings, err := core.ValidateAll(path, m.cfg)
-				if err != nil {
-					m.err = err
-					return m, nil
-				}
-				m.err = nil
-				m.addPreview = path
-				m.addPkgName = detectPackageName(path)
-				m.addInput.SetValue(m.addPkgName)
-				m.addInput.SetCursor(len(m.addPkgName))
-				m.addSecrets = warnings
-				m.addStep = 1
-				return m, nil
+				return m.browserSelectEntry()
 
 			case 1:
 				pkgName := m.addInput.Value()
@@ -207,15 +314,88 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.addInput.SetCursor(len(m.addPkgName))
 			return m, nil
 		}
+
+		if m.addStep == 0 {
+			return m.browserHandleKey(keyMsg)
+		}
 	}
 
-	if m.addStep <= 1 {
+	if m.addStep == 1 {
 		var cmd tea.Cmd
 		m.addInput, cmd = m.addInput.Update(msg)
 		return m, cmd
 	}
 
 	return m, nil
+}
+
+func (m Model) browserHandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch keyMsg.String() {
+	case "up", "k":
+		if m.browserCursor > 0 {
+			m.browserCursor--
+		}
+		m.browserAdjustScroll()
+		return m, nil
+
+	case "down", "j":
+		entries := m.browserVisibleEntries()
+		if m.browserCursor < len(entries)-1 {
+			m.browserCursor++
+		}
+		m.browserAdjustScroll()
+		return m, nil
+
+	case "h":
+		parent := filepath.Dir(m.browserPath)
+		if parent != m.browserPath && parent != filepath.Dir(m.homeDir) {
+			m.browserPath = parent
+			m.browserCursor = 0
+			m.browserScroll = 0
+		}
+		return m, nil
+
+	case "l":
+		return m.browserSelectEntry()
+	}
+
+	return m, nil
+}
+
+func (m Model) browserSelectEntry() (tea.Model, tea.Cmd) {
+	entries := m.browserVisibleEntries()
+	if m.browserCursor < 0 || m.browserCursor >= len(entries) {
+		return m, nil
+	}
+
+	e := entries[m.browserCursor]
+	fullPath := filepath.Join(m.browserPath, e.Name())
+
+	if e.IsDir() {
+		m.browserPath = fullPath
+		m.browserCursor = 0
+		m.browserScroll = 0
+		return m, nil
+	}
+
+	if _, err := os.Stat(fullPath); err != nil {
+		m.err = fmt.Errorf("file not found: %s", fullPath)
+		return m, nil
+	}
+	warnings, err := core.ValidateAll(fullPath, m.cfg)
+	if err != nil {
+		m.err = err
+		return m, nil
+	}
+	m.err = nil
+	m.addPreview = fullPath
+	m.addPkgName = detectPackageName(fullPath)
+	m.addInput.SetValue(m.addPkgName)
+	m.addInput.SetCursor(len(m.addPkgName))
+	m.addSecrets = warnings
+	m.addStep = 1
+	m.addInput.Focus()
+	return m, textinput.Blink
 }
 
 func (m Model) executeAdd() tea.Cmd {
@@ -302,17 +482,6 @@ func validateRelPath(rel string) error {
 		return fmt.Errorf("file path escapes home directory: %s", rel)
 	}
 	return nil
-}
-
-func expandHome(path string) string {
-	if strings.HasPrefix(path, "~/") {
-		home, _ := config.GetHomeDir()
-		if home == "" {
-			return path
-		}
-		return filepath.Join(home, path[2:])
-	}
-	return path
 }
 
 func detectPackageName(path string) string {

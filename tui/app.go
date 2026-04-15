@@ -106,6 +106,11 @@ type Model struct {
 	addPreview string
 	addSecrets []string
 
+	browserEntries map[string][]os.DirEntry
+	browserPath    string
+	browserCursor  int
+	browserScroll  int
+
 	commits        []git.CommitInfo
 	selectedCommit int
 	recentCommits  []git.CommitInfo
@@ -150,22 +155,24 @@ func NewModel(cfg *config.Config, version string) Model {
 	vp := viewport.New(80, 20)
 
 	return Model{
-		cfg:           cfg,
-		version:       version,
-		repoDir:       repoDir,
-		homeDir:       homeDir,
-		spinner:       sp,
-		help:          newHelpModel(),
-		keys:          newKeyMap(),
-		searchInput:   si,
-		addInput:      ai,
-		settingsInput: sti,
-		viewport:      vp,
-		expanded:      make(map[int]bool),
-		logLevel:      "info",
-		loading:       true,
-		width:         80,
-		height:        24,
+		cfg:            cfg,
+		version:        version,
+		repoDir:        repoDir,
+		homeDir:        homeDir,
+		spinner:        sp,
+		help:           newHelpModel(),
+		keys:           newKeyMap(),
+		searchInput:    si,
+		addInput:       ai,
+		settingsInput:  sti,
+		viewport:       vp,
+		expanded:       make(map[int]bool),
+		logLevel:       "info",
+		loading:        true,
+		width:          80,
+		height:         24,
+		browserEntries: make(map[string][]os.DirEntry),
+		browserPath:    homeDir,
 	}
 }
 
@@ -479,8 +486,11 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.activeView = AddView
 		m.addStep = 0
 		m.addInput.SetValue("")
-		m.addInput.Focus()
-		return m, textinput.Blink
+		m.browserPath = m.homeDir
+		m.browserCursor = 0
+		m.browserScroll = 0
+		m.browserEntries = make(map[string][]os.DirEntry)
+		return m, nil
 
 	case key.Matches(keyMsg, m.keys.Diff):
 		m.clearErr()
@@ -694,6 +704,10 @@ func (m *Model) resetAddState() {
 	m.addPkgName = ""
 	m.addPreview = ""
 	m.addSecrets = nil
+	m.browserPath = m.homeDir
+	m.browserCursor = 0
+	m.browserScroll = 0
+	m.browserEntries = make(map[string][]os.DirEntry)
 }
 
 func clearStatusAfter(d time.Duration) tea.Cmd {
