@@ -403,6 +403,23 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case key.Matches(keyMsg, m.keys.StowAll):
+		m.clearErr()
+		unlinked := 0
+		for _, pkg := range m.packages {
+			if pkg.Status != stow.StatusLinked {
+				unlinked++
+			}
+		}
+		if unlinked > 0 {
+			m.confirmAction = "stow-all"
+			m.confirmTarget = fmt.Sprintf("%d unlinked packages", unlinked)
+		} else {
+			m.statusMsg = "All packages already stowed"
+			return m, clearStatusAfter(3 * time.Second)
+		}
+		return m, nil
+
 	case key.Matches(keyMsg, m.keys.Delete):
 		m.clearErr()
 		if m.selectedPkg < len(m.packages) {
@@ -758,7 +775,46 @@ func (m Model) unstowPackage() tea.Cmd {
 	}
 }
 
-func (m Model) stowAllPackages() tea.Cmd { return nil }
+func (m Model) stowAllPackages() tea.Cmd {
+	repoDir := m.repoDir
+	homeDir := m.homeDir
+	packages := m.packages
+	logger := m.cfg.Logger
+
+	return func() tea.Msg {
+		var toStow []stow.Package
+		for _, pkg := range packages {
+			if pkg.Status != stow.StatusLinked {
+				toStow = append(toStow, pkg)
+			}
+		}
+		if len(toStow) == 0 {
+			return stowResultMsg{msg: "All packages already stowed"}
+		}
+
+		var totalLinked, totalSkipped int
+		var stowedNames []string
+		for _, pkg := range toStow {
+			result, err := stow.Link(repoDir, homeDir, pkg.Name)
+			if err != nil {
+				if logger != nil {
+					logger.Warn("stow all: failed to stow package", "name", pkg.Name, "error", err)
+				}
+				continue
+			}
+			totalLinked += result.Linked
+			totalSkipped += result.Skipped
+			stowedNames = append(stowedNames, pkg.Name)
+		}
+
+		msg := fmt.Sprintf("Stowed %d packages (%d linked", len(stowedNames), totalLinked)
+		if totalSkipped > 0 {
+			msg += fmt.Sprintf(", %d skipped", totalSkipped)
+		}
+		msg += ")"
+		return stowResultMsg{msg: msg}
+	}
+}
 func (m Model) deletePackage() tea.Cmd {
 	if m.selectedPkg >= len(m.packages) {
 		return nil
