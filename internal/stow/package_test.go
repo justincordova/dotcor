@@ -235,3 +235,80 @@ func TestComputeStatus_EmptyFiles_ReturnsUnlinked(t *testing.T) {
 	assert.Equal(t, StatusUnlinked, computeStatus(nil))
 	assert.Equal(t, StatusUnlinked, computeStatus([]FileEntry{}))
 }
+
+func TestDiscoverPackages_AutoDetectsNewFilesInManagedTree(t *testing.T) {
+	tmpDir := t.TempDir()
+	repoDir := filepath.Join(tmpDir, "repo")
+	homeDir := filepath.Join(tmpDir, "home")
+	pkgDir := filepath.Join(repoDir, "nvim")
+	require.NoError(t, os.MkdirAll(filepath.Join(pkgDir, ".config", "nvim"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(homeDir, ".config", "nvim", "lua", "plugins"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".config", "nvim", "init.lua"), []byte("init"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".config", "nvim", "lua", "plugins", "telescope.lua"), []byte("tel"), 0644))
+
+	packages, err := DiscoverPackages(repoDir, homeDir)
+
+	require.NoError(t, err)
+	require.Len(t, packages, 1)
+	require.Len(t, packages[0].Files, 2)
+
+	repoFiles := 0
+	autoFiles := 0
+	for _, f := range packages[0].Files {
+		if f.InRepo {
+			repoFiles++
+			assert.Equal(t, ".config/nvim/init.lua", f.RelPath)
+		} else {
+			autoFiles++
+			assert.Equal(t, filepath.Join(".config", "nvim", "lua", "plugins", "telescope.lua"), f.RelPath)
+			assert.True(t, f.Exists)
+			assert.False(t, f.IsLinked)
+		}
+	}
+	assert.Equal(t, 1, repoFiles)
+	assert.Equal(t, 1, autoFiles)
+	assert.Equal(t, StatusUnlinked, packages[0].Status)
+}
+
+func TestDiscoverPackages_NoAutoDetectForTopLevelFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	repoDir := filepath.Join(tmpDir, "repo")
+	homeDir := filepath.Join(tmpDir, "home")
+	pkgDir := filepath.Join(repoDir, "git")
+	require.NoError(t, os.MkdirAll(pkgDir, 0755))
+	require.NoError(t, os.MkdirAll(homeDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".gitconfig"), []byte("git"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".gitignore_global"), []byte("ignore"), 0644))
+
+	packages, err := DiscoverPackages(repoDir, homeDir)
+
+	require.NoError(t, err)
+	require.Len(t, packages, 1)
+	require.Len(t, packages[0].Files, 1)
+	assert.True(t, packages[0].Files[0].InRepo)
+}
+
+func TestDiscoverPackages_AutoDetectSetsStatusToPartial(t *testing.T) {
+	tmpDir := t.TempDir()
+	repoDir := filepath.Join(tmpDir, "repo")
+	homeDir := filepath.Join(tmpDir, "home")
+	pkgDir := filepath.Join(repoDir, "nvim")
+	require.NoError(t, os.MkdirAll(filepath.Join(pkgDir, ".config", "nvim"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(homeDir, ".config", "nvim"), 0755))
+
+	repoFile := filepath.Join(pkgDir, ".config", "nvim", "init.lua")
+	require.NoError(t, os.WriteFile(repoFile, []byte("init"), 0644))
+
+	targetPath := filepath.Join(homeDir, ".config", "nvim", "init.lua")
+	relLink, err := filepath.Rel(filepath.Dir(targetPath), repoFile)
+	require.NoError(t, err)
+	require.NoError(t, os.Symlink(relLink, targetPath))
+	require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".config", "nvim", "new.lua"), []byte("new"), 0644))
+
+	packages, err := DiscoverPackages(repoDir, homeDir)
+
+	require.NoError(t, err)
+	require.Len(t, packages, 1)
+	assert.Equal(t, StatusPartial, packages[0].Status)
+	require.Len(t, packages[0].Files, 2)
+}

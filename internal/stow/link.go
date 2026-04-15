@@ -41,48 +41,7 @@ func Link(repoDir, homeDir, packageName string) (*LinkResult, error) {
 			return fmt.Errorf("computing relative symlink: %w", err)
 		}
 
-		targetInfo, err := os.Lstat(targetPath)
-		if err != nil {
-			if !os.IsNotExist(err) {
-				return fmt.Errorf("checking target %s: %w", targetPath, err)
-			}
-
-			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-				return fmt.Errorf("creating parent directory for %s: %w", targetPath, err)
-			}
-
-			if err := os.Symlink(relSymlink, targetPath); err != nil {
-				return fmt.Errorf("creating symlink %s: %w", targetPath, err)
-			}
-			result.Linked++
-			return nil
-		}
-
-		if targetInfo.Mode()&os.ModeSymlink != 0 {
-			existingTarget, err := os.Readlink(targetPath)
-			if err != nil {
-				return fmt.Errorf("reading existing symlink %s: %w", targetPath, err)
-			}
-
-			var resolved string
-			if filepath.IsAbs(existingTarget) {
-				resolved = filepath.Clean(existingTarget)
-			} else {
-				resolved = filepath.Clean(filepath.Join(filepath.Dir(targetPath), existingTarget))
-			}
-
-			if resolved == filepath.Clean(path) {
-				result.Skipped++
-				return nil
-			}
-
-			result.Conflicts = append(result.Conflicts, relPath)
-			result.Skipped++
-			return nil
-		}
-
-		result.Conflicts = append(result.Conflicts, relPath)
-		result.Skipped++
+		result.linkFile(path, relPath, targetPath, relSymlink)
 		return nil
 	})
 
@@ -90,5 +49,154 @@ func Link(repoDir, homeDir, packageName string) (*LinkResult, error) {
 		return nil, err
 	}
 
+	packages, discoverErr := DiscoverPackages(repoDir, homeDir)
+	if discoverErr != nil {
+		return result, nil
+	}
+
+	for _, pkg := range packages {
+		if pkg.Name != packageName {
+			continue
+		}
+		for _, f := range pkg.Files {
+			if f.InRepo {
+				continue
+			}
+			linkAutoDetectedFile(result, pkgDir, homeDir, f)
+		}
+		break
+	}
+
 	return result, nil
+}
+
+func linkAutoDetectedFile(result *LinkResult, pkgDir, homeDir string, f FileEntry) {
+	repoPath := filepath.Join(pkgDir, f.RelPath)
+
+	targetInfo, err := os.Lstat(f.TargetPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return
+		}
+		result.Skipped++
+		return
+	}
+
+	if targetInfo.Mode()&os.ModeSymlink != 0 {
+		linkTarget, readErr := os.Readlink(f.TargetPath)
+		if readErr == nil {
+			var resolved string
+			if filepath.IsAbs(linkTarget) {
+				resolved = filepath.Clean(linkTarget)
+			} else {
+				resolved = filepath.Clean(filepath.Join(filepath.Dir(f.TargetPath), linkTarget))
+			}
+			if resolved == filepath.Clean(repoPath) {
+				result.Skipped++
+				return
+			}
+		}
+		result.Conflicts = append(result.Conflicts, f.RelPath)
+		result.Skipped++
+		return
+	}
+
+	srcData, readErr := os.ReadFile(f.TargetPath)
+	if readErr != nil {
+		result.Conflicts = append(result.Conflicts, f.RelPath)
+		result.Skipped++
+		return
+	}
+
+	if mkdirErr := os.MkdirAll(filepath.Dir(repoPath), 0755); mkdirErr != nil {
+		result.Conflicts = append(result.Conflicts, f.RelPath)
+		result.Skipped++
+		return
+	}
+
+	srcPerm := targetInfo.Mode().Perm()
+	if writeErr := os.WriteFile(repoPath, srcData, srcPerm); writeErr != nil {
+		result.Conflicts = append(result.Conflicts, f.RelPath)
+		result.Skipped++
+		return
+	}
+
+	relSymlink, symErr := filepath.Rel(filepath.Dir(f.TargetPath), repoPath)
+	if symErr != nil {
+		result.Skipped++
+		return
+	}
+
+	if symErr = os.Symlink(relSymlink, f.TargetPath+".dotcor-tmp"); symErr != nil {
+		result.Skipped++
+		return
+	}
+
+	if removeErr := os.Remove(f.TargetPath); removeErr != nil {
+		_ = os.Remove(f.TargetPath + ".dotcor-tmp")
+		result.Conflicts = append(result.Conflicts, f.RelPath)
+		result.Skipped++
+		return
+	}
+
+	if renameErr := os.Rename(f.TargetPath+".dotcor-tmp", f.TargetPath); renameErr != nil {
+		_ = os.Remove(f.TargetPath + ".dotcor-tmp")
+		result.Skipped++
+		return
+	}
+
+	result.Linked++
+}
+
+func (r *LinkResult) linkFile(path, relPath, targetPath, relSymlink string) {
+	targetInfo, err := os.Lstat(targetPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			r.Conflicts = append(r.Conflicts, relPath)
+			r.Skipped++
+			return
+		}
+
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+			r.Conflicts = append(r.Conflicts, relPath)
+			r.Skipped++
+			return
+		}
+
+		if err := os.Symlink(relSymlink, targetPath); err != nil {
+			r.Conflicts = append(r.Conflicts, relPath)
+			r.Skipped++
+			return
+		}
+		r.Linked++
+		return
+	}
+
+	if targetInfo.Mode()&os.ModeSymlink != 0 {
+		existingTarget, err := os.Readlink(targetPath)
+		if err != nil {
+			r.Conflicts = append(r.Conflicts, relPath)
+			r.Skipped++
+			return
+		}
+
+		var resolved string
+		if filepath.IsAbs(existingTarget) {
+			resolved = filepath.Clean(existingTarget)
+		} else {
+			resolved = filepath.Clean(filepath.Join(filepath.Dir(targetPath), existingTarget))
+		}
+
+		if resolved == filepath.Clean(path) {
+			r.Skipped++
+			return
+		}
+
+		r.Conflicts = append(r.Conflicts, relPath)
+		r.Skipped++
+		return
+	}
+
+	r.Conflicts = append(r.Conflicts, relPath)
+	r.Skipped++
 }

@@ -28,6 +28,7 @@ type FileEntry struct {
 	IsLinked   bool
 	Exists     bool
 	IsSymlink  bool
+	InRepo     bool
 }
 
 type LinkResult struct {
@@ -80,6 +81,8 @@ func DiscoverPackages(repoDir, homeDir string) ([]Package, error) {
 			return nil, fmt.Errorf("discovering files for package %s: %w", entry.Name(), err)
 		}
 
+		files = appendAutoDetected(files, pkgPath, homeDir)
+
 		pkg := Package{
 			Name:   entry.Name(),
 			Path:   pkgPath,
@@ -113,6 +116,7 @@ func discoverFiles(pkgDir, homeDir string) ([]FileEntry, error) {
 		entry := FileEntry{
 			RelPath:    relPath,
 			TargetPath: targetPath,
+			InRepo:     true,
 		}
 
 		targetInfo, err := os.Lstat(targetPath)
@@ -168,4 +172,92 @@ func computeStatus(files []FileEntry) PackageStatus {
 		return StatusUnlinked
 	}
 	return StatusPartial
+}
+
+func appendAutoDetected(files []FileEntry, pkgDir, homeDir string) []FileEntry {
+	managedRoot := findManagedRoot(files)
+	if managedRoot == "" {
+		return files
+	}
+
+	tracked := make(map[string]bool, len(files))
+	for _, f := range files {
+		tracked[f.RelPath] = true
+	}
+
+	homeRoot := filepath.Join(homeDir, managedRoot)
+	_ = filepath.Walk(homeRoot, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		relPath, relErr := filepath.Rel(homeDir, path)
+		if relErr != nil || tracked[relPath] {
+			return nil
+		}
+
+		entry := FileEntry{
+			RelPath:    relPath,
+			TargetPath: path,
+			Exists:     true,
+			IsLinked:   false,
+			IsSymlink:  false,
+			InRepo:     false,
+		}
+
+		linkInfo, statErr := os.Lstat(path)
+		if statErr == nil && linkInfo.Mode()&os.ModeSymlink != 0 {
+			entry.IsSymlink = true
+			linkTarget, readErr := os.Readlink(path)
+			if readErr == nil {
+				var resolved string
+				if filepath.IsAbs(linkTarget) {
+					resolved = filepath.Clean(linkTarget)
+				} else {
+					resolved = filepath.Clean(filepath.Join(filepath.Dir(path), linkTarget))
+				}
+				repoPath := filepath.Join(pkgDir, relPath)
+				entry.IsLinked = resolved == filepath.Clean(repoPath)
+			}
+		}
+
+		files = append(files, entry)
+		return nil
+	})
+
+	return files
+}
+
+func findManagedRoot(files []FileEntry) string {
+	var dirs []string
+	for _, f := range files {
+		if !f.InRepo {
+			continue
+		}
+		dir := filepath.Dir(f.RelPath)
+		if dir == "." {
+			continue
+		}
+		dirs = append(dirs, dir)
+	}
+	if len(dirs) == 0 {
+		return ""
+	}
+
+	common := dirs[0]
+	for _, d := range dirs[1:] {
+		for !strings.HasPrefix(d+string(filepath.Separator), common+string(filepath.Separator)) && d != common {
+			parent := filepath.Dir(common)
+			if parent == common {
+				break
+			}
+			common = parent
+		}
+	}
+
+	parts := strings.Split(common, string(filepath.Separator))
+	if len(parts) <= 1 {
+		return ""
+	}
+
+	return common
 }

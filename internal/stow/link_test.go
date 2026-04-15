@@ -230,7 +230,6 @@ func TestLink_EmptyPackage_LinksNothing(t *testing.T) {
 }
 
 func TestLink_RelativeSymlinkPath(t *testing.T) {
-	// Arrange
 	tmpDir := t.TempDir()
 	repoDir := filepath.Join(tmpDir, "repo")
 	homeDir := filepath.Join(tmpDir, "home")
@@ -239,10 +238,8 @@ func TestLink_RelativeSymlinkPath(t *testing.T) {
 	require.NoError(t, os.MkdirAll(homeDir, 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".config", "nvim", "init.lua"), []byte("lua"), 0644))
 
-	// Act
 	result, err := Link(repoDir, homeDir, "nvim")
 
-	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Linked)
 
@@ -251,4 +248,34 @@ func TestLink_RelativeSymlinkPath(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, filepath.IsAbs(linkTarget))
 	assert.Contains(t, linkTarget, "..")
+}
+
+func TestLink_AutoDetectedFiles_CopiesToRepoAndLinks(t *testing.T) {
+	tmpDir := t.TempDir()
+	repoDir := filepath.Join(tmpDir, "repo")
+	homeDir := filepath.Join(tmpDir, "home")
+	pkgDir := filepath.Join(repoDir, "nvim")
+	require.NoError(t, os.MkdirAll(filepath.Join(pkgDir, ".config", "nvim"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(homeDir, ".config", "nvim", "lua", "plugins"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".config", "nvim", "init.lua"), []byte("init"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".config", "nvim", "lua", "plugins", "telescope.lua"), []byte("tel"), 0644))
+
+	result, err := Link(repoDir, homeDir, "nvim")
+
+	require.NoError(t, err)
+	assert.Equal(t, 2, result.Linked)
+	assert.Equal(t, 0, result.Skipped)
+	assert.Empty(t, result.Conflicts)
+
+	repoCopy := filepath.Join(pkgDir, ".config", "nvim", "lua", "plugins", "telescope.lua")
+	assert.FileExists(t, repoCopy)
+
+	data, readErr := os.ReadFile(repoCopy)
+	require.NoError(t, readErr)
+	assert.Equal(t, "tel", string(data))
+
+	homeLink := filepath.Join(homeDir, ".config", "nvim", "lua", "plugins", "telescope.lua")
+	linkTarget, readErr := os.Readlink(homeLink)
+	require.NoError(t, readErr)
+	assert.False(t, filepath.IsAbs(linkTarget))
 }
