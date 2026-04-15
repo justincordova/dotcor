@@ -23,9 +23,14 @@ type addResultMsg struct {
 }
 
 func viewAdd(m Model) string {
+	errLine := ""
+	if m.err != nil {
+		errLine = "\n" + errorStyle.Render(fmt.Sprintf("  ✗ %v", m.err)) + "\n"
+	}
+
 	if m.addStep == 0 {
 		header := subviewHeader(m.width, "Add File", []string{"browse"})
-		body := renderAddStep0(m)
+		body := renderAddStep0(m) + errLine
 		footer := subviewFooter(m.width,
 			kbd("↑/k", "up"), kbd("↓/j", "down"),
 			kbd("enter", "select"), kbd("h", "back"),
@@ -43,9 +48,9 @@ func viewAdd(m Model) string {
 	var body string
 	switch m.addStep {
 	case 1:
-		body = renderAddStep1(m)
+		body = renderAddStep1(m) + errLine
 	case 2:
-		body = renderAddStep2(m)
+		body = renderAddStep2(m) + errLine
 	case 3:
 		body = renderAddStep3(m)
 	}
