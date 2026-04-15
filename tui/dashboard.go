@@ -559,10 +559,13 @@ func renderFooter(m Model) string {
 
 	hints := joinHints(
 		kbd("↑↓/jk", "nav"),
-		kbd("enter", "expand"),
 		kbd("s", "stow"),
 		kbd("u", "unstow"),
+		kbd("A", "stow-all"),
 		kbd("a", "add"),
+		kbd("d", "remove"),
+		kbd("x", "delete"),
+		kbd("i", "init git"),
 		kbd("S", "sync"),
 		kbd("/", "search"),
 		kbd("q", "quit"),
