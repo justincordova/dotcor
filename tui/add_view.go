@@ -40,8 +40,8 @@ func viewAdd(m Model) string {
 		body := renderAddStep0(m) + errLine
 		footer := subviewFooter(m.width,
 			kbd("↑/k", "up"), kbd("↓/j", "down"),
-			kbd("enter", "expand/add"), kbd("h", "collapse"),
-			kbd("esc", "cancel"),
+			kbd("space", "select"), kbd("enter", "expand/confirm"),
+			kbd("h", "collapse"), kbd("esc", "cancel"),
 		)
 		return lipgloss.JoinVertical(lipgloss.Left,
 			header,
@@ -147,18 +147,33 @@ func renderAddStep0(m Model) string {
 		var icon string
 		var styledName string
 		if item.isDir {
+			selected := m.browserSelected[item.path]
 			if m.browserExpanded[item.path] {
 				icon = "▾"
+			} else if selected {
+				icon = "●"
 			} else {
 				icon = "▸"
 			}
 			styledName = accentStyle.Render(name + "/")
 		} else if isSymlink(item.path) {
-			icon = "◆"
+			if m.browserSelected[item.path] {
+				icon = "●"
+			} else {
+				icon = "◆"
+			}
 			styledName = dimStyle.Render(name)
 		} else {
-			icon = "○"
+			if m.browserSelected[item.path] {
+				icon = "●"
+			} else {
+				icon = "○"
+			}
 			styledName = textStyle.Render(name)
+		}
+
+		if m.browserSelected[item.path] || (item.isDir && m.browserSelected[item.path]) {
+			icon = successStyle.Render(icon)
 		}
 
 		line := fmt.Sprintf("  %s%s %s", indent, icon, styledName)
@@ -257,7 +272,6 @@ func (m *Model) browserAdjustScroll() {
 }
 
 func renderAddStep1(m Model) string {
-	preview := collapseHome(m.addPreview, m.homeDir)
 	var b strings.Builder
 
 	if m.addPkgEditing {
@@ -272,7 +286,7 @@ func renderAddStep1(m Model) string {
 			b.WriteString("\n")
 		}
 		b.WriteString("\n")
-		b.WriteString(dimStyle.Render(fmt.Sprintf("adding %s", preview)))
+		b.WriteString(dimStyle.Render(m.addPreviewSummary()))
 	} else {
 		b.WriteString(textStyle.Render("Package name:"))
 		b.WriteString("\n\n")
@@ -282,10 +296,18 @@ func renderAddStep1(m Model) string {
 			b.WriteString(dimStyle.Render("tab to pick from existing packages"))
 			b.WriteString("\n")
 		}
-		b.WriteString(dimStyle.Render(fmt.Sprintf("adding %s", preview)))
+		b.WriteString(dimStyle.Render(m.addPreviewSummary()))
 	}
 
 	return b.String()
+}
+
+func (m Model) addPreviewSummary() string {
+	files := m.addPreviewFiles()
+	if len(files) == 1 {
+		return fmt.Sprintf("adding %s", collapseHome(files[0], m.homeDir))
+	}
+	return fmt.Sprintf("adding %s", countLabel(len(files), "file"))
 }
 
 func renderAddStep2(m Model) string {
@@ -295,21 +317,37 @@ func renderAddStep2(m Model) string {
 	b.WriteString(subtleStyle.Render(strings.Repeat("─", 40)))
 	b.WriteString("\n\n")
 
-	path := collapseHome(m.addPreview, m.homeDir)
-	relPath, _ := filepath.Rel(m.homeDir, m.addPreview)
-	repoPath := filepath.Join(m.repoDir, m.addPkgName, relPath)
+	files := m.addPreviewFiles()
 
-	info, _ := os.Stat(m.addPreview)
-	if info != nil && info.IsDir() {
-		n := countFiles(m.addPreview)
-		b.WriteString("  " + padRight(textStyle.Render("Folder"), 12) + "  " + textStyle.Render(path) + "\n")
-		b.WriteString("  " + padRight(textStyle.Render("Package"), 12) + "  " + accentStyle.Render(m.addPkgName) + "\n")
-		b.WriteString("  " + padRight(textStyle.Render("Files"), 12) + "  " + dimStyle.Render(countLabel(n, "file")) + "\n")
-		b.WriteString("  " + padRight(textStyle.Render("Destination"), 12) + "  " + dimStyle.Render(collapseHome(repoPath, m.homeDir)) + "\n")
+	if len(files) == 1 {
+		path := collapseHome(files[0], m.homeDir)
+		relPath, _ := filepath.Rel(m.homeDir, files[0])
+		repoPath := filepath.Join(m.repoDir, m.addPkgName, relPath)
+		info, _ := os.Stat(files[0])
+		if info != nil && info.IsDir() {
+			n := countFiles(files[0])
+			b.WriteString("  " + padRight(textStyle.Render("Folder"), 12) + "  " + textStyle.Render(path) + "\n")
+			b.WriteString("  " + padRight(textStyle.Render("Package"), 12) + "  " + accentStyle.Render(m.addPkgName) + "\n")
+			b.WriteString("  " + padRight(textStyle.Render("Files"), 12) + "  " + dimStyle.Render(countLabel(n, "file")) + "\n")
+			b.WriteString("  " + padRight(textStyle.Render("Destination"), 12) + "  " + dimStyle.Render(collapseHome(repoPath, m.homeDir)) + "\n")
+		} else {
+			b.WriteString("  " + padRight(textStyle.Render("File"), 12) + "  " + textStyle.Render(path) + "\n")
+			b.WriteString("  " + padRight(textStyle.Render("Package"), 12) + "  " + accentStyle.Render(m.addPkgName) + "\n")
+			b.WriteString("  " + padRight(textStyle.Render("Destination"), 12) + "  " + dimStyle.Render(collapseHome(repoPath, m.homeDir)) + "\n")
+		}
 	} else {
-		b.WriteString("  " + padRight(textStyle.Render("File"), 12) + "  " + textStyle.Render(path) + "\n")
+		b.WriteString("  " + padRight(textStyle.Render("Files"), 12) + "  " + dimStyle.Render(countLabel(len(files), "file")) + "\n")
 		b.WriteString("  " + padRight(textStyle.Render("Package"), 12) + "  " + accentStyle.Render(m.addPkgName) + "\n")
-		b.WriteString("  " + padRight(textStyle.Render("Destination"), 12) + "  " + dimStyle.Render(collapseHome(repoPath, m.homeDir)) + "\n")
+		b.WriteString("\n")
+		maxShow := 8
+		for i, f := range files {
+			if i >= maxShow {
+				b.WriteString(dimStyle.Render(fmt.Sprintf("  … %d more", len(files)-maxShow)))
+				b.WriteString("\n")
+				break
+			}
+			b.WriteString("  " + dimStyle.Render(collapseHome(f, m.homeDir)) + "\n")
+		}
 	}
 
 	if len(m.addSecrets) > 0 {
@@ -330,7 +368,27 @@ func renderAddStep2(m Model) string {
 }
 
 func renderAddStep3(m Model) string {
-	return fmt.Sprintf("%s  %s", m.spinner.View(), textStyle.Render("Adding file…"))
+	files := m.addPreviewFiles()
+	label := "Adding file…"
+	if len(files) > 1 {
+		label = fmt.Sprintf("Adding %d files…", len(files))
+	}
+	return fmt.Sprintf("%s  %s", m.spinner.View(), textStyle.Render(label))
+}
+
+func (m Model) addPreviewFiles() []string {
+	if m.addPreview == "" {
+		return nil
+	}
+	files := strings.Split(m.addPreview, "\n")
+	var clean []string
+	for _, f := range files {
+		f = strings.TrimSpace(f)
+		if f != "" {
+			clean = append(clean, f)
+		}
+	}
+	return clean
 }
 
 func addFooterHints(m Model) []string {
@@ -374,6 +432,9 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(keyMsg, m.keys.Enter):
 			switch m.addStep {
 			case 0:
+				if len(m.browserSelected) > 0 {
+					return m.confirmBrowserSelection()
+				}
 				items := m.buildBrowserItems()
 				if m.browserCursor < 0 || m.browserCursor >= len(items) {
 					return m, nil
@@ -489,6 +550,18 @@ func (m Model) browserHandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.browserAdjustScroll()
 		return m, nil
 
+	case " ":
+		if m.browserCursor < 0 || m.browserCursor >= len(items) {
+			return m, nil
+		}
+		item := items[m.browserCursor]
+		if item.isDir {
+			m.toggleDirSelection(item.path)
+		} else {
+			m.browserSelected[item.path] = !m.browserSelected[item.path]
+		}
+		return m, nil
+
 	case "h":
 		if m.browserCursor >= 0 && m.browserCursor < len(items) {
 			item := items[m.browserCursor]
@@ -509,6 +582,68 @@ func (m Model) browserHandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func (m Model) confirmBrowserSelection() (tea.Model, tea.Cmd) {
+	var files []string
+	for path, selected := range m.browserSelected {
+		if !selected {
+			continue
+		}
+		if info, err := os.Stat(path); err == nil && info.IsDir() {
+			_ = filepath.Walk(path, func(p string, fi os.FileInfo, err error) error {
+				if err != nil || fi.IsDir() || isSymlink(p) {
+					return nil
+				}
+				files = append(files, p)
+				return nil
+			})
+		} else {
+			files = append(files, path)
+		}
+	}
+	sort.Strings(files)
+
+	if len(files) == 0 {
+		return m, nil
+	}
+
+	m.addPreview = strings.Join(files, "\n")
+	m.err = nil
+
+	seen := make(map[string]bool)
+	var choices []string
+	for _, pkg := range m.packages {
+		if !seen[pkg.Name] {
+			seen[pkg.Name] = true
+			choices = append(choices, pkg.Name)
+		}
+	}
+	m.addPkgChoices = choices
+	m.addPkgIdx = 0
+	m.addPkgEditing = false
+
+	detected := detectPackageNameMulti(files, m.homeDir)
+	for i, name := range choices {
+		if name == detected {
+			m.addPkgIdx = i
+			break
+		}
+	}
+	m.addPkgName = detected
+	m.addInput.SetValue(detected)
+	m.addInput.SetCursor(len(detected))
+	m.addInput.Focus()
+	m.addStep = 1
+	return m, nil
+}
+
+func (m *Model) toggleDirSelection(dirPath string) {
+	if m.browserSelected[dirPath] {
+		delete(m.browserSelected, dirPath)
+		return
+	}
+	m.browserSelected[dirPath] = true
 }
 
 func (m Model) browserSelectFile(fullPath string) (tea.Model, tea.Cmd) {
@@ -565,27 +700,52 @@ func countFiles(dir string) int {
 }
 
 func (m Model) executeAdd() tea.Cmd {
-	srcPath := m.addPreview
+	files := m.addPreviewFiles()
 	pkgName := m.addPkgName
 	repoDir := m.repoDir
 	homeDir := m.homeDir
 	logger := m.cfg.Logger
 
 	return func() tea.Msg {
-		info, err := os.Stat(srcPath)
-		if err != nil {
-			return addResultMsg{err: fmt.Errorf("source not found: %w", err)}
-		}
-
 		pkgDir := filepath.Join(repoDir, pkgName)
 		if err := os.MkdirAll(pkgDir, 0755); err != nil {
 			return addResultMsg{err: fmt.Errorf("creating package directory: %w", err)}
 		}
 
-		if info.IsDir() {
-			return executeAddDir(srcPath, pkgDir, pkgName, homeDir, logger)
+		if len(files) == 1 {
+			info, err := os.Stat(files[0])
+			if err != nil {
+				return addResultMsg{err: fmt.Errorf("source not found: %w", err)}
+			}
+			if info.IsDir() {
+				return executeAddDir(files[0], pkgDir, pkgName, homeDir, logger)
+			}
+			return executeAddFile(files[0], pkgDir, pkgName, homeDir, logger)
 		}
-		return executeAddFile(srcPath, pkgDir, pkgName, homeDir, logger)
+
+		var totalLinked, totalSkipped int
+		var firstErr string
+		for _, f := range files {
+			result := executeAddFile(f, pkgDir, pkgName, homeDir, logger)
+			if result.err != nil {
+				if firstErr == "" {
+					firstErr = result.err.Error()
+				}
+				totalSkipped++
+				continue
+			}
+			totalLinked++
+		}
+
+		if firstErr != "" {
+			return addResultMsg{err: fmt.Errorf("errors adding files: %s", firstErr)}
+		}
+
+		msg := fmt.Sprintf("Added %d file(s) → %s", totalLinked, pkgName)
+		if totalSkipped > 0 {
+			msg += fmt.Sprintf(" (%d skipped)", totalSkipped)
+		}
+		return addResultMsg{msg: msg}
 	}
 }
 
@@ -782,4 +942,63 @@ func detectPackageName(path string) string {
 	}
 
 	return filepath.Base(filepath.Dir(path))
+}
+
+func detectPackageNameMulti(paths []string, homeDir string) string {
+	if len(paths) == 0 {
+		return "misc"
+	}
+	if len(paths) == 1 {
+		return detectPackageName(paths[0])
+	}
+
+	common := findCommonParent(paths, homeDir)
+	if common != "" {
+		return common
+	}
+	return "misc"
+}
+
+func findCommonParent(paths []string, homeDir string) string {
+	if len(paths) == 0 {
+		return ""
+	}
+
+	var partsList [][]string
+	for _, p := range paths {
+		rel, err := filepath.Rel(homeDir, p)
+		if err != nil {
+			rel = p
+		}
+		partsList = append(partsList, strings.Split(rel, string(filepath.Separator)))
+	}
+
+	first := partsList[0]
+	var common []string
+	for i := 0; i < len(first); i++ {
+		match := true
+		for _, parts := range partsList[1:] {
+			if i >= len(parts) || parts[i] != first[i] {
+				match = false
+				break
+			}
+		}
+		if !match {
+			break
+		}
+		common = append(common, first[i])
+	}
+
+	if len(common) == 0 {
+		return ""
+	}
+
+	candidate := common[len(common)-1]
+	name := strings.TrimPrefix(candidate, ".")
+	name = strings.TrimSuffix(name, "rc")
+	name = strings.TrimSuffix(name, "config")
+	if name != "" {
+		return name
+	}
+	return ""
 }

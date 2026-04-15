@@ -114,6 +114,7 @@ type Model struct {
 	browserCursor   int
 	browserScroll   int
 	browserItems    []browserItem
+	browserSelected map[string]bool
 
 	commits        []git.CommitInfo
 	selectedCommit int
@@ -177,6 +178,7 @@ func NewModel(cfg *config.Config, version string) Model {
 		height:          24,
 		browserEntries:  make(map[string][]os.DirEntry),
 		browserExpanded: make(map[string]bool),
+		browserSelected: make(map[string]bool),
 	}
 }
 
@@ -495,6 +497,7 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.browserScroll = 0
 		m.browserEntries = make(map[string][]os.DirEntry)
 		m.browserItems = nil
+		m.browserSelected = make(map[string]bool)
 		return m, nil
 
 	case key.Matches(keyMsg, m.keys.Diff):
@@ -717,6 +720,7 @@ func (m *Model) resetAddState() {
 	m.browserScroll = 0
 	m.browserEntries = make(map[string][]os.DirEntry)
 	m.browserItems = nil
+	m.browserSelected = make(map[string]bool)
 }
 
 func clearStatusAfter(d time.Duration) tea.Cmd {
