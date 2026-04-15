@@ -92,6 +92,15 @@ sandbox-setup:
 	@mkdir -p $(DOTCOR_DIR)/git $(DOTCOR_DIR)/nvim $(DOTCOR_DIR)/starship $(DOTCOR_DIR)/tmux $(DOTCOR_DIR)/zsh
 	@mkdir -p $(DOTCOR_DIR)/alacritty $(DOTCOR_DIR)/bat $(DOTCOR_DIR)/eza $(DOTCOR_DIR)/fzf $(DOTCOR_DIR)/htop
 	@mkdir -p $(DOTCOR_DIR)/lazygit $(DOTCOR_DIR)/ripgrep $(DOTCOR_DIR)/ssh $(DOTCOR_DIR)/vim $(DOTCOR_DIR)/zoxide
+	@# --- unmanaged files in DOTCOR_HOME for testing the add wizard ---
+	@test -f $(DOTCOR_HOME)/.bashrc || printf "export PATH=$$HOME/.local/bin:$$PATH\nalias ll='ls -la'\nalias gs='git status'\n" > $(DOTCOR_HOME)/.bashrc
+	@test -f $(DOTCOR_HOME)/.profile || printf "if [ -f $$HOME/.bashrc ]; then\n  . $$HOME/.bashrc\nfi\n" > $(DOTCOR_HOME)/.profile
+	@test -f $(DOTCOR_HOME)/.inputrc || printf '"\e[A": history-search-backward\n"\e[B": history-search-forward\nset completion-ignore-case on\n' > $(DOTCOR_HOME)/.inputrc
+	@test -f $(DOTCOR_HOME)/.editorconfig || printf 'root = true\n\n[*]\nindent_style = tab\nindent_size = 4\nend_of_line = lf\ncharset = utf-8\ntrim_trailing_whitespace = true\n' > $(DOTCOR_HOME)/.editorconfig
+	@mkdir -p $(DOTCOR_HOME)/.config/tmux
+	@test -f $(DOTCOR_HOME)/.config/tmux/tmux.conf || printf "set -g prefix C-a\nbind | split-window -h\nbind - split-window -v\n" > $(DOTCOR_HOME)/.config/tmux/tmux.conf
+	@mkdir -p $(DOTCOR_HOME)/.config/starship
+	@test -f $(DOTCOR_HOME)/.config/starship.toml || printf "[character]\nsuccess_symbol = '[➜](bold green)'\n" > $(DOTCOR_HOME)/.config/starship.toml
 	@# --- git (3 files) ---
 	@test -f $(DOTCOR_DIR)/git/.gitconfig || printf "[user]\n\tname = Test User\n\temail = test@example.com\n[core]\n\teditor = nvim\n[pull]\n\trebase = true\n" > $(DOTCOR_DIR)/git/.gitconfig
 	@test -f $(DOTCOR_DIR)/git/.gitignore_global || printf ".DS_Store\n*.swp\n*.swo\n*~\n.env\n" > $(DOTCOR_DIR)/git/.gitignore_global
@@ -146,5 +155,7 @@ sandbox-setup:
 	@# --- zoxide ---
 	@test -f $(DOTCOR_DIR)/zoxide/config.sh || printf 'export _ZO_ECHO=1\nexport _ZO_FZF_OPTS="--height 40%%"\n' > $(DOTCOR_DIR)/zoxide/config.sh
 
-sandbox: binary sandbox-setup
+sandbox: binary
+	@rm -rf $(DOTCOR_DIR) $(DOTCOR_HOME)
+	@$(MAKE) sandbox-setup
 	DOTCOR_DIR=$(DOTCOR_DIR) DOTCOR_HOME=$(DOTCOR_HOME) ./bin/dotcor
