@@ -28,6 +28,8 @@ func viewSettings(m Model) string {
 		return viewSettingsEditRemote(m)
 	case 3:
 		return viewSettingsBackups(m)
+	case 4:
+		return viewSettingsAddPattern(m)
 	default:
 		return viewSettingsMain(m)
 	}
@@ -38,7 +40,6 @@ func viewSettingsMain(m Model) string {
 
 	var b strings.Builder
 
-	// Git section
 	b.WriteString(accentStyle.Render("Git"))
 	b.WriteString("\n")
 	b.WriteString(subtleStyle.Render(strings.Repeat("─", 40)))
@@ -60,17 +61,25 @@ func viewSettingsMain(m Model) string {
 	if len(m.cfg.IgnorePatterns) == 0 {
 		b.WriteString(dimStyle.Render("  (none)\n"))
 	} else {
-		for _, p := range m.cfg.IgnorePatterns {
-			fmt.Fprintf(&b, "  %s %s\n", dimStyle.Render("•"), textStyle.Render(p))
+		for i, p := range m.cfg.IgnorePatterns {
+			if m.settingsEditingIgnore && i == m.settingsIgnoreIdx {
+				fmt.Fprintf(&b, "  %s %s\n", accentStyle.Render(">"), textStyle.Render(p))
+			} else {
+				fmt.Fprintf(&b, "  %s %s\n", dimStyle.Render("•"), textStyle.Render(p))
+			}
 		}
 	}
 
 	body := subviewContent(m.width, m.height-3, b.String())
-	footer := subviewFooter(m.width,
-		kbd("e", "edit remote"),
-		kbd("b", "backups"),
-		kbd("esc", "back"),
-	)
+
+	var footerKeys []string
+	footerKeys = append(footerKeys, kbd("e", "edit remote"), kbd("b", "backups"))
+	if m.settingsEditingIgnore {
+		footerKeys = append(footerKeys, kbd("a", "add"), kbd("d", "delete"), kbd("i", "done"), kbd("esc", "back"))
+	} else {
+		footerKeys = append(footerKeys, kbd("i", "edit patterns"), kbd("esc", "back"))
+	}
+	footer := subviewFooter(m.width, footerKeys...)
 
 	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
 }
@@ -122,12 +131,29 @@ func viewSettingsBackups(m Model) string {
 	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
 }
 
+func viewSettingsAddPattern(m Model) string {
+	header := subviewHeader(m.width, "Settings", []string{"add pattern"})
+
+	body := strings.Join([]string{
+		textStyle.Render("Enter ignore pattern:"),
+		"",
+		m.settingsInput.View(),
+		"",
+		dimStyle.Render("e.g. *.log, .env, secret/"),
+	}, "\n")
+
+	footer := subviewFooter(m.width, kbd("enter", "save"), kbd("esc", "cancel"))
+	return lipgloss.JoinVertical(lipgloss.Left, header, subviewContent(m.width, m.height-3, body), footer)
+}
+
 func (m Model) updateSettings(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.settingsStep {
 	case 1:
 		return updateSettingsEditRemote(m, msg)
 	case 3:
 		return updateSettingsBackups(m, msg)
+	case 4:
+		return updateSettingsAddPattern(m, msg)
 	default:
 		return updateSettingsMain(m, msg)
 	}
@@ -137,6 +163,10 @@ func updateSettingsMain(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch {
 		case key.Matches(keyMsg, m.keys.Esc):
+			if m.settingsEditingIgnore {
+				m.settingsEditingIgnore = false
+				return m, nil
+			}
 			m.activeView = DashboardView
 			m.settingsStep = 0
 			return m, nil
@@ -152,6 +182,45 @@ func updateSettingsMain(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "b":
 			m.settingsStep = 3
 			return m, m.loadBackups()
+
+		case "i":
+			if m.settingsEditingIgnore {
+				m.settingsEditingIgnore = false
+				return m, nil
+			}
+			m.settingsEditingIgnore = true
+			m.settingsIgnoreIdx = 0
+			return m, nil
+
+		case "a":
+			if m.settingsEditingIgnore {
+				m.settingsInput.SetValue("")
+				m.settingsInput.Focus()
+				m.settingsStep = 4
+				return m, textinput.Blink
+			}
+
+		case "d":
+			if m.settingsEditingIgnore && m.settingsIgnoreIdx < len(m.cfg.IgnorePatterns) {
+				m.cfg.IgnorePatterns = append(
+					m.cfg.IgnorePatterns[:m.settingsIgnoreIdx],
+					m.cfg.IgnorePatterns[m.settingsIgnoreIdx+1:]...,
+				)
+				_ = m.cfg.SaveConfig()
+				return m, nil
+			}
+
+		case "up", "k":
+			if m.settingsEditingIgnore && m.settingsIgnoreIdx > 0 {
+				m.settingsIgnoreIdx--
+				return m, nil
+			}
+
+		case "down", "j":
+			if m.settingsEditingIgnore && m.settingsIgnoreIdx < len(m.cfg.IgnorePatterns)-1 {
+				m.settingsIgnoreIdx++
+				return m, nil
+			}
 		}
 	}
 
@@ -196,6 +265,30 @@ func updateSettingsBackups(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+func updateSettingsAddPattern(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		switch {
+		case key.Matches(keyMsg, m.keys.Enter):
+			val := m.settingsInput.Value()
+			if val != "" {
+				m.cfg.IgnorePatterns = append(m.cfg.IgnorePatterns, val)
+				_ = m.cfg.SaveConfig()
+			}
+			m.settingsInput.Blur()
+			m.settingsStep = 0
+			m.settingsEditingIgnore = false
+			return m, nil
+		case key.Matches(keyMsg, m.keys.Esc):
+			m.settingsInput.Blur()
+			m.settingsStep = 0
+			return m, nil
+		}
+	}
+	var cmd tea.Cmd
+	m.settingsInput, cmd = m.settingsInput.Update(msg)
+	return m, cmd
 }
 
 func (m Model) loadBackups() tea.Cmd {

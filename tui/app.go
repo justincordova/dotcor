@@ -125,9 +125,11 @@ type Model struct {
 	selectedCommit int
 	recentCommits  []git.CommitInfo
 
-	settingsStep  int
-	settingsInput textinput.Model
-	backups       []core.BackupInfo
+	settingsStep          int
+	settingsInput         textinput.Model
+	settingsEditingIgnore bool
+	settingsIgnoreIdx     int
+	backups               []core.BackupInfo
 
 	initStep int
 
