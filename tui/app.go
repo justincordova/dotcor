@@ -100,11 +100,14 @@ type Model struct {
 	loading      bool
 	expanded     map[int]bool
 
-	addInput   textinput.Model
-	addStep    int
-	addPkgName string
-	addPreview string
-	addSecrets []string
+	addInput      textinput.Model
+	addStep       int
+	addPkgName    string
+	addPreview    string
+	addSecrets    []string
+	addPkgChoices []string
+	addPkgIdx     int
+	addPkgEditing bool
 
 	browserEntries map[string][]os.DirEntry
 	browserPath    string
@@ -704,6 +707,9 @@ func (m *Model) resetAddState() {
 	m.addPkgName = ""
 	m.addPreview = ""
 	m.addSecrets = nil
+	m.addPkgChoices = nil
+	m.addPkgIdx = 0
+	m.addPkgEditing = false
 	m.browserPath = m.homeDir
 	m.browserCursor = 0
 	m.browserScroll = 0
