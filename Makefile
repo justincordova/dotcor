@@ -101,6 +101,13 @@ sandbox-setup:
 	@test -f $(DOTCOR_HOME)/.config/tmux/tmux.conf || printf "set -g prefix C-a\nbind | split-window -h\nbind - split-window -v\n" > $(DOTCOR_HOME)/.config/tmux/tmux.conf
 	@mkdir -p $(DOTCOR_HOME)/.config/starship
 	@test -f $(DOTCOR_HOME)/.config/starship.toml || printf "[character]\nsuccess_symbol = '[➜](bold green)'\n" > $(DOTCOR_HOME)/.config/starship.toml
+	@# --- unmanaged nvim config tree in DOTCOR_HOME for testing folder add ---
+	@mkdir -p $(DOTCOR_HOME)/.config/nvim/lua/config $(DOTCOR_HOME)/.config/nvim/lua/plugins
+	@test -f $(DOTCOR_HOME)/.config/nvim/init.lua || printf 'require("config.lazy")\nrequire("config.options")\n' > $(DOTCOR_HOME)/.config/nvim/init.lua
+	@test -f $(DOTCOR_HOME)/.config/nvim/lua/config/options.lua || printf "vim.opt.number = true\nvim.opt.relativenumber = true\n" > $(DOTCOR_HOME)/.config/nvim/lua/config/options.lua
+	@test -f $(DOTCOR_HOME)/.config/nvim/lua/config/keymaps.lua || printf 'vim.g.mapleader = " "\n' > $(DOTCOR_HOME)/.config/nvim/lua/config/keymaps.lua
+	@test -f $(DOTCOR_HOME)/.config/nvim/lua/plugins/telescope.lua || printf 'return { "nvim-telescope/telescope.nvim" }\n' > $(DOTCOR_HOME)/.config/nvim/lua/plugins/telescope.lua
+	@test -f $(DOTCOR_HOME)/.config/nvim/lua/plugins/lualine.lua || printf 'return { "nvim-lualine/lualine.nvim" }\n' > $(DOTCOR_HOME)/.config/nvim/lua/plugins/lualine.lua
 	@# --- git (3 files) ---
 	@test -f $(DOTCOR_DIR)/git/.gitconfig || printf "[user]\n\tname = Test User\n\temail = test@example.com\n[core]\n\teditor = nvim\n[pull]\n\trebase = true\n" > $(DOTCOR_DIR)/git/.gitconfig
 	@test -f $(DOTCOR_DIR)/git/.gitignore_global || printf ".DS_Store\n*.swp\n*.swo\n*~\n.env\n" > $(DOTCOR_DIR)/git/.gitignore_global
