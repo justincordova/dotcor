@@ -597,12 +597,14 @@ func (m Model) browserHandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			item := items[m.browserCursor]
 			if item.isDir && m.browserExpanded[item.path] {
 				m.browserExpanded[item.path] = false
+				delete(m.browserEntries, item.path)
 				m.browserItems = nil
 				return m, nil
 			}
 			for dir := range m.browserExpanded {
 				if strings.HasPrefix(item.path, dir+string(filepath.Separator)) {
 					m.browserExpanded[dir] = false
+					delete(m.browserEntries, dir)
 					m.browserItems = nil
 					return m, nil
 				}
