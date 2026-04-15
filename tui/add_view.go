@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -33,8 +34,8 @@ func viewAdd(m Model) string {
 		body := renderAddStep0(m) + errLine
 		footer := subviewFooter(m.width,
 			kbd("↑/k", "up"), kbd("↓/j", "down"),
-			kbd("enter", "select"), kbd("h", "back"),
-			kbd("esc", "cancel"),
+			kbd("l", "open dir"), kbd("enter", "select"),
+			kbd("h", "back"), kbd("esc", "cancel"),
 		)
 		return lipgloss.JoinVertical(lipgloss.Left,
 			header,
@@ -280,11 +281,21 @@ func renderAddStep2(m Model) string {
 	b.WriteString("\n\n")
 
 	path := collapseHome(m.addPreview, m.homeDir)
-	repoPath := filepath.Join(m.repoDir, m.addPkgName, filepath.Base(m.addPreview))
+	relPath, _ := filepath.Rel(m.homeDir, m.addPreview)
+	repoPath := filepath.Join(m.repoDir, m.addPkgName, relPath)
 
-	b.WriteString("  " + padRight(textStyle.Render("File"), 12) + "  " + textStyle.Render(path) + "\n")
-	b.WriteString("  " + padRight(textStyle.Render("Package"), 12) + "  " + accentStyle.Render(m.addPkgName) + "\n")
-	b.WriteString("  " + padRight(textStyle.Render("Destination"), 12) + "  " + dimStyle.Render(collapseHome(repoPath, m.homeDir)) + "\n")
+	info, _ := os.Stat(m.addPreview)
+	if info != nil && info.IsDir() {
+		n := countFiles(m.addPreview)
+		b.WriteString("  " + padRight(textStyle.Render("Folder"), 12) + "  " + textStyle.Render(path) + "\n")
+		b.WriteString("  " + padRight(textStyle.Render("Package"), 12) + "  " + accentStyle.Render(m.addPkgName) + "\n")
+		b.WriteString("  " + padRight(textStyle.Render("Files"), 12) + "  " + dimStyle.Render(countLabel(n, "file")) + "\n")
+		b.WriteString("  " + padRight(textStyle.Render("Destination"), 12) + "  " + dimStyle.Render(collapseHome(repoPath, m.homeDir)) + "\n")
+	} else {
+		b.WriteString("  " + padRight(textStyle.Render("File"), 12) + "  " + textStyle.Render(path) + "\n")
+		b.WriteString("  " + padRight(textStyle.Render("Package"), 12) + "  " + accentStyle.Render(m.addPkgName) + "\n")
+		b.WriteString("  " + padRight(textStyle.Render("Destination"), 12) + "  " + dimStyle.Render(collapseHome(repoPath, m.homeDir)) + "\n")
+	}
 
 	if len(m.addSecrets) > 0 {
 		b.WriteString("\n")
@@ -344,6 +355,10 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(keyMsg, m.keys.Enter):
 			switch m.addStep {
 			case 0:
+				entries := m.browserVisibleEntries()
+				if m.browserCursor >= 0 && m.browserCursor < len(entries) && entries[m.browserCursor].IsDir() {
+					return m.browserSelectDir()
+				}
 				return m.browserSelectEntry()
 
 			case 1:
@@ -451,6 +466,14 @@ func (m Model) browserHandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "l":
+		entries := m.browserVisibleEntries()
+		if m.browserCursor >= 0 && m.browserCursor < len(entries) && entries[m.browserCursor].IsDir() {
+			fullPath := filepath.Join(m.browserPath, entries[m.browserCursor].Name())
+			m.browserPath = fullPath
+			m.browserCursor = 0
+			m.browserScroll = 0
+			return m, nil
+		}
 		return m.browserSelectEntry()
 	}
 
@@ -512,6 +535,80 @@ func (m Model) browserSelectEntry() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) browserSelectDir() (tea.Model, tea.Cmd) {
+	entries := m.browserVisibleEntries()
+	if m.browserCursor < 0 || m.browserCursor >= len(entries) {
+		return m, nil
+	}
+
+	e := entries[m.browserCursor]
+	if !e.IsDir() {
+		return m.browserSelectEntry()
+	}
+
+	fullPath := filepath.Join(m.browserPath, e.Name())
+
+	if _, err := os.Stat(fullPath); err != nil {
+		m.err = fmt.Errorf("directory not found: %s", fullPath)
+		return m, nil
+	}
+	m.err = nil
+	m.addPreview = fullPath
+
+	var warnings []string
+	_ = filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		if isSymlink(path) {
+			return nil
+		}
+		w, detectErr := core.DetectSecrets(path)
+		if detectErr == nil {
+			warnings = append(warnings, w...)
+		}
+		return nil
+	})
+	m.addSecrets = warnings
+
+	seen := make(map[string]bool)
+	var choices []string
+	for _, pkg := range m.packages {
+		if !seen[pkg.Name] {
+			seen[pkg.Name] = true
+			choices = append(choices, pkg.Name)
+		}
+	}
+	m.addPkgChoices = choices
+	m.addPkgIdx = 0
+	m.addPkgEditing = false
+
+	detected := detectPackageName(fullPath)
+	for i, name := range choices {
+		if name == detected {
+			m.addPkgIdx = i
+			break
+		}
+	}
+	m.addPkgName = detected
+	m.addInput.SetValue(detected)
+	m.addInput.SetCursor(len(detected))
+	m.addStep = 1
+	return m, nil
+}
+
+func countFiles(dir string) int {
+	count := 0
+	_ = filepath.Walk(dir, func(_ string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		count++
+		return nil
+	})
+	return count
+}
+
 func (m Model) executeAdd() tea.Cmd {
 	srcPath := m.addPreview
 	pkgName := m.addPkgName
@@ -520,63 +617,163 @@ func (m Model) executeAdd() tea.Cmd {
 	logger := m.cfg.Logger
 
 	return func() tea.Msg {
+		info, err := os.Stat(srcPath)
+		if err != nil {
+			return addResultMsg{err: fmt.Errorf("source not found: %w", err)}
+		}
+
 		pkgDir := filepath.Join(repoDir, pkgName)
 		if err := os.MkdirAll(pkgDir, 0755); err != nil {
 			return addResultMsg{err: fmt.Errorf("creating package directory: %w", err)}
 		}
 
-		relPath, err := filepath.Rel(homeDir, srcPath)
-		if err != nil {
-			relPath = filepath.Base(srcPath)
+		if info.IsDir() {
+			return executeAddDir(srcPath, pkgDir, pkgName, homeDir, logger)
+		}
+		return executeAddFile(srcPath, pkgDir, pkgName, homeDir, logger)
+	}
+}
+
+func executeAddFile(srcPath, pkgDir, pkgName, homeDir string, logger *slog.Logger) addResultMsg {
+	relPath, err := filepath.Rel(homeDir, srcPath)
+	if err != nil {
+		relPath = filepath.Base(srcPath)
+	}
+
+	if err := validateRelPath(relPath); err != nil {
+		return addResultMsg{err: err}
+	}
+
+	dstPath := filepath.Join(pkgDir, relPath)
+	if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
+		return addResultMsg{err: fmt.Errorf("creating destination directory: %w", err)}
+	}
+
+	srcData, err := os.ReadFile(srcPath)
+	if err != nil {
+		return addResultMsg{err: fmt.Errorf("reading source file: %w", err)}
+	}
+
+	srcInfo, err := os.Stat(srcPath)
+	srcPerm := os.FileMode(0644)
+	if err == nil {
+		srcPerm = srcInfo.Mode().Perm()
+	}
+
+	if err := os.WriteFile(dstPath, srcData, srcPerm); err != nil {
+		return addResultMsg{err: fmt.Errorf("writing to repo: %w", err)}
+	}
+
+	relSymlink, err := filepath.Rel(filepath.Dir(srcPath), dstPath)
+	if err != nil {
+		return addResultMsg{err: fmt.Errorf("computing symlink path: %w", err)}
+	}
+
+	tempLink := srcPath + ".dotcor-tmp"
+	if err := os.Symlink(relSymlink, tempLink); err != nil {
+		return addResultMsg{err: fmt.Errorf("creating temp symlink: %w", err)}
+	}
+
+	if err := os.Remove(srcPath); err != nil {
+		_ = os.Remove(tempLink)
+		if logger != nil {
+			logger.Warn("failed to remove original file", "file", srcPath, "error", err)
+		}
+		return addResultMsg{err: fmt.Errorf("removing original file: %w", err)}
+	}
+
+	if err := os.Rename(tempLink, srcPath); err != nil {
+		_ = os.Remove(tempLink)
+		return addResultMsg{err: fmt.Errorf("moving symlink into place: %w", err)}
+	}
+
+	return addResultMsg{msg: fmt.Sprintf("Added %s → %s", filepath.Base(srcPath), pkgName)}
+}
+
+func executeAddDir(srcPath, pkgDir, pkgName, homeDir string, logger *slog.Logger) addResultMsg {
+	var linked, skipped int
+	var firstErr string
+
+	_ = filepath.Walk(srcPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		if isSymlink(path) {
+			skipped++
+			return nil
 		}
 
-		if err := validateRelPath(relPath); err != nil {
-			return addResultMsg{err: err}
+		relPath, err := filepath.Rel(homeDir, path)
+		if err != nil || strings.HasPrefix(relPath, "..") {
+			skipped++
+			return nil
 		}
 
 		dstPath := filepath.Join(pkgDir, relPath)
 		if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
-			return addResultMsg{err: fmt.Errorf("creating destination directory: %w", err)}
+			if firstErr == "" {
+				firstErr = err.Error()
+			}
+			skipped++
+			return nil
 		}
 
-		srcData, err := os.ReadFile(srcPath)
+		srcData, err := os.ReadFile(path)
 		if err != nil {
-			return addResultMsg{err: fmt.Errorf("reading source file: %w", err)}
+			if firstErr == "" {
+				firstErr = err.Error()
+			}
+			skipped++
+			return nil
 		}
 
-		srcInfo, err := os.Stat(srcPath)
-		srcPerm := os.FileMode(0644)
-		if err == nil {
-			srcPerm = srcInfo.Mode().Perm()
-		}
-
+		srcPerm := info.Mode().Perm()
 		if err := os.WriteFile(dstPath, srcData, srcPerm); err != nil {
-			return addResultMsg{err: fmt.Errorf("writing to repo: %w", err)}
+			if firstErr == "" {
+				firstErr = err.Error()
+			}
+			skipped++
+			return nil
 		}
 
-		relSymlink, err := filepath.Rel(filepath.Dir(srcPath), dstPath)
+		relSymlink, err := filepath.Rel(filepath.Dir(path), dstPath)
 		if err != nil {
-			return addResultMsg{err: fmt.Errorf("computing symlink path: %w", err)}
+			skipped++
+			return nil
 		}
 
-		tempLink := srcPath + ".dotcor-tmp"
+		tempLink := path + ".dotcor-tmp"
 		if err := os.Symlink(relSymlink, tempLink); err != nil {
-			return addResultMsg{err: fmt.Errorf("creating temp symlink: %w", err)}
+			skipped++
+			return nil
 		}
 
-		if err := os.Remove(srcPath); err != nil {
+		if err := os.Remove(path); err != nil {
 			_ = os.Remove(tempLink)
-			logger.Warn("failed to remove original file", "file", srcPath, "error", err)
-			return addResultMsg{err: fmt.Errorf("removing original file: %w", err)}
+			skipped++
+			return nil
 		}
 
-		if err := os.Rename(tempLink, srcPath); err != nil {
+		if err := os.Rename(tempLink, path); err != nil {
 			_ = os.Remove(tempLink)
-			return addResultMsg{err: fmt.Errorf("moving symlink into place: %w", err)}
+			skipped++
+			return nil
 		}
 
-		return addResultMsg{msg: fmt.Sprintf("Added %s → %s", filepath.Base(srcPath), pkgName)}
+		linked++
+		return nil
+	})
+
+	if firstErr != "" {
+		return addResultMsg{err: fmt.Errorf("errors adding directory: %s", firstErr)}
 	}
+
+	msg := fmt.Sprintf("Added %s/ → %s (%d linked", filepath.Base(srcPath), pkgName, linked)
+	if skipped > 0 {
+		msg += fmt.Sprintf(", %d skipped", skipped)
+	}
+	msg += ")"
+	return addResultMsg{msg: msg}
 }
 
 var validPkgName = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
