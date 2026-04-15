@@ -117,8 +117,15 @@ type Model struct {
 }
 
 func NewModel(cfg *config.Config, version string) Model {
-	homeDir, _ := config.GetHomeDir()
-	repoDir, _ := config.GetConfigDir()
+	homeDir, err := config.GetHomeDir()
+	if err != nil {
+		homeDir = "/"
+	}
+	repoDir, err := config.GetConfigDir()
+	if err != nil {
+		repoDir = filepath.Join(homeDir, ".dotcor")
+	}
+	_ = err
 
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
@@ -633,9 +640,9 @@ func (m Model) pullRepo() tea.Cmd {
 	repoDir := m.repoDir
 	return func() tea.Msg {
 		if err := git.Pull(repoDir); err != nil {
-			return stowResultMsg{err: err}
+			return syncResultMsg{err: err}
 		}
-		return stowResultMsg{msg: "Pulled"}
+		return syncResultMsg{msg: "Pulled"}
 	}
 }
 

@@ -118,6 +118,13 @@ func (m Model) updateHistory(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func shortRef(ref string) string {
+	if len(ref) > 7 {
+		return ref[:7]
+	}
+	return ref
+}
+
 func getFileHistory(m Model) tea.Cmd {
 	return func() tea.Msg {
 		if m.selectedPkg >= len(m.packages) {
@@ -156,7 +163,7 @@ func (m Model) restoreFromCommit(ref string) tea.Cmd {
 		if err := git.RestoreFile(repoDir, filePath, ref); err != nil {
 			return errMsg{err: err}
 		}
-		return statusMsg(fmt.Sprintf("Restored from %s", ref[:7]))
+		return statusMsg(fmt.Sprintf("Restored from %s", shortRef(ref)))
 	}
 }
 
@@ -177,7 +184,7 @@ func (m Model) diffFromCommit(ref string) tea.Cmd {
 			return diffMsg{err: err}
 		}
 		if content == "" {
-			return diffMsg{content: fmt.Sprintf("No diff for %s vs %s", filePath, ref[:7])}
+			return diffMsg{content: fmt.Sprintf("No diff for %s vs %s", filePath, shortRef(ref))}
 		}
 		return diffMsg{content: content}
 	}

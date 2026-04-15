@@ -111,65 +111,8 @@ func RunPreflightValidation(cfg *config.Config, operation string, files []string
 }
 
 func DisplayValidationResults(result ValidationResult) error {
-	colorLightPink := "\033[38;5;218m"
-	colorReset := "\033[0m"
-	colorGreen := "\033[32m"
-	colorRed := "\033[31m"
-
-	fmt.Printf("\n  %sPre-flight checks:%s\n", colorLightPink, colorReset)
-	fmt.Println("")
-
-	checkGroups := make(map[string][]CheckResult)
-	for _, check := range result.Checks {
-		checkGroups[check.Name] = append(checkGroups[check.Name], check)
-	}
-
-	allPassed := true
-
-	for checkType, checks := range checkGroups {
-		passed := 0
-		failed := 0
-		var failures []string
-
-		for _, check := range checks {
-			if check.Passed {
-				passed++
-			} else {
-				failed++
-				failures = append(failures, check.Message)
-				allPassed = false
-			}
-		}
-
-		total := passed + failed
-		if total == 1 {
-			if failed > 0 {
-				fmt.Printf("  %s✗%s %s\n", colorRed, colorReset, failures[0])
-			} else {
-				fmt.Printf("  %s✓%s %s\n", colorGreen, colorReset, checks[0].Message)
-			}
-		} else {
-			if failed == 0 {
-				fmt.Printf("  %s✓%s %d %s OK\n", colorGreen, colorReset, passed, checkType)
-			} else if passed == 0 {
-				fmt.Printf("  %s✗%s %d %s failed\n", colorRed, colorReset, failed, checkType)
-				for _, msg := range failures {
-					fmt.Printf("    %s✗%s %s\n", colorRed, colorReset, msg)
-				}
-			} else {
-				fmt.Printf("  %s✗%s %d/%d %s OK (%d failed)\n", colorRed, colorReset, passed, total, checkType, failed)
-				for _, msg := range failures {
-					fmt.Printf("    %s✗%s %s\n", colorRed, colorReset, msg)
-				}
-			}
-		}
-	}
-
-	fmt.Println("")
-
-	if !allPassed {
+	if !result.Success {
 		return fmt.Errorf("pre-flight checks failed")
 	}
-
 	return nil
 }

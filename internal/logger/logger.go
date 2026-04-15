@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 
 	charmlog "github.com/charmbracelet/log"
+
+	"github.com/justincordova/dotcor/internal/config"
 )
 
 func New(level string, logFilePath string) *slog.Logger {
@@ -25,11 +27,11 @@ func New(level string, logFilePath string) *slog.Logger {
 	}
 
 	if logFilePath == "" {
-		home, err := os.UserHomeDir()
+		configDir, err := config.GetConfigDir()
 		if err != nil {
 			logFilePath = filepath.Join(os.TempDir(), "dotcor.log")
 		} else {
-			logFilePath = filepath.Join(home, ".dotcor", "logs", "dotcor.log")
+			logFilePath = filepath.Join(configDir, "logs", "dotcor.log")
 		}
 	}
 

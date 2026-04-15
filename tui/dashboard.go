@@ -3,11 +3,10 @@ package tui
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/justincordova/dotcor/internal/git"
 	"github.com/justincordova/dotcor/internal/stow"
 )
 
@@ -591,7 +590,7 @@ func repoSizeMB(repoDir string) float64 {
 			continue
 		}
 		if info.IsDir() {
-			total += dirSize(repoDir + "/" + e.Name())
+			total += dirSize(filepath.Join(repoDir, e.Name()))
 		} else {
 			total += info.Size()
 		}
@@ -606,7 +605,7 @@ func dirSize(path string) int64 {
 		return 0
 	}
 	for _, e := range entries {
-		full := path + "/" + e.Name()
+		full := filepath.Join(path, e.Name())
 		info, err := e.Info()
 		if err != nil {
 			continue
@@ -648,11 +647,3 @@ func visibleRange(sel, total, maxLines int) (int, int) {
 	}
 	return start, end
 }
-
-// compatibility shims
-func statusIndicator(status stow.PackageStatus) string { return statusGlyph(status) }
-func fileStatus(f stow.FileEntry) string               { return fileBadge(f) }
-
-// silence unused import warnings when pkg is in transition
-var _ = time.Now
-var _ = git.CommitInfo{}

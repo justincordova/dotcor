@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/justincordova/dotcor/internal/config"
+	"github.com/justincordova/dotcor/internal/core"
 )
 
 type addResultMsg struct {
@@ -168,11 +169,17 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.err = fmt.Errorf("file not found: %s", path)
 					return m, nil
 				}
+				warnings, err := core.ValidateAll(path, m.cfg)
+				if err != nil {
+					m.err = err
+					return m, nil
+				}
 				m.err = nil
 				m.addPreview = path
 				m.addPkgName = detectPackageName(path)
 				m.addInput.SetValue(m.addPkgName)
 				m.addInput.SetCursor(len(m.addPkgName))
+				m.addSecrets = warnings
 				m.addStep = 1
 				return m, nil
 
@@ -181,8 +188,11 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if pkgName == "" {
 					return m, nil
 				}
+				if err := validatePackageName(pkgName); err != nil {
+					m.err = err
+					return m, nil
+				}
 				m.addPkgName = pkgName
-				m.addSecrets = scanForSecrets(m.addPreview)
 				m.addStep = 2
 				m.addInput.Blur()
 				return m, nil
@@ -226,6 +236,10 @@ func (m Model) executeAdd() tea.Cmd {
 			relPath = filepath.Base(srcPath)
 		}
 
+		if err := validateRelPath(relPath); err != nil {
+			return addResultMsg{err: err}
+		}
+
 		dstPath := filepath.Join(pkgDir, relPath)
 		if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
 			return addResultMsg{err: fmt.Errorf("creating destination directory: %w", err)}
@@ -236,12 +250,14 @@ func (m Model) executeAdd() tea.Cmd {
 			return addResultMsg{err: fmt.Errorf("reading source file: %w", err)}
 		}
 
-		if err := os.WriteFile(dstPath, srcData, 0644); err != nil {
-			return addResultMsg{err: fmt.Errorf("writing to repo: %w", err)}
+		srcInfo, err := os.Stat(srcPath)
+		srcPerm := os.FileMode(0644)
+		if err == nil {
+			srcPerm = srcInfo.Mode().Perm()
 		}
 
-		if err := os.Remove(srcPath); err != nil {
-			logger.Warn("failed to remove original file", "file", srcPath, "error", err)
+		if err := os.WriteFile(dstPath, srcData, srcPerm); err != nil {
+			return addResultMsg{err: fmt.Errorf("writing to repo: %w", err)}
 		}
 
 		relSymlink, err := filepath.Rel(filepath.Dir(srcPath), dstPath)
@@ -249,24 +265,61 @@ func (m Model) executeAdd() tea.Cmd {
 			return addResultMsg{err: fmt.Errorf("computing symlink path: %w", err)}
 		}
 
-		if err := os.Symlink(relSymlink, srcPath); err != nil {
-			return addResultMsg{err: fmt.Errorf("creating symlink: %w", err)}
+		tempLink := srcPath + ".dotcor-tmp"
+		if err := os.Symlink(relSymlink, tempLink); err != nil {
+			return addResultMsg{err: fmt.Errorf("creating temp symlink: %w", err)}
+		}
+
+		if err := os.Remove(srcPath); err != nil {
+			_ = os.Remove(tempLink)
+			logger.Warn("failed to remove original file", "file", srcPath, "error", err)
+			return addResultMsg{err: fmt.Errorf("removing original file: %w", err)}
+		}
+
+		if err := os.Rename(tempLink, srcPath); err != nil {
+			_ = os.Remove(tempLink)
+			return addResultMsg{err: fmt.Errorf("moving symlink into place: %w", err)}
 		}
 
 		return addResultMsg{msg: fmt.Sprintf("Added %s → %s", filepath.Base(srcPath), pkgName)}
 	}
 }
 
+var validPkgName = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
+
+func validatePackageName(name string) error {
+	if !validPkgName.MatchString(name) {
+		return fmt.Errorf("invalid package name %q: must contain only letters, numbers, dots, hyphens, underscores", name)
+	}
+	if strings.Contains(name, "..") {
+		return fmt.Errorf("invalid package name %q: must not contain '..'", name)
+	}
+	return nil
+}
+
+func validateRelPath(rel string) error {
+	if strings.HasPrefix(rel, "..") {
+		return fmt.Errorf("file path escapes home directory: %s", rel)
+	}
+	return nil
+}
+
 func expandHome(path string) string {
 	if strings.HasPrefix(path, "~/") {
 		home, _ := config.GetHomeDir()
+		if home == "" {
+			return path
+		}
 		return filepath.Join(home, path[2:])
 	}
 	return path
 }
 
 func detectPackageName(path string) string {
-	home, _ := config.GetHomeDir()
+	home, err := config.GetHomeDir()
+	if err != nil || home == "" {
+		return filepath.Base(filepath.Dir(path))
+	}
 	rel, err := filepath.Rel(home, path)
 	if err != nil {
 		rel = path
@@ -292,30 +345,4 @@ func detectPackageName(path string) string {
 	}
 
 	return filepath.Base(filepath.Dir(path))
-}
-
-func scanForSecrets(path string) []string {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil
-	}
-
-	content := string(data)
-	patterns := []*regexp.Regexp{
-		regexp.MustCompile(`(?i)(api_key|apikey|api-secret)\s*[:=]\s*\S+`),
-		regexp.MustCompile(`(?i)secret\s*[:=]\s*\S+`),
-		regexp.MustCompile(`(?i)token\s*[:=]\s*\S+`),
-		regexp.MustCompile(`(?i)password\s*[:=]\s*\S+`),
-		regexp.MustCompile(`-----BEGIN\s+RSA\s+PRIVATE\s+KEY-----`),
-		regexp.MustCompile(`-----BEGIN\s+PRIVATE\s+KEY-----`),
-		regexp.MustCompile(`(?i)bearer\s+\S+`),
-	}
-
-	var found []string
-	for _, p := range patterns {
-		matches := p.FindAllString(content, -1)
-		found = append(found, matches...)
-	}
-
-	return found
 }

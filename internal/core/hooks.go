@@ -71,19 +71,16 @@ func RunHook(ctx HookContext, cfg *config.Config) error {
 		exitErr, ok := err.(*exec.ExitError)
 		if ok {
 			if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
-				fmt.Fprintf(os.Stderr, "[!] Hook %s failed (exit code %d): %s\n", ctx.HookType, status.ExitStatus(), string(output))
+				cfg.Logger.Warn("hook failed", "hook", ctx.HookType, "exit_code", status.ExitStatus(), "output", string(output))
 				return nil
 			}
 		}
-		fmt.Fprintf(os.Stderr, "[!] Hook %s failed: %v\n", ctx.HookType, err)
-		if len(output) > 0 {
-			fmt.Fprintf(os.Stderr, "  Output: %s\n", string(output))
-		}
+		cfg.Logger.Warn("hook failed", "hook", ctx.HookType, "error", err, "output", string(output))
 		return nil
 	}
 
 	if len(output) > 0 {
-		fmt.Printf("[Hook %s] %s", ctx.HookType, string(output))
+		cfg.Logger.Debug("hook output", "hook", ctx.HookType, "output", string(output))
 	}
 
 	return nil

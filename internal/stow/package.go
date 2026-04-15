@@ -53,7 +53,7 @@ func isExcluded(name string) bool {
 	if excludedDirs[name] {
 		return true
 	}
-	if strings.HasPrefix(name, ".") && name != ".dotcorrc" {
+	if strings.HasPrefix(name, ".") {
 		return true
 	}
 	return false

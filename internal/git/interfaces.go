@@ -1,11 +1,13 @@
 package git
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // GitCommander defines the interface for executing git commands
@@ -16,24 +18,32 @@ type GitCommander interface {
 }
 
 // ExecGitCommander wraps exec.Command for git operations
-type ExecGitCommander struct{}
+const commanderTimeout = 30 * time.Second
 
-// Run executes a git command and discards output
+type ExecGitCommander struct {
+	Dir string
+}
+
+func (c *ExecGitCommander) command(args ...string) *exec.Cmd {
+	ctx, cancel := context.WithTimeout(context.Background(), commanderTimeout)
+	cmd := exec.CommandContext(ctx, "git", args...)
+	if c.Dir != "" {
+		cmd.Dir = c.Dir
+	}
+	_ = cancel
+	return cmd
+}
+
 func (c *ExecGitCommander) Run(args ...string) error {
-	cmd := exec.Command("git", args...)
-	return cmd.Run()
+	return c.command(args...).Run()
 }
 
-// CombinedOutput executes a git command and returns combined output
 func (c *ExecGitCommander) CombinedOutput(args ...string) ([]byte, error) {
-	cmd := exec.Command("git", args...)
-	return cmd.CombinedOutput()
+	return c.command(args...).CombinedOutput()
 }
 
-// Output executes a git command and returns stdout output
 func (c *ExecGitCommander) Output(args ...string) ([]byte, error) {
-	cmd := exec.Command("git", args...)
-	return cmd.Output()
+	return c.command(args...).Output()
 }
 
 // GitService defines the interface for git operations
@@ -73,8 +83,12 @@ func NewGitServiceWithCommander(commander GitCommander) GitService {
 }
 
 // InitRepo initializes git repository in directory
+func (s *GitServiceImpl) withDir(repoPath string) *ExecGitCommander {
+	return &ExecGitCommander{Dir: repoPath}
+}
+
 func (s *GitServiceImpl) InitRepo(repoPath string) error {
-	err := s.commander.Run("init")
+	_, err := s.withDir(repoPath).Output("init")
 	if err != nil {
 		return &GitError{op: "init", err: err}
 	}
@@ -83,12 +97,13 @@ func (s *GitServiceImpl) InitRepo(repoPath string) error {
 
 // IsRepo checks if directory is a git repository
 func (s *GitServiceImpl) IsRepo(repoPath string) bool {
-	err := s.commander.Run("rev-parse", "--is-inside-work-tree")
+	err := s.withDir(repoPath).Run("rev-parse", "--is-inside-work-tree")
 	return err == nil
 }
 
 // AutoCommit stages all changes and commits with message
 func (s *GitServiceImpl) AutoCommit(repoPath, message string, logger *slog.Logger) error {
+	c := s.withDir(repoPath)
 	hasChanges, err := s.HasChanges(repoPath)
 	if err != nil {
 		return &GitError{op: "has-changes", err: err}
@@ -97,7 +112,7 @@ func (s *GitServiceImpl) AutoCommit(repoPath, message string, logger *slog.Logge
 		return nil
 	}
 
-	if _, err := s.commander.CombinedOutput("add", "-A"); err != nil {
+	if _, err := c.CombinedOutput("add", "-A"); err != nil {
 		return &GitError{op: "add", err: err}
 	}
 
@@ -106,7 +121,7 @@ func (s *GitServiceImpl) AutoCommit(repoPath, message string, logger *slog.Logge
 
 // Commit creates a commit with the given message
 func (s *GitServiceImpl) Commit(repoPath, message string) error {
-	err := s.commander.Run("commit", "-m", message)
+	err := s.withDir(repoPath).Run("commit", "-m", message)
 	if err != nil {
 		return &GitError{op: "commit", err: err}
 	}
@@ -115,7 +130,7 @@ func (s *GitServiceImpl) Commit(repoPath, message string) error {
 
 // Push pushes to the remote
 func (s *GitServiceImpl) Push(repoPath string) error {
-	err := s.commander.Run("push")
+	err := s.withDir(repoPath).Run("push")
 	if err != nil {
 		return &GitError{op: "push", err: err}
 	}
@@ -124,7 +139,7 @@ func (s *GitServiceImpl) Push(repoPath string) error {
 
 // Pull pulls from the remote
 func (s *GitServiceImpl) Pull(repoPath string) error {
-	err := s.commander.Run("pull")
+	err := s.withDir(repoPath).Run("pull")
 	if err != nil {
 		return &GitError{op: "pull", err: err}
 	}
@@ -133,7 +148,7 @@ func (s *GitServiceImpl) Pull(repoPath string) error {
 
 // HasChanges checks if there are uncommitted changes
 func (s *GitServiceImpl) HasChanges(repoPath string) (bool, error) {
-	output, err := s.commander.Output("status", "--porcelain")
+	output, err := s.withDir(repoPath).Output("status", "--porcelain")
 	if err != nil {
 		return false, &GitError{op: "status", err: err}
 	}
@@ -143,22 +158,25 @@ func (s *GitServiceImpl) HasChanges(repoPath string) (bool, error) {
 // GetStatus returns the git status
 func (s *GitServiceImpl) GetStatus(repoPath string) (StatusInfo, error) {
 	status := StatusInfo{}
+	c := s.withDir(repoPath)
 
-	output, err := s.commander.Output("status", "--porcelain")
+	output, err := c.Output("status", "--porcelain")
 	if err != nil {
 		return status, &GitError{op: "status", err: err}
 	}
 	status.HasUncommitted = len(output) > 0
 
-	branch, err := s.commander.Output("rev-parse", "--abbrev-ref", "HEAD")
-	if err == nil {
-		status.Branch = string(branch)
+	branch, branchErr := c.Output("rev-parse", "--abbrev-ref", "HEAD")
+	if branchErr == nil {
+		status.Branch = strings.TrimSpace(string(branch))
 	}
 
-	ahead, _ := s.commander.Output("rev-list", "--count", "--not", "origin/"+status.Branch)
-	if err == nil {
-		if n, _ := strconv.Atoi(string(ahead)); n > 0 {
-			status.AheadBy = n
+	if status.Branch != "" {
+		ahead, aheadErr := c.Output("rev-list", "--count", "--not", "origin/"+status.Branch)
+		if aheadErr == nil {
+			if n, _ := strconv.Atoi(strings.TrimSpace(string(ahead))); n > 0 {
+				status.AheadBy = n
+			}
 		}
 	}
 
@@ -167,16 +185,15 @@ func (s *GitServiceImpl) GetStatus(repoPath string) (StatusInfo, error) {
 
 // GetDiff returns the diff of uncommitted changes
 func (s *GitServiceImpl) GetDiff(repoPath string) (string, error) {
-	output, err := s.commander.Output("diff")
+	output, err := s.withDir(repoPath).Output("diff")
 	if err != nil {
 		return "", &GitError{op: "diff", err: err}
 	}
 	return string(output), nil
 }
 
-// GetFileHistory returns the commit history for a file
 func (s *GitServiceImpl) GetFileHistory(repoPath, filePath string, n int) ([]CommitInfo, error) {
-	output, err := s.commander.Output("log", "--oneline", "-n", string(rune('0'+n)), "--", filePath)
+	output, err := s.withDir(repoPath).Output("log", "--oneline", fmt.Sprintf("-n%d", n), "--", filePath)
 	if err != nil {
 		return nil, &GitError{op: "log", err: err}
 	}
@@ -205,7 +222,7 @@ func (s *GitServiceImpl) GetFileHistory(repoPath, filePath string, n int) ([]Com
 
 // GetCurrentCommit returns the current commit hash
 func (s *GitServiceImpl) GetCurrentCommit(repoPath string) (string, error) {
-	output, err := s.commander.Output("rev-parse", "HEAD")
+	output, err := s.withDir(repoPath).Output("rev-parse", "HEAD")
 	if err != nil {
 		return "", &GitError{op: "rev-parse", err: err}
 	}
@@ -214,7 +231,7 @@ func (s *GitServiceImpl) GetCurrentCommit(repoPath string) (string, error) {
 
 // GetRemoteURL returns the remote URL for origin
 func (s *GitServiceImpl) GetRemoteURL(repoPath string) (string, error) {
-	output, err := s.commander.Output("remote", "get-url", "origin")
+	output, err := s.withDir(repoPath).Output("remote", "get-url", "origin")
 	if err != nil {
 		return "", &GitError{op: "remote", err: err}
 	}
