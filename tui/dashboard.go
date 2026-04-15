@@ -13,7 +13,7 @@ import (
 func viewDashboard(m Model) string {
 	header := renderHeader(m)
 	stats := renderStatsStrip(m)
-	activity := renderActivityStrip(m)
+	activity := renderActivityPanel(m)
 	gitBar := renderGitBar(m)
 	footer := renderFooter(m)
 
@@ -407,12 +407,7 @@ func renderFileDetail(m Model, width, maxLines int) string {
 
 // ─── Activity strip ──────────────────────────────────────────────────────────
 
-func renderActivityStrip(m Model) string {
-	titleLine := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(colLavender)).
-		Bold(true).
-		Render("Recent activity")
-
+func renderActivityPanel(m Model) string {
 	var body string
 	if len(m.recentCommits) == 0 {
 		body = dimStyle.Render("No commits yet — press ") + kbd("S", "sync") + dimStyle.Render(" to commit changes")
@@ -441,16 +436,15 @@ func renderActivityStrip(m Model) string {
 		body = strings.Join(lines, "\n")
 	}
 
-	content := lipgloss.JoinVertical(lipgloss.Left,
-		titleLine,
-		subtleStyle.Render(strings.Repeat("─", max(m.width-4, 4))),
-		body,
-	)
+	panelHeight := lipgloss.Height(body) + 4
+	if panelHeight < 4 {
+		panelHeight = 4
+	}
 
 	return lipgloss.NewStyle().
 		Width(m.width).
-		Padding(0, 2).
-		Render(content)
+		Padding(0, 1).
+		Render(panel(" Recent activity", body, m.width-2, panelHeight, false))
 }
 
 func max(a, b int) int {
