@@ -420,6 +420,31 @@ func max(a, b int) int {
 // ─── Git + footer ────────────────────────────────────────────────────────────
 
 func renderGitBar(m Model) string {
+	if m.confirmAction != "" {
+		target := m.confirmTarget
+		var verb string
+		switch m.confirmAction {
+		case "stow":
+			verb = "Stow"
+		case "unstow":
+			verb = "Unstow"
+		case "stow-all":
+			verb = "Stow all"
+		case "delete":
+			verb = "Delete"
+		case "remove":
+			verb = "Remove from"
+		}
+		return lipgloss.NewStyle().
+			Width(m.width).
+			Foreground(lipgloss.Color(colYellow)).
+			Bold(true).
+			Render(fmt.Sprintf("  %s %s? %s %s %s",
+				verb, target,
+				kbd("enter", "confirm"), dimStyle.Render("·"), kbd("any key", "cancel"),
+			))
+	}
+
 	if m.err != nil {
 		return lipgloss.NewStyle().
 			Width(m.width).

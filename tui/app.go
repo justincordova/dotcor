@@ -113,6 +113,9 @@ type Model struct {
 	settingsStep  int
 	settingsInput textinput.Model
 	backups       []core.BackupInfo
+
+	confirmAction string
+	confirmTarget string
 }
 
 func NewModel(cfg *config.Config, version string) Model {
@@ -322,6 +325,32 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if m.confirmAction != "" {
+		switch {
+		case key.Matches(keyMsg, m.keys.Enter):
+			action := m.confirmAction
+			target := m.confirmTarget
+			m.clearConfirm()
+			switch action {
+			case "stow":
+				_ = target
+				return m, m.stowPackage()
+			case "unstow":
+				_ = target
+				return m, m.unstowPackage()
+			case "stow-all":
+				return m, m.stowAllPackages()
+			case "delete":
+				return m, m.deletePackage()
+			case "remove":
+				return m, m.removeFileFromPackage()
+			}
+		default:
+			m.clearConfirm()
+			return m, nil
+		}
+	}
+
 	switch {
 	case key.Matches(keyMsg, m.keys.Quit):
 		return m, tea.Quit
@@ -352,11 +381,21 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(keyMsg, m.keys.Stow):
 		m.clearErr()
-		return m, m.stowPackage()
+		if m.selectedPkg < len(m.packages) {
+			pkg := m.packages[m.selectedPkg]
+			m.confirmAction = "stow"
+			m.confirmTarget = pkg.Name
+		}
+		return m, nil
 
 	case key.Matches(keyMsg, m.keys.Unstow):
 		m.clearErr()
-		return m, m.unstowPackage()
+		if m.selectedPkg < len(m.packages) {
+			pkg := m.packages[m.selectedPkg]
+			m.confirmAction = "unstow"
+			m.confirmTarget = pkg.Name
+		}
+		return m, nil
 
 	case key.Matches(keyMsg, m.keys.Sync):
 		m.clearErr()
@@ -519,6 +558,10 @@ func (m Model) View() string {
 // ─── State helpers ───────────────────────────────────────────────────────────
 
 func (m *Model) clearErr() { m.err = nil }
+func (m *Model) clearConfirm() {
+	m.confirmAction = ""
+	m.confirmTarget = ""
+}
 func (m Model) currentFiles() []stow.FileEntry {
 	if m.selectedPkg >= len(m.packages) {
 		return nil
@@ -613,6 +656,10 @@ func (m Model) unstowPackage() tea.Cmd {
 		return stowResultMsg{msg: fmt.Sprintf("Unstowed %s (%d unlinked)", pkg.Name, result.Unlinked)}
 	}
 }
+
+func (m Model) stowAllPackages() tea.Cmd       { return nil }
+func (m Model) deletePackage() tea.Cmd         { return nil }
+func (m Model) removeFileFromPackage() tea.Cmd { return nil }
 
 func (m Model) syncRepo() tea.Cmd {
 	repoDir := m.repoDir
