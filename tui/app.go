@@ -117,7 +117,7 @@ type Model struct {
 }
 
 func NewModel(cfg *config.Config, version string) Model {
-	homeDir, _ := os.UserHomeDir()
+	homeDir, _ := config.GetHomeDir()
 	repoDir, _ := config.GetConfigDir()
 
 	sp := spinner.New()
@@ -512,7 +512,7 @@ func (m Model) View() string {
 
 // ─── State helpers ───────────────────────────────────────────────────────────
 
-func (m *Model) clearErr()            { m.err = nil }
+func (m *Model) clearErr() { m.err = nil }
 func (m Model) currentFiles() []stow.FileEntry {
 	if m.selectedPkg >= len(m.packages) {
 		return nil
@@ -643,12 +643,8 @@ func (m Model) pullRepo() tea.Cmd {
 
 func loadLogs(level string) tea.Cmd {
 	return func() tea.Msg {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return logsLoadedMsg{lines: []string{"error: cannot determine home directory"}}
-		}
-
-		logPath := filepath.Join(home, ".dotcor", "logs", "dotcor.log")
+		configDir, _ := config.GetConfigDir()
+		logPath := filepath.Join(configDir, "logs", "dotcor.log")
 		data, err := os.ReadFile(logPath)
 		if err != nil {
 			return logsLoadedMsg{lines: []string{"no logs found — run some commands first"}}

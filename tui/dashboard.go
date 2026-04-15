@@ -211,7 +211,7 @@ func renderPackageList(m Model, width, maxLines int) string {
 	}
 
 	// Each card is 3 lines + 1 spacer; show as many as fit.
-	cardLines := 3
+	cardLines := 2
 	perCard := cardLines + 1
 	maxCards := maxLines / perCard
 	if maxCards < 1 {
@@ -274,26 +274,21 @@ func renderPackageCard(m Model, i, width int) string {
 	}
 	line1 := bar + " " + circle + " " + name + strings.Repeat(" ", gap) + tag
 
-	// Line 2: source path
-	srcPath := collapseHome(pkg.Path, m.homeDir)
-	line2 := indent + dimStyle.Render(truncate(srcPath, contentWidth))
-
-	// Line 3: progress + mtime
 	var progress string
 	switch {
 	case total == 0:
 		progress = dimStyle.Render("empty")
 	case linked == total:
-		progress = successStyle.Render(fmt.Sprintf("✓ %d/%d linked", linked, total))
+		progress = successStyle.Render(fmt.Sprintf("✓ %d/%d", linked, total))
 	case linked == 0:
-		progress = errorStyle.Render(fmt.Sprintf("✗ %d/%d linked", linked, total))
+		progress = errorStyle.Render(fmt.Sprintf("✗ %d/%d", linked, total))
 	default:
-		progress = warningStyle.Render(fmt.Sprintf("◐ %d/%d linked", linked, total))
+		progress = warningStyle.Render(fmt.Sprintf("◐ %d/%d", linked, total))
 	}
 	modified := dimStyle.Render(relativeModTime(pkg.Path))
-	line3 := indent + progress + dimStyle.Render(" · ") + modified
+	line2 := indent + progress + dimStyle.Render(" · ") + modified
 
-	return lipgloss.JoinVertical(lipgloss.Left, line1, line2, line3)
+	return lipgloss.JoinVertical(lipgloss.Left, line1, line2)
 }
 
 func renderEmptyPackages(width int) string {

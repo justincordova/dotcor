@@ -10,6 +10,8 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/justincordova/dotcor/internal/config"
 )
 
 type addResultMsg struct {
@@ -257,14 +259,14 @@ func (m Model) executeAdd() tea.Cmd {
 
 func expandHome(path string) string {
 	if strings.HasPrefix(path, "~/") {
-		home, _ := os.UserHomeDir()
+		home, _ := config.GetHomeDir()
 		return filepath.Join(home, path[2:])
 	}
 	return path
 }
 
 func detectPackageName(path string) string {
-	home, _ := os.UserHomeDir()
+	home, _ := config.GetHomeDir()
 	rel, err := filepath.Rel(home, path)
 	if err != nil {
 		rel = path

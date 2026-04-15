@@ -16,8 +16,8 @@ go build -o bin/dotcor ./cmd/dotcor
 
 ### Run with Test Environment
 ```bash
-# Use DOTCOR_DIR env var to test with isolated environment
-DOTCOR_DIR=/tmp/dotcor-test ./bin/dotcor
+# Sandbox both config dir and home dir — won't touch your real dotfiles
+DOTCOR_DIR=/tmp/dotcor-test DOTCOR_HOME=/tmp/dotcor-home ./bin/dotcor
 ```
 
 ---
@@ -35,6 +35,9 @@ The TUI launches automatically when running `./bin/dotcor`. Use keyboard navigat
 ### Test with Isolated Environment
 
 ```bash
+# Create sandbox home (symlinks will target this, not your real ~)
+mkdir -p /tmp/dotcor-home
+
 # Create test directory with packages
 mkdir -p /tmp/dotcor-test/git /tmp/dotcor-test/nvim /tmp/dotcor-test/starship /tmp/dotcor-test/tmux /tmp/dotcor-test/zsh
 
@@ -45,8 +48,8 @@ echo "starship config" > /tmp/dotcor-test/starship/config.toml
 echo "tmux config" > /tmp/dotcor-test/tmux/config
 echo "zsh config" > /tmp/dotcor-test/zshrc
 
-# Run with test environment
-DOTCOR_DIR=/tmp/dotcor-test ./bin/dotcor
+# Run with sandboxed environment
+DOTCOR_DIR=/tmp/dotcor-test DOTCOR_HOME=/tmp/dotcor-home ./bin/dotcor
 ```
 
 The TUI should show 5 packages in the left sidebar.
