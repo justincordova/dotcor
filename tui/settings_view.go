@@ -109,7 +109,7 @@ func viewSettingsBackups(m Model) string {
 			}
 			ts := dimStyle.Render(backup.Timestamp.Format("2006-01-02 15:04"))
 			src := textStyle.Render(truncate(backup.SourcePath, m.width-40))
-			size := dimStyle.Render(fmt.Sprintf("%d B", backup.Size))
+			size := dimStyle.Render(humanSize(backup.Size))
 			fmt.Fprintf(&b, "  %s  %s  %s\n", ts, src, size)
 		}
 	}
@@ -216,6 +216,6 @@ func (m Model) cleanBackups() tea.Cmd {
 		if err != nil {
 			return settingsMsg{err: err}
 		}
-		return settingsMsg{msg: fmt.Sprintf("Cleaned %d backups (%d failed, freed %d B)", deleted, failed, freed)}
+		return settingsMsg{msg: fmt.Sprintf("Cleaned %d backups (%d failed, freed %s)", deleted, failed, humanSize(freed))}
 	}
 }
