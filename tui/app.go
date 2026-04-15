@@ -525,7 +525,7 @@ func (m Model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.searchInput.Blur()
 			m.searchQuery = m.searchInput.Value()
 			for i, pkg := range m.packages {
-				if strings.Contains(strings.ToLower(pkg.Name), strings.ToLower(m.searchQuery)) {
+				if fuzzyMatch(m.searchQuery, pkg.Name) {
 					m.selectedPkg = i
 					m.selectedFile = 0
 					break

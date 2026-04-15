@@ -205,13 +205,56 @@ func renderPackageList(m Model, width, maxLines int) string {
 	}
 
 	if m.searching {
-		return renderSearchInput(m, width)
+		query := m.searchInput.Value()
+
+		var filtered []int
+		for i, pkg := range m.packages {
+			if fuzzyMatch(query, pkg.Name) {
+				filtered = append(filtered, i)
+			}
+		}
+
+		var b strings.Builder
+		b.WriteString(renderSearchInput(m, width))
+		b.WriteString("\n")
+
+		if len(filtered) == 0 {
+			b.WriteString(dimStyle.Render("  no matches"))
+			return b.String()
+		}
+
+		searchLines := 3
+		cardHeight := 2
+		availableLines := maxLines - searchLines - 1
+		if availableLines < 2 {
+			availableLines = 2
+		}
+		maxCards := availableLines / cardHeight
+		if maxCards < 1 {
+			maxCards = 1
+		}
+
+		selInFiltered := 0
+		for fi, oi := range filtered {
+			if oi == m.selectedPkg {
+				selInFiltered = fi
+				break
+			}
+		}
+
+		start, end := visibleRange(selInFiltered, len(filtered), maxCards)
+		for fi := start; fi < end; fi++ {
+			b.WriteString(renderPackageCard(m, filtered[fi], width))
+			if fi < end-1 {
+				b.WriteString("\n")
+			}
+		}
+
+		return b.String()
 	}
 
-	// Each card is 3 lines + 1 spacer; show as many as fit.
-	cardLines := 2
-	perCard := cardLines
-	maxCards := maxLines / perCard
+	cardHeight := 2
+	maxCards := maxLines / cardHeight
 	if maxCards < 1 {
 		maxCards = 1
 	}
@@ -576,6 +619,21 @@ func categoryTag(name string) string {
 	return lipgloss.NewStyle().
 		Foreground(lipgloss.Color(color)).
 		Render(tag)
+}
+
+func fuzzyMatch(query, target string) bool {
+	if query == "" {
+		return true
+	}
+	q := strings.ToLower(query)
+	t := strings.ToLower(target)
+	qi := 0
+	for _, c := range t {
+		if qi < len(q) && byte(c) == q[qi] {
+			qi++
+		}
+	}
+	return qi == len(q)
 }
 
 func containsAny(s string, subs ...string) bool {
