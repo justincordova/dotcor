@@ -16,6 +16,19 @@ type historyMsg struct {
 }
 
 func viewHistory(m Model) string {
+	base := viewHistoryBase(m)
+	if m.confirmOpen {
+		return lipgloss.Place(m.width, m.height,
+			lipgloss.Center, lipgloss.Center,
+			confirmModal(m),
+			lipgloss.WithWhitespaceChars(" "),
+			lipgloss.WithWhitespaceForeground(lipgloss.Color(colBase)),
+		)
+	}
+	return base
+}
+
+func viewHistoryBase(m Model) string {
 	crumbs := []string{}
 	if m.selectedPkg < len(m.packages) {
 		p := m.packages[m.selectedPkg]
@@ -86,6 +99,17 @@ func (m Model) updateHistory(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		if m.confirmOpen {
+			switch {
+			case key.Matches(msg, m.keys.Enter):
+				ref := m.confirmRestoreRef
+				m.clearConfirm()
+				return m, m.restoreFromCommit(ref)
+			default:
+				m.clearConfirm()
+				return m, nil
+			}
+		}
 		switch {
 		case key.Matches(msg, m.keys.Esc):
 			m.activeView = DashboardView
@@ -105,7 +129,16 @@ func (m Model) updateHistory(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, m.keys.Enter):
 			if m.selectedCommit < len(m.commits) {
-				return m, m.restoreFromCommit(m.commits[m.selectedCommit].Hash)
+				c := m.commits[m.selectedCommit]
+				m.confirmOpen = true
+				m.confirmAction = "restore"
+				m.confirmRestoreRef = c.Hash
+				filePath := historyFilePath(m)
+				shortHash := shortRef(c.Hash)
+				m.confirmTitle = fmt.Sprintf("Restore %s?", filePath)
+				m.confirmBody = fmt.Sprintf("from %s · %s\n\nThis replaces the current version.", shortHash, formatRelativeTime(c.Date))
+				m.confirmHint = "enter confirm · esc cancel"
+				m.confirmDanger = true
 			}
 
 		case msg.String() == "D":
@@ -123,6 +156,17 @@ func shortRef(ref string) string {
 		return ref[:7]
 	}
 	return ref
+}
+
+func historyFilePath(m Model) string {
+	if m.selectedPkg < len(m.packages) {
+		pkg := m.packages[m.selectedPkg]
+		if m.expanded[m.selectedPkg] && m.selectedFile < len(pkg.Files) {
+			return pkg.Files[m.selectedFile].RelPath
+		}
+		return pkg.Name
+	}
+	return ""
 }
 
 func getFileHistory(m Model) tea.Cmd {
@@ -156,6 +200,8 @@ func (m Model) restoreFromCommit(ref string) tea.Cmd {
 		pkg := m.packages[m.selectedPkg]
 		if m.expanded[m.selectedPkg] && m.selectedFile < len(pkg.Files) {
 			filePath = pkg.Files[m.selectedFile].RelPath
+		} else {
+			filePath = pkg.Name
 		}
 	}
 

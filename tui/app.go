@@ -129,13 +129,14 @@ type Model struct {
 
 	initStep int
 
-	confirmOpen   bool
-	confirmAction string
-	confirmTarget string
-	confirmTitle  string
-	confirmBody   string
-	confirmHint   string
-	confirmDanger bool
+	confirmOpen       bool
+	confirmAction     string
+	confirmTarget     string
+	confirmTitle      string
+	confirmBody       string
+	confirmHint       string
+	confirmDanger     bool
+	confirmRestoreRef string
 }
 
 func NewModel(cfg *config.Config, version string) Model {
@@ -371,6 +372,7 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(keyMsg, m.keys.Enter):
 			action := m.confirmAction
 			target := m.confirmTarget
+			restoreRef := m.confirmRestoreRef
 			m.clearConfirm()
 			switch action {
 			case "stow":
@@ -385,6 +387,8 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.removeFileFromPackage()
 			case "resolve-conflicts":
 				return m, m.resolveConflicts(target)
+			case "restore":
+				return m, m.restoreFromCommit(restoreRef)
 			}
 		default:
 			m.clearConfirm()
@@ -752,6 +756,7 @@ func (m *Model) clearConfirm() {
 	m.confirmBody = ""
 	m.confirmHint = ""
 	m.confirmDanger = false
+	m.confirmRestoreRef = ""
 }
 
 func countLinked(files []stow.FileEntry) (linked, total int) {
