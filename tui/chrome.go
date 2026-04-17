@@ -45,11 +45,30 @@ func subviewFooter(width int, hints ...string) string {
 		Render(joinHints(hints...))
 }
 
-// subviewContent frames the body between header and footer with a fixed height.
+func contentWidth(termWidth int) int {
+	maxW := 90
+	if termWidth < maxW {
+		return termWidth
+	}
+	return maxW
+}
+
+func bodyWidth(termWidth int) int {
+	return contentWidth(termWidth) - 4
+}
+
 func subviewContent(width, height int, body string) string {
 	return lipgloss.NewStyle().
 		Width(width).
 		Height(height).
+		Padding(1, 2).
+		Render(body)
+}
+
+func subviewBody(width int, body string) string {
+	cw := contentWidth(width)
+	return lipgloss.NewStyle().
+		Width(cw).
 		Padding(1, 2).
 		Render(body)
 }

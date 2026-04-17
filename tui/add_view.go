@@ -36,8 +36,11 @@ func viewAdd(m Model) string {
 		errLine = "\n" + errorStyle.Render(fmt.Sprintf("  ✗ %v", m.err)) + "\n"
 	}
 
+	cw := contentWidth(m.width)
+	var footer string
+
 	if m.addStep == 0 {
-		header := subviewHeader(m.width, "Add File", []string{"browse"})
+		header := subviewHeader(cw, "Add File", []string{"browse"})
 		body := renderAddStep0(m) + errLine
 		footerHints := []string{
 			kbd("↑/k", "up"), kbd("↓/j", "down"),
@@ -48,16 +51,22 @@ func viewAdd(m Model) string {
 		if sc := selectionCount(m.browserSelected); sc != "" {
 			footerHints = append(footerHints, sc)
 		}
-		footer := subviewFooter(m.width, footerHints...)
-		return lipgloss.JoinVertical(lipgloss.Left,
+		footer = subviewFooter(cw, footerHints...)
+		content := lipgloss.JoinVertical(lipgloss.Left,
 			header,
-			renderStepper(m.width, m.addStep),
-			subviewContent(m.width, m.height-4, body),
+			renderStepper(cw, m.addStep),
+			subviewBody(cw, body),
 			footer,
+		)
+		return lipgloss.Place(m.width, m.height,
+			lipgloss.Center, lipgloss.Center,
+			content,
+			lipgloss.WithWhitespaceChars(" "),
+			lipgloss.WithWhitespaceForeground(lipgloss.Color(colBase)),
 		)
 	}
 
-	header := subviewHeader(m.width, "Add File", []string{stepLabel(m.addStep)})
+	header := subviewHeader(cw, "Add File", []string{stepLabel(m.addStep)})
 
 	var body string
 	switch m.addStep {
@@ -69,13 +78,19 @@ func viewAdd(m Model) string {
 		body = renderAddStep3(m)
 	}
 
-	footer := subviewFooter(m.width, addFooterHints(m)...)
+	footer = subviewFooter(cw, addFooterHints(m)...)
 
-	return lipgloss.JoinVertical(lipgloss.Left,
+	content := lipgloss.JoinVertical(lipgloss.Left,
 		header,
-		renderStepper(m.width, m.addStep),
-		subviewContent(m.width, m.height-4, body),
+		renderStepper(cw, m.addStep),
+		subviewBody(cw, body),
 		footer,
+	)
+	return lipgloss.Place(m.width, m.height,
+		lipgloss.Center, lipgloss.Center,
+		content,
+		lipgloss.WithWhitespaceChars(" "),
+		lipgloss.WithWhitespaceForeground(lipgloss.Color(colBase)),
 	)
 }
 
@@ -112,7 +127,7 @@ func renderStepper(width, step int) string {
 		}
 	}
 	row := lipgloss.JoinHorizontal(lipgloss.Center, parts...)
-	return lipgloss.NewStyle().Width(width).Padding(0, 2).Render(row)
+	return lipgloss.NewStyle().Width(contentWidth(width)).Padding(0, 2).Render(row)
 }
 
 func renderAddStep0(m Model) string {
@@ -124,14 +139,14 @@ func renderAddStep0(m Model) string {
 	}
 	b.WriteString(accentStyle.Render("  " + displayPath))
 	b.WriteString("\n")
-	b.WriteString(subtleStyle.Render(strings.Repeat("─", max(m.width-8, 4))))
+	b.WriteString(subtleStyle.Render(strings.Repeat("─", max(bodyWidth(m.width), 4))))
 	b.WriteString("\n")
 
 	if m.browserJumping {
 		b.WriteString("\n")
 		b.WriteString("  " + accentStyle.Render("/") + " " + m.browserJumpInput.View())
 		b.WriteString("\n")
-		b.WriteString(dimStyle.Render(strings.Repeat("─", max(m.width-8, 4))))
+		b.WriteString(dimStyle.Render(strings.Repeat("─", max(bodyWidth(m.width), 4))))
 		b.WriteString("\n")
 	}
 
@@ -204,7 +219,7 @@ func renderAddStep0(m Model) string {
 
 		line := fmt.Sprintf("  %s%s %s", indent, icon, styledName)
 		if i == m.browserCursor {
-			line = selectedRowStyle.Width(m.width - 8).Render(line)
+			line = selectedRowStyle.Width(bodyWidth(m.width)).Render(line)
 		}
 		b.WriteString(line)
 		b.WriteString("\n")
@@ -306,7 +321,7 @@ func renderAddStep1(m Model) string {
 		for i, name := range m.addPkgChoices {
 			line := fmt.Sprintf("  ○ %s", name)
 			if i == m.addPkgIdx {
-				line = selectedRowStyle.Width(m.width - 8).Render(" ▸ " + name)
+				line = selectedRowStyle.Width(bodyWidth(m.width)).Render(" ▸ " + name)
 			}
 			b.WriteString(line)
 			b.WriteString("\n")
