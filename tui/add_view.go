@@ -40,7 +40,6 @@ func viewAdd(m Model) string {
 	var footer string
 
 	if m.addStep == 0 {
-		header := subviewHeader(cw, "Add File", []string{"browse"})
 		body := renderAddStep0(m) + errLine
 		footerHints := []string{
 			kbd("↑/k", "up"), kbd("↓/j", "down"),
@@ -51,22 +50,20 @@ func viewAdd(m Model) string {
 		if sc := selectionCount(m.browserSelected); sc != "" {
 			footerHints = append(footerHints, sc)
 		}
-		footer = subviewFooter(cw, footerHints...)
+		footer = plainFooter(cw, footerHints...)
 		content := lipgloss.JoinVertical(lipgloss.Left,
-			header,
 			renderStepper(cw, m.addStep),
 			subviewBody(cw, body),
 			footer,
 		)
+		dialog := boxStyle.Width(cw - 2).Render(content)
 		return lipgloss.Place(m.width, m.height,
 			lipgloss.Center, lipgloss.Center,
-			content,
+			dialog,
 			lipgloss.WithWhitespaceChars(" "),
 			lipgloss.WithWhitespaceForeground(lipgloss.Color(colBase)),
 		)
 	}
-
-	header := subviewHeader(cw, "Add File", []string{stepLabel(m.addStep)})
 
 	var body string
 	switch m.addStep {
@@ -78,37 +75,28 @@ func viewAdd(m Model) string {
 		body = renderAddStep3(m)
 	}
 
-	footer = subviewFooter(cw, addFooterHints(m)...)
+	footer = plainFooter(cw, addFooterHints(m)...)
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
-		header,
 		renderStepper(cw, m.addStep),
 		subviewBody(cw, body),
 		footer,
 	)
+	dialog := boxStyle.Width(cw - 2).Render(content)
 	return lipgloss.Place(m.width, m.height,
 		lipgloss.Center, lipgloss.Center,
-		content,
+		dialog,
 		lipgloss.WithWhitespaceChars(" "),
 		lipgloss.WithWhitespaceForeground(lipgloss.Color(colBase)),
 	)
 }
 
-func stepLabel(step int) string {
-	switch step {
-	case 0:
-		return "path"
-	case 1:
-		return "package name"
-	case 2:
-		return "preview"
-	case 3:
-		return "adding"
-	}
-	return ""
-}
-
 func renderStepper(width, step int) string {
+	title := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(colMauve)).
+		Bold(true).
+		Render("◆ Add File")
+
 	steps := []string{"Select", "Package", "Review"}
 	var parts []string
 	for i, s := range steps {
@@ -126,8 +114,17 @@ func renderStepper(width, step int) string {
 				Render(label))
 		}
 	}
-	row := lipgloss.JoinHorizontal(lipgloss.Center, parts...)
-	return lipgloss.NewStyle().Width(contentWidth(width)).Padding(0, 2).Render(row)
+	stepRow := lipgloss.JoinHorizontal(lipgloss.Center, parts...)
+
+	cw := contentWidth(width)
+	rightW := lipgloss.Width(stepRow)
+	gap := cw - lipgloss.Width(title) - rightW - 4
+	if gap < 2 {
+		gap = 2
+	}
+
+	row := title + strings.Repeat(" ", gap) + stepRow
+	return lipgloss.NewStyle().Width(cw).Padding(0, 2).Render(row)
 }
 
 func renderAddStep0(m Model) string {

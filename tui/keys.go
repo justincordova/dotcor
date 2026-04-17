@@ -24,7 +24,6 @@ type keyMap struct {
 	Pull     key.Binding
 	Settings key.Binding
 	Init     key.Binding
-	Delete   key.Binding
 	StowAll  key.Binding
 	Remove   key.Binding
 	Quit     key.Binding
@@ -50,9 +49,8 @@ func newKeyMap() keyMap {
 		Pull:     key.NewBinding(key.WithKeys("P"), key.WithHelp("P", "pull")),
 		Settings: key.NewBinding(key.WithKeys(","), key.WithHelp(",", "settings")),
 		Init:     key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "init git")),
-		Delete:   key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "delete pkg")),
 		StowAll:  key.NewBinding(key.WithKeys("A"), key.WithHelp("A", "stow all")),
-		Remove:   key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "remove file")),
+		Remove:   key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "remove")),
 		Quit:     key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 	}
 }
@@ -65,7 +63,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Enter, k.Esc},
 		{k.Stow, k.Unstow, k.StowAll, k.Sync},
-		{k.Add, k.Remove, k.Delete, k.Init},
+		{k.Add, k.Remove, k.Init},
 		{k.Push, k.Pull, k.Diff, k.History},
 		{k.Logs, k.Settings, k.Search, k.Help},
 		{k.Quit},

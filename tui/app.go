@@ -488,23 +488,12 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case key.Matches(keyMsg, m.keys.Delete):
-		m.clearErr()
-		if m.selectedPkg < len(m.packages) {
-			pkg := m.packages[m.selectedPkg]
-			m.confirmOpen = true
-			m.confirmAction = "delete"
-			m.confirmTarget = pkg.Name
-			m.confirmTitle = fmt.Sprintf("Delete %s?", pkg.Name)
-			m.confirmBody = fmt.Sprintf("Permanently removes %d tracked files.\nThis cannot be undone.", len(pkg.Files))
-			m.confirmHint = "enter confirm · any key cancel"
-			m.confirmDanger = true
-		}
-		return m, nil
-
 	case key.Matches(keyMsg, m.keys.Remove):
 		m.clearErr()
-		if m.selectedPkg < len(m.packages) && m.expanded[m.selectedPkg] && m.selectedFile < len(m.packages[m.selectedPkg].Files) {
+		if m.selectedPkg >= len(m.packages) {
+			return m, nil
+		}
+		if m.expanded[m.selectedPkg] && m.selectedFile < len(m.packages[m.selectedPkg].Files) {
 			f := m.packages[m.selectedPkg].Files[m.selectedFile]
 			m.confirmOpen = true
 			m.confirmAction = "remove"
@@ -513,6 +502,15 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.confirmBody = fmt.Sprintf("Removes from package %s.\nFile stays on disk.", m.packages[m.selectedPkg].Name)
 			m.confirmHint = "enter confirm · any key cancel"
 			m.confirmDanger = false
+		} else {
+			pkg := m.packages[m.selectedPkg]
+			m.confirmOpen = true
+			m.confirmAction = "delete"
+			m.confirmTarget = pkg.Name
+			m.confirmTitle = fmt.Sprintf("Delete %s?", pkg.Name)
+			m.confirmBody = fmt.Sprintf("Permanently removes %d tracked files.\nThis cannot be undone.", len(pkg.Files))
+			m.confirmHint = "enter confirm · any key cancel"
+			m.confirmDanger = true
 		}
 		return m, nil
 

@@ -29,8 +29,7 @@ func viewHelp(m Model) string {
 				formatBinding("u", "unstow package"),
 				formatBinding("A", "stow all"),
 				formatBinding("a", "add file (browser)"),
-				formatBinding("r", "remove file"),
-				formatBinding("x", "delete package"),
+				formatBinding("r", "remove (context-aware)"),
 			},
 		},
 		{
