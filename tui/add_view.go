@@ -37,6 +37,7 @@ func viewAdd(m Model) string {
 	}
 
 	cw := contentWidth(m.width)
+	innerW := cw - 4
 	var footer string
 
 	if m.addStep == 0 {
@@ -50,10 +51,10 @@ func viewAdd(m Model) string {
 		if sc := selectionCount(m.browserSelected); sc != "" {
 			footerHints = append(footerHints, sc)
 		}
-		footer = plainFooter(cw, footerHints...)
+		footer = plainFooter(innerW, footerHints...)
 		content := lipgloss.JoinVertical(lipgloss.Left,
-			renderStepper(cw, m.addStep),
-			subviewBody(cw, body),
+			renderStepper(innerW, m.addStep),
+			lipgloss.NewStyle().Padding(1, 0).Render(body),
 			footer,
 		)
 		dialog := boxStyle.Width(cw - 2).Render(content)
@@ -75,11 +76,11 @@ func viewAdd(m Model) string {
 		body = renderAddStep3(m)
 	}
 
-	footer = plainFooter(cw, addFooterHints(m)...)
+	footer = plainFooter(innerW, addFooterHints(m)...)
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
-		renderStepper(cw, m.addStep),
-		subviewBody(cw, body),
+		renderStepper(innerW, m.addStep),
+		lipgloss.NewStyle().Padding(1, 0).Render(body),
 		footer,
 	)
 	dialog := boxStyle.Width(cw - 2).Render(content)
@@ -116,15 +117,14 @@ func renderStepper(width, step int) string {
 	}
 	stepRow := lipgloss.JoinHorizontal(lipgloss.Center, parts...)
 
-	cw := contentWidth(width)
 	rightW := lipgloss.Width(stepRow)
-	gap := cw - lipgloss.Width(title) - rightW - 4
+	gap := width - lipgloss.Width(title) - rightW - 4
 	if gap < 2 {
 		gap = 2
 	}
 
 	row := title + strings.Repeat(" ", gap) + stepRow
-	return lipgloss.NewStyle().Width(cw).Padding(0, 2).Render(row)
+	return lipgloss.NewStyle().Width(width).Padding(0, 2).Render(row)
 }
 
 func renderAddStep0(m Model) string {
@@ -215,8 +215,11 @@ func renderAddStep0(m Model) string {
 		}
 
 		line := fmt.Sprintf("  %s%s %s", indent, icon, styledName)
+		bw := bodyWidth(m.width)
 		if i == m.browserCursor {
-			line = selectedRowStyle.Width(bodyWidth(m.width)).Render(line)
+			line = selectedRowStyle.Width(bw).Render(line)
+		} else {
+			line = lipgloss.NewStyle().Width(bw).Render(line)
 		}
 		b.WriteString(line)
 		b.WriteString("\n")

@@ -101,7 +101,7 @@ func panel(title, body string, width, height int, active bool) string {
 
 // kbd renders a keyboard hint: `[key] desc`.
 func kbd(k, desc string) string {
-	return keyStyle.Render(k) + " " + descStyle.Render(desc)
+	return keyStyle.Render(k) + "\u00a0" + descStyle.Render(desc)
 }
 
 // joinHints joins key hints with a spaced separator.

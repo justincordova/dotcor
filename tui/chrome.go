@@ -65,19 +65,13 @@ func subviewContent(width, height int, body string) string {
 		Render(body)
 }
 
-func subviewBody(width int, body string) string {
-	cw := contentWidth(width)
-	return lipgloss.NewStyle().
-		Width(cw).
-		Padding(1, 2).
-		Render(body)
-}
-
 func plainFooter(width int, hints ...string) string {
+	text := joinHints(hints...)
 	return lipgloss.NewStyle().
 		Width(width).
 		Padding(0, 2).
-		Render(joinHints(hints...))
+		Align(lipgloss.Center).
+		Render(text)
 }
 
 func mapStyle(in []string, style lipgloss.Style) []string {
