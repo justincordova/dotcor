@@ -444,12 +444,31 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.clearErr()
 		if m.selectedPkg < len(m.packages) {
 			pkg := m.packages[m.selectedPkg]
-			linked, total := countLinked(pkg.Files)
+			var linked, toLink, conflicts, foreign int
+			for _, f := range pkg.Files {
+				if f.IsLinked {
+					linked++
+				} else if f.Exists && f.IsSymlink {
+					foreign++
+				} else if f.Exists {
+					conflicts++
+				} else {
+					toLink++
+				}
+			}
 			m.confirmOpen = true
 			m.confirmAction = "stow"
 			m.confirmTarget = pkg.Name
 			m.confirmTitle = fmt.Sprintf("Stow %s?", pkg.Name)
-			m.confirmBody = fmt.Sprintf("%d files to link, %d already linked", total-linked, linked)
+			parts := []string{fmt.Sprintf("%d to link", toLink)}
+			if foreign > 0 {
+				parts = append(parts, fmt.Sprintf("%d foreign", foreign))
+			}
+			if conflicts > 0 {
+				parts = append(parts, fmt.Sprintf("%d conflict", conflicts))
+			}
+			parts = append(parts, fmt.Sprintf("%d linked", linked))
+			m.confirmBody = strings.Join(parts, " · ")
 			m.confirmHint = "enter confirm · any key cancel"
 			m.confirmDanger = false
 		}

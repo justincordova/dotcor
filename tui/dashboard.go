@@ -415,10 +415,12 @@ func renderFileDetail(m Model, width, maxLines int) string {
 
 	var b strings.Builder
 
-	linked, conflicts := 0, 0
+	linked, conflicts, foreign := 0, 0, 0
 	for _, f := range pkg.Files {
 		if f.IsLinked {
 			linked++
+		} else if f.Exists && f.IsSymlink {
+			foreign++
 		} else if f.Exists {
 			conflicts++
 		}
@@ -427,10 +429,13 @@ func renderFileDetail(m Model, width, maxLines int) string {
 	summary := []string{
 		pill(fmt.Sprintf("linked %d", linked), colBase, colGreen),
 	}
+	if foreign > 0 {
+		summary = append(summary, pill(fmt.Sprintf("foreign %d", foreign), colBase, colYellow))
+	}
 	if conflicts > 0 {
 		summary = append(summary, pill(fmt.Sprintf("conflict %d", conflicts), colBase, colRed))
 	}
-	unlinked := len(pkg.Files) - linked - conflicts
+	unlinked := len(pkg.Files) - linked - conflicts - foreign
 	if unlinked > 0 {
 		summary = append(summary, pill(fmt.Sprintf("unlinked %d", unlinked), colBase, colOverlay0))
 	}
@@ -445,18 +450,17 @@ func renderFileDetail(m Model, width, maxLines int) string {
 		selected := i == m.selectedFile && m.expanded[m.selectedPkg]
 
 		statusBadge := fileBadge(f)
-		rel := truncate(f.RelPath, width/2-4)
-		target := truncate(collapseHome(f.TargetPath, m.homeDir), width/2-2)
-		arrow := "→"
+		rel := f.RelPath
+		target := collapseHome(f.TargetPath, m.homeDir)
 
 		if selected {
-			line := fmt.Sprintf("%s %s %s %s", statusBadge, rel, arrow, target)
-			b.WriteString(selectedRowStyle.Width(width).Render("▸ " + line))
+			b.WriteString(selectedRowStyle.Width(width).Render(fmt.Sprintf("▸ %s %s", statusBadge, rel)))
+			b.WriteString("\n")
+			b.WriteString(selectedRowStyle.Width(width).Render(fmt.Sprintf("  %s→ %s", strings.Repeat(" ", lipgloss.Width(statusBadge)-1), target)))
 		} else {
-			line := fmt.Sprintf("%s %s %s %s", statusBadge, textStyle.Render(rel), dimStyle.Render(arrow), dimStyle.Render(target))
-			b.WriteString("  " + line)
+			fmt.Fprintf(&b, "  %s %s\n", statusBadge, textStyle.Render(rel))
+			fmt.Fprintf(&b, "  %s%s %s\n", strings.Repeat(" ", lipgloss.Width(statusBadge)), dimStyle.Render("→"), dimStyle.Render(target))
 		}
-		b.WriteString("\n")
 	}
 
 	if len(pkg.Files) > maxLines-3 {
@@ -615,7 +619,9 @@ func fileBadge(f stow.FileEntry) string {
 	switch {
 	case f.IsLinked:
 		return pill("LINK", colBase, colGreen)
-	case f.Exists && !f.IsSymlink:
+	case f.Exists && f.IsSymlink:
+		return pill("FOREIGN", colBase, colYellow)
+	case f.Exists:
 		return pill("CONF", colBase, colRed)
 	default:
 		return pill("NONE", colText, colSurface1)

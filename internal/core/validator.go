@@ -121,10 +121,8 @@ func ValidateSourceFile(path string, cfg *config.Config) error {
 		}
 		if pointsToRepo {
 			cfg.Logger.Debug("file already managed by dotcor", "file", path)
-			return fmt.Errorf("file is already a symlink pointing to dotcor repo: %s", path)
+			return fmt.Errorf("file is already managed by dotcor: %s", path)
 		}
-		cfg.Logger.Debug("file is symlink pointing elsewhere", "file", path)
-		return fmt.Errorf("file is a symlink pointing elsewhere, use 'dotcor adopt' instead: %s", path)
 	}
 
 	cfg.Logger.Debug("validation complete", "file", path, "valid", true)
@@ -287,6 +285,11 @@ func ValidateAll(path string, cfg *config.Config) (warnings []string, err error)
 
 	if err := ValidateNotAlreadyManaged(cfg, path); err != nil {
 		return nil, err
+	}
+
+	isLink, _ := fs.IsSymlink(path)
+	if isLink {
+		warnings = append(warnings, "Foreign symlink — will be adopted (symlink replaced, file moved to dotcor repo)")
 	}
 
 	// Check file size (non-fatal, just return warning)

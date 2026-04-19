@@ -16,6 +16,7 @@ import (
 
 	"github.com/justincordova/dotcor/internal/config"
 	"github.com/justincordova/dotcor/internal/core"
+	"github.com/justincordova/dotcor/internal/fs"
 )
 
 type addResultMsg struct {
@@ -200,7 +201,12 @@ func renderAddStep0(m Model) string {
 			}
 			target, _ := os.Readlink(item.path)
 			display := truncate(filepath.Base(target), 20)
-			styledName = dimStyle.Render(name + " → " + display)
+			managed, _ := fs.SymlinkPointsToRepo(item.path, m.repoDir)
+			if managed {
+				styledName = successStyle.Render(name + " → dotcor")
+			} else {
+				styledName = warningStyle.Render(name + " → " + display + " ⚠ foreign")
+			}
 		} else {
 			if m.browserSelected[item.path] {
 				icon = "●"
@@ -365,6 +371,8 @@ func renderAddStep2(m Model) string {
 		relPath, _ := filepath.Rel(m.homeDir, files[0])
 		repoPath := filepath.Join(m.repoDir, m.addPkgName, relPath)
 		info, _ := os.Stat(files[0])
+		isForeignLink := isSymlink(files[0])
+
 		if info != nil && info.IsDir() {
 			n := countFiles(files[0])
 			b.WriteString("  " + padRight(textStyle.Render("Folder"), 12) + "  " + textStyle.Render(path) + "\n")
@@ -375,6 +383,19 @@ func renderAddStep2(m Model) string {
 			b.WriteString("  " + padRight(textStyle.Render("File"), 12) + "  " + textStyle.Render(path) + "\n")
 			b.WriteString("  " + padRight(textStyle.Render("Package"), 12) + "  " + accentStyle.Render(m.addPkgName) + "\n")
 			b.WriteString("  " + padRight(textStyle.Render("Destination"), 12) + "  " + dimStyle.Render(collapseHome(repoPath, m.homeDir)) + "\n")
+		}
+
+		if isForeignLink {
+			target, _ := os.Readlink(files[0])
+			if !filepath.IsAbs(target) {
+				target = filepath.Join(filepath.Dir(files[0]), target)
+			}
+			b.WriteString("\n")
+			b.WriteString(pill(" ADOPT ", colBase, colYellow) + "\n")
+			b.WriteString("  " + warningStyle.Render("Foreign symlink detected") + "\n")
+			b.WriteString("  " + dimStyle.Render("Currently points to:") + "\n")
+			b.WriteString("  " + dimStyle.Render("  "+collapseHome(filepath.Clean(target), m.homeDir)) + "\n")
+			b.WriteString("  " + dimStyle.Render("Will be reparented to dotcor repo.") + "\n")
 		}
 	} else {
 		b.WriteString("  " + padRight(textStyle.Render("Files"), 12) + "  " + dimStyle.Render(countLabel(len(files), "file")) + "\n")
@@ -752,15 +773,9 @@ func (m *Model) toggleDirSelection(dirPath string) {
 
 func (m Model) browserSelectFile(fullPath string) (tea.Model, tea.Cmd) {
 	if isSymlink(fullPath) {
-		target, _ := os.Readlink(fullPath)
-		if filepath.IsAbs(target) {
-			// keep
-		} else {
-			target = filepath.Join(filepath.Dir(fullPath), target)
-		}
-		target = filepath.Clean(target)
-		if strings.HasPrefix(target, m.repoDir) {
-			m.err = fmt.Errorf("already managed by dotcor — file lives in %s", collapseHome(target, m.homeDir))
+		managed, _ := fs.SymlinkPointsToRepo(fullPath, m.repoDir)
+		if managed {
+			m.err = fmt.Errorf("already managed by dotcor — use the dashboard to manage this file")
 			return m, nil
 		}
 	}

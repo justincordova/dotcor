@@ -115,24 +115,24 @@ sandbox-setup:
     test -f "$repo"/git/.gitcommit        || printf 'refactor: simplify config loader\n\nCo-authored-by: Test User <test@example.com>\n' > "$repo"/git/.gitcommit
 
     # nvim (deep tree ~20 files)
-    test -f "$repo"/nvim/init.lua                  || printf 'require("config.lazy")\nrequire("config.options")\nrequire("config.keymaps")\nrequire("config.autocmds")\n' > "$repo"/nvim/init.lua
-    mkdir -p "$repo"/nvim/lua/{config,plugins,lsp}
-    test -f "$repo"/nvim/lua/config/options.lua    || printf "vim.opt.number = true\nvim.opt.relativenumber = true\nvim.opt.tabstop = 4\nvim.opt.shiftwidth = 4\nvim.opt.expandtab = true\nvim.opt.signcolumn = 'yes'\n" > "$repo"/nvim/lua/config/options.lua
-    test -f "$repo"/nvim/lua/config/keymaps.lua    || printf 'vim.g.mapleader = " "\nvim.keymap.set("n", "<leader>ff", "<cmd>Telescope find_files<cr>")\nvim.keymap.set("n", "<leader>fg", "<cmd>Telescope live_grep<cr>")\nvim.keymap.set("n", "<leader>fb", "<cmd>Telescope buffers<cr>")\n' > "$repo"/nvim/lua/config/keymaps.lua
-    test -f "$repo"/nvim/lua/config/autocmds.lua   || printf 'vim.api.nvim_create_autocmd("TextYankPost", {\n  callback = function() vim.highlight.on_yank() end,\n})\n' > "$repo"/nvim/lua/config/autocmds.lua
-    test -f "$repo"/nvim/lua/config/lazy.lua       || printf 'local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"\nvim.opt.rtp:prepend(lazypath)\nrequire("lazy").setup("plugins")\n' > "$repo"/nvim/lua/config/lazy.lua
-    test -f "$repo"/nvim/lua/config/utils.lua      || printf 'local M = {}\nM.log = function(msg) vim.notify(msg, vim.log.levels.INFO) end\nreturn M\n' > "$repo"/nvim/lua/config/utils.lua
-    test -f "$repo"/nvim/lua/plugins/telescope.lua || printf 'return {\n  "nvim-telescope/telescope.nvim",\n  dependencies = { "nvim-lua/plenary.nvim" },\n  config = function() require("telescope").setup() end,\n}\n' > "$repo"/nvim/lua/plugins/telescope.lua
-    test -f "$repo"/nvim/lua/plugins/lualine.lua   || printf 'return {\n  "nvim-lualine/lualine.nvim",\n  config = function() require("lualine").setup({ options = { theme = "catppuccin" } }) end,\n}\n' > "$repo"/nvim/lua/plugins/lualine.lua
-    test -f "$repo"/nvim/lua/plugins/treesitter.lua || printf 'return {\n  "nvim-treesitter/nvim-treesitter",\n  build = ":TSUpdate",\n  config = function() require("nvim-treesitter.configs").setup({ ensure_installed = "all" }) end,\n}\n' > "$repo"/nvim/lua/plugins/treesitter.lua
-    test -f "$repo"/nvim/lua/plugins/neo-tree.lua   || printf 'return {\n  "nvim-neo-tree/neo-tree.nvim",\n  dependencies = { "nvim-lua/plenary.nvim", "nvim-tree/nvim-web-devicons" },\n  config = function() vim.keymap.set("n", "<leader>e", "<cmd>Neotree toggle<cr>") end,\n}\n' > "$repo"/nvim/lua/plugins/neo-tree.lua
-    test -f "$repo"/nvim/lua/plugins/formatting.lua || printf 'return {\n  "stevearc/conform.nvim",\n  config = function()\n    require("conform").setup({ formatters_by_ft = { lua = { "stylua" }, go = { "gofmt" } } })\n  end,\n}\n' > "$repo"/nvim/lua/plugins/formatting.lua
-    test -f "$repo"/nvim/lua/plugins/linting.lua    || printf 'return {\n  "mfussenegger/nvim-lint",\n  config = function() require("lint").linters_by_ft = { sh = { "shellcheck" } } end,\n}\n' > "$repo"/nvim/lua/plugins/linting.lua
-    test -f "$repo"/nvim/lua/plugins/autopairs.lua  || printf 'return { "windwp/nvim-autopairs", config = function() require("nvim-autopairs").setup() end }\n' > "$repo"/nvim/lua/plugins/autopairs.lua
-    test -f "$repo"/nvim/lua/plugins/dashboard.lua   || printf 'return {\n  "nvimdev/dashboard-nvim",\n  config = function() require("dashboard").setup({ theme = "hyper" }) end,\n}\n' > "$repo"/nvim/lua/plugins/dashboard.lua
-    test -f "$repo"/nvim/lua/plugins/git-conflict.lua || printf 'return { "akinsho/git-conflict.nvim", config = function() require("git-conflict").setup() end }\n' > "$repo"/nvim/lua/plugins/git-conflict.lua
-    test -f "$repo"/nvim/lua/lsp/init.lua            || printf 'local M = {}\nM.setup = function() require("lspconfig").gopls.setup({}) end\nreturn M\n' > "$repo"/nvim/lua/lsp/init.lua
-    test -f "$repo"/nvim/lua/lsp/completion.lua      || printf 'local M = {}\nM.setup = function() require("cmp").setup({ sources = { { name = "nvim_lsp" } } }) end\nreturn M\n' > "$repo"/nvim/lua/lsp/completion.lua
+    mkdir -p "$repo"/nvim/.config/nvim/lua/{config,plugins,lsp}
+    test -f "$repo"/nvim/.config/nvim/init.lua                  || printf 'require("config.lazy")\nrequire("config.options")\nrequire("config.keymaps")\nrequire("config.autocmds")\n' > "$repo"/nvim/.config/nvim/init.lua
+    test -f "$repo"/nvim/.config/nvim/lua/config/options.lua    || printf "vim.opt.number = true\nvim.opt.relativenumber = true\nvim.opt.tabstop = 4\nvim.opt.shiftwidth = 4\nvim.opt.expandtab = true\nvim.opt.signcolumn = 'yes'\n" > "$repo"/nvim/.config/nvim/lua/config/options.lua
+    test -f "$repo"/nvim/.config/nvim/lua/config/keymaps.lua    || printf 'vim.g.mapleader = " "\nvim.keymap.set("n", "<leader>ff", "<cmd>Telescope find_files<cr>")\nvim.keymap.set("n", "<leader>fg", "<cmd>Telescope live_grep<cr>")\nvim.keymap.set("n", "<leader>fb", "<cmd>Telescope buffers<cr>")\n' > "$repo"/nvim/.config/nvim/lua/config/keymaps.lua
+    test -f "$repo"/nvim/.config/nvim/lua/config/autocmds.lua   || printf 'vim.api.nvim_create_autocmd("TextYankPost", {\n  callback = function() vim.highlight.on_yank() end,\n})\n' > "$repo"/nvim/.config/nvim/lua/config/autocmds.lua
+    test -f "$repo"/nvim/.config/nvim/lua/config/lazy.lua       || printf 'local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"\nvim.opt.rtp:prepend(lazypath)\nrequire("lazy").setup("plugins")\n' > "$repo"/nvim/.config/nvim/lua/config/lazy.lua
+    test -f "$repo"/nvim/.config/nvim/lua/config/utils.lua      || printf 'local M = {}\nM.log = function(msg) vim.notify(msg, vim.log.levels.INFO) end\nreturn M\n' > "$repo"/nvim/.config/nvim/lua/config/utils.lua
+    test -f "$repo"/nvim/.config/nvim/lua/plugins/telescope.lua || printf 'return {\n  "nvim-telescope/telescope.nvim",\n  dependencies = { "nvim-lua/plenary.nvim" },\n  config = function() require("telescope").setup() end,\n}\n' > "$repo"/nvim/.config/nvim/lua/plugins/telescope.lua
+    test -f "$repo"/nvim/.config/nvim/lua/plugins/lualine.lua   || printf 'return {\n  "nvim-lualine/lualine.nvim",\n  config = function() require("lualine").setup({ options = { theme = "catppuccin" } }) end,\n}\n' > "$repo"/nvim/.config/nvim/lua/plugins/lualine.lua
+    test -f "$repo"/nvim/.config/nvim/lua/plugins/treesitter.lua || printf 'return {\n  "nvim-treesitter/nvim-treesitter",\n  build = ":TSUpdate",\n  config = function() require("nvim-treesitter.configs").setup({ ensure_installed = "all" }) end,\n}\n' > "$repo"/nvim/.config/nvim/lua/plugins/treesitter.lua
+    test -f "$repo"/nvim/.config/nvim/lua/plugins/neo-tree.lua   || printf 'return {\n  "nvim-neo-tree/neo-tree.nvim",\n  dependencies = { "nvim-lua/plenary.nvim", "nvim-tree/nvim-web-devicons" },\n  config = function() vim.keymap.set("n", "<leader>e", "<cmd>Neotree toggle<cr>") end,\n}\n' > "$repo"/nvim/.config/nvim/lua/plugins/neo-tree.lua
+    test -f "$repo"/nvim/.config/nvim/lua/plugins/formatting.lua || printf 'return {\n  "stevearc/conform.nvim",\n  config = function()\n    require("conform").setup({ formatters_by_ft = { lua = { "stylua" }, go = { "gofmt" } } })\n  end,\n}\n' > "$repo"/nvim/.config/nvim/lua/plugins/formatting.lua
+    test -f "$repo"/nvim/.config/nvim/lua/plugins/linting.lua    || printf 'return {\n  "mfussenegger/nvim-lint",\n  config = function() require("lint").linters_by_ft = { sh = { "shellcheck" } } end,\n}\n' > "$repo"/nvim/.config/nvim/lua/plugins/linting.lua
+    test -f "$repo"/nvim/.config/nvim/lua/plugins/autopairs.lua  || printf 'return { "windwp/nvim-autopairs", config = function() require("nvim-autopairs").setup() end }\n' > "$repo"/nvim/.config/nvim/lua/plugins/autopairs.lua
+    test -f "$repo"/nvim/.config/nvim/lua/plugins/dashboard.lua   || printf 'return {\n  "nvimdev/dashboard-nvim",\n  config = function() require("dashboard").setup({ theme = "hyper" }) end,\n}\n' > "$repo"/nvim/.config/nvim/lua/plugins/dashboard.lua
+    test -f "$repo"/nvim/.config/nvim/lua/plugins/git-conflict.lua || printf 'return { "akinsho/git-conflict.nvim", config = function() require("git-conflict").setup() end }\n' > "$repo"/nvim/.config/nvim/lua/plugins/git-conflict.lua
+    test -f "$repo"/nvim/.config/nvim/lua/lsp/init.lua            || printf 'local M = {}\nM.setup = function() require("lspconfig").gopls.setup({}) end\nreturn M\n' > "$repo"/nvim/.config/nvim/lua/lsp/init.lua
+    test -f "$repo"/nvim/.config/nvim/lua/lsp/completion.lua      || printf 'local M = {}\nM.setup = function() require("cmp").setup({ sources = { { name = "nvim_lsp" } } }) end\nreturn M\n' > "$repo"/nvim/.config/nvim/lua/lsp/completion.lua
 
     # tmux (2 files)
     test -f "$repo"/tmux/.tmux.conf       || printf 'set -g prefix C-a\nset -g base-index 1\nsetw -g pane-base-index 1\nset -g mouse on\nbind | split-window -h\nbind - split-window -v\n' > "$repo"/tmux/.tmux.conf
@@ -177,13 +177,13 @@ sandbox-setup:
 
     # ─── foreign symlinks for testing adopt (o key) ──────────────────────────────
     old="{{dotcor_dir}}"/../old-dotfiles
-    mkdir -p "$old"/nvim/lua/plugins "$old"/nvim/lua/config
+    mkdir -p "$old"/nvim/.config/nvim/lua/plugins "$old"/nvim/.config/nvim/lua/config
 
     # nvim package tracks .config/nvim/* — foreign symlinks in same tree
-    printf 'return { "nvim-cmp" }\n' > "$old"/nvim/lua/plugins/cmp.lua
-    printf 'vim.opt.scrolloff = 8\n' > "$old"/nvim/lua/config/autocmds_old.lua
-    ln -sf "$old"/nvim/lua/plugins/cmp.lua "$home"/.config/nvim/lua/plugins/cmp.lua
-    ln -sf "$old"/nvim/lua/config/autocmds_old.lua "$home"/.config/nvim/lua/config/autocmds_old.lua
+    printf 'return { "nvim-cmp" }\n' > "$old"/nvim/.config/nvim/lua/plugins/cmp.lua
+    printf 'vim.opt.scrolloff = 8\n' > "$old"/nvim/.config/nvim/lua/config/autocmds_old.lua
+    ln -sf "$old"/nvim/.config/nvim/lua/plugins/cmp.lua "$home"/.config/nvim/lua/plugins/cmp.lua
+    ln -sf "$old"/nvim/.config/nvim/lua/config/autocmds_old.lua "$home"/.config/nvim/lua/config/autocmds_old.lua
 
 sandbox: (binary)
     #!/usr/bin/env bash
