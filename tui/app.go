@@ -421,8 +421,8 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.selectedFile > 0 {
 				m.selectedFile--
 			}
-		} else if m.selectedPkg > 0 {
-			m.selectedPkg--
+		} else {
+			m.selectedPkg = m.prevSortedPkg()
 			m.selectedFile = 0
 		}
 
@@ -431,8 +431,8 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.selectedFile < len(m.currentFiles())-1 {
 				m.selectedFile++
 			}
-		} else if m.selectedPkg < len(m.packages)-1 {
-			m.selectedPkg++
+		} else {
+			m.selectedPkg = m.nextSortedPkg()
 			m.selectedFile = 0
 		}
 
@@ -815,6 +815,34 @@ func (m Model) currentFiles() []stow.FileEntry {
 		return nil
 	}
 	return m.packages[m.selectedPkg].Files
+}
+
+func (m Model) sortedPkgPos() int {
+	indices := sortedPackages(m)
+	for i, idx := range indices {
+		if idx == m.selectedPkg {
+			return i
+		}
+	}
+	return 0
+}
+
+func (m Model) prevSortedPkg() int {
+	indices := sortedPackages(m)
+	pos := m.sortedPkgPos()
+	if pos > 0 {
+		return indices[pos-1]
+	}
+	return m.selectedPkg
+}
+
+func (m Model) nextSortedPkg() int {
+	indices := sortedPackages(m)
+	pos := m.sortedPkgPos()
+	if pos < len(indices)-1 {
+		return indices[pos+1]
+	}
+	return m.selectedPkg
 }
 
 func (m *Model) resetAddState() {
