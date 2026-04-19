@@ -149,8 +149,8 @@ func renderStatsStrip(m Model) string {
 	}
 
 	repoVal := fmt.Sprintf("%d %s", len(m.packages), pluralize(len(m.packages), "pkg"))
-	if size := repoSizeMB(m.repoDir); size > 0 {
-		repoVal += fmt.Sprintf(" · %.1fMB", size)
+	if m.repoSizeCached > 0 {
+		repoVal += fmt.Sprintf(" · %.1fMB", m.repoSizeCached)
 	}
 
 	items := []string{
@@ -212,15 +212,9 @@ func sortedPackages(m Model) []int {
 		})
 	case 2:
 		sort.Slice(indices, func(a, b int) bool {
-			aTime, _ := os.Stat(m.packages[indices[a]].Path)
-			bTime, _ := os.Stat(m.packages[indices[b]].Path)
-			if aTime == nil {
-				return false
-			}
-			if bTime == nil {
-				return true
-			}
-			return aTime.ModTime().After(bTime.ModTime())
+			aTime := m.packages[indices[a]].ModTime
+			bTime := m.packages[indices[b]].ModTime
+			return aTime.After(bTime)
 		})
 	}
 	return indices
@@ -507,13 +501,6 @@ func renderActivityPanel(m Model) string {
 		Render(panel(" Recent activity", body, m.width-2, panelHeight, false))
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 // ─── Git + footer ────────────────────────────────────────────────────────────
 
 func renderGitBar(m Model) string {
@@ -738,7 +725,7 @@ func dirSize(path string) int64 {
 }
 
 func collapseHome(path, home string) string {
-	if home != "" && strings.HasPrefix(path, home) {
+	if home != "" && (path == home || strings.HasPrefix(path, home+string(filepath.Separator))) {
 		return "~" + strings.TrimPrefix(path, home)
 	}
 	return path

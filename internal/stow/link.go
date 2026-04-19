@@ -142,6 +142,9 @@ func linkAutoDetectedFile(result *LinkResult, pkgDir, homeDir string, f FileEntr
 
 	if renameErr := os.Rename(f.TargetPath+".dotcor-tmp", f.TargetPath); renameErr != nil {
 		_ = os.Remove(f.TargetPath + ".dotcor-tmp")
+		if writeErr := os.WriteFile(f.TargetPath, srcData, srcPerm); writeErr != nil {
+			result.Conflicts = append(result.Conflicts, f.RelPath)
+		}
 		result.Skipped++
 		return
 	}

@@ -117,7 +117,7 @@ func GenerateRepoPath(sourcePath string, cfg *Config) (string, error) {
 	}
 
 	// Validate path is under home directory
-	if !strings.HasPrefix(expanded, home) {
+	if expanded != home && !strings.HasPrefix(expanded, home+string(filepath.Separator)) {
 		return "", fmt.Errorf("path must be under home directory: %s", sourcePath)
 	}
 

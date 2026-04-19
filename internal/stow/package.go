@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type PackageStatus int
@@ -16,10 +17,11 @@ const (
 )
 
 type Package struct {
-	Name   string
-	Path   string
-	Files  []FileEntry
-	Status PackageStatus
+	Name    string
+	Path    string
+	Files   []FileEntry
+	Status  PackageStatus
+	ModTime time.Time
 }
 
 type FileEntry struct {
@@ -84,10 +86,11 @@ func DiscoverPackages(repoDir, homeDir string) ([]Package, error) {
 		files = appendAutoDetected(files, pkgPath, homeDir)
 
 		pkg := Package{
-			Name:   entry.Name(),
-			Path:   pkgPath,
-			Files:  files,
-			Status: computeStatus(files),
+			Name:    entry.Name(),
+			Path:    pkgPath,
+			Files:   files,
+			Status:  computeStatus(files),
+			ModTime: packageModTime(pkgPath),
 		}
 		packages = append(packages, pkg)
 	}
@@ -260,4 +263,12 @@ func findManagedRoot(files []FileEntry) string {
 	}
 
 	return common
+}
+
+func packageModTime(pkgPath string) time.Time {
+	info, err := os.Stat(pkgPath)
+	if err != nil {
+		return time.Time{}
+	}
+	return info.ModTime()
 }

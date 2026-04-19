@@ -135,6 +135,8 @@ type Model struct {
 
 	sortMode int
 
+	repoSizeCached float64
+
 	confirmOpen       bool
 	confirmAction     string
 	confirmTarget     string
@@ -237,6 +239,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.packages = msg.packages
+		m.repoSizeCached = repoSizeMB(m.repoDir)
 		if m.selectedPkg >= len(m.packages) {
 			m.selectedPkg = 0
 		}

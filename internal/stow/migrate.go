@@ -57,11 +57,6 @@ func PlanMigration(repoDir string) ([]MigrationStep, error) {
 			dstRel := filepath.Join(category, filePart)
 			dst := filepath.Join(repoDir, dstRel)
 
-			dstDir := filepath.Dir(dst)
-			if err := os.MkdirAll(dstDir, 0755); err != nil {
-				return fmt.Errorf("creating destination directory %s: %w", dstDir, err)
-			}
-
 			steps = append(steps, MigrationStep{
 				Src:  path,
 				Dst:  dst,

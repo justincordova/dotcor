@@ -807,8 +807,8 @@ func (m Model) browserSelectFile(fullPath string) (tea.Model, tea.Cmd) {
 
 func countFilesRecursive(dir string) int {
 	count := 0
-	_ = filepath.Walk(dir, func(_ string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() || isSymlink(dir) {
+	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || isSymlink(path) {
 			return nil
 		}
 		count++
@@ -942,6 +942,11 @@ func executeAddFile(srcPath, pkgDir, pkgName, homeDir string, logger *slog.Logge
 
 	if err := os.Rename(tempLink, srcPath); err != nil {
 		_ = os.Remove(tempLink)
+		if writeErr := os.WriteFile(srcPath, srcData, srcPerm); writeErr != nil {
+			if logger != nil {
+				logger.Error("failed to restore original file after rename failure", "file", srcPath, "error", writeErr)
+			}
+		}
 		return addResultMsg{err: fmt.Errorf("moving symlink into place: %w", err)}
 	}
 
@@ -1014,6 +1019,10 @@ func executeAddDir(srcPath, pkgDir, pkgName, homeDir string, logger *slog.Logger
 
 		if err := os.Rename(tempLink, path); err != nil {
 			_ = os.Remove(tempLink)
+			if writeErr := os.WriteFile(path, srcData, srcPerm); writeErr != nil {
+				skipped++
+				return nil
+			}
 			skipped++
 			return nil
 		}

@@ -263,6 +263,11 @@ func SymlinkPointsToRepo(link string, repoPath string) (bool, error) {
 		return false, fmt.Errorf("expanding repo path: %w", err)
 	}
 
-	// Check if resolved path is under repo
-	return strings.HasPrefix(resolved, expandedRepo), nil
+	resolved = filepath.Clean(resolved)
+	expandedRepo = filepath.Clean(expandedRepo)
+
+	if resolved == expandedRepo || strings.HasPrefix(resolved, expandedRepo+string(filepath.Separator)) {
+		return true, nil
+	}
+	return false, nil
 }

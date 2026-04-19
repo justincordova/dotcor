@@ -157,6 +157,29 @@ func ValidateRepoPath(path string) error {
 
 // ValidateNotAlreadyManaged checks if file is not already managed
 func ValidateNotAlreadyManaged(cfg *config.Config, sourcePath string) error {
+	expanded, err := config.ExpandPath(sourcePath, cfg)
+	if err != nil {
+		return fmt.Errorf("expanding path: %w", err)
+	}
+
+	isLink, err := fs.IsSymlink(expanded)
+	if err != nil || !isLink {
+		return nil
+	}
+
+	configDir, err := config.GetConfigDir()
+	if err != nil {
+		return fmt.Errorf("getting config dir: %w", err)
+	}
+
+	pointsToRepo, err := fs.SymlinkPointsToRepo(expanded, configDir)
+	if err != nil {
+		return fmt.Errorf("checking symlink target: %w", err)
+	}
+	if pointsToRepo {
+		return fmt.Errorf("file is already managed by dotcor: %s", sourcePath)
+	}
+
 	return nil
 }
 
@@ -173,7 +196,7 @@ func ValidateNotInDotcorDir(path string, cfg *config.Config) error {
 	}
 
 	// Check if path is under dotcor directory
-	if strings.HasPrefix(expanded, configDir) {
+	if expanded == configDir || strings.HasPrefix(expanded, configDir+string(filepath.Separator)) {
 		return fmt.Errorf("cannot add files from inside dotcor directory: %s", path)
 	}
 

@@ -11,6 +11,11 @@ import (
 	"github.com/justincordova/dotcor/internal/config"
 )
 
+const (
+	maxLogSize = 10 * 1024 * 1024
+	maxBackups = 3
+)
+
 func New(level string, logFilePath string) *slog.Logger {
 	var lvl charmlog.Level
 	switch level {
@@ -43,6 +48,8 @@ func New(level string, logFilePath string) *slog.Logger {
 		}))
 	}
 
+	rotateLogIfNeeded(logFilePath)
+
 	file, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: failed to open log file %s: %v\n", logFilePath, err)
@@ -57,4 +64,23 @@ func New(level string, logFilePath string) *slog.Logger {
 	})
 
 	return slog.New(handler)
+}
+
+func rotateLogIfNeeded(logPath string) {
+	info, err := os.Stat(logPath)
+	if err != nil || info.Size() < maxLogSize {
+		return
+	}
+
+	for i := maxBackups - 1; i >= 1; i-- {
+		older := fmt.Sprintf("%s.%d", logPath, i)
+		newer := fmt.Sprintf("%s.%d", logPath, i+1)
+		if i == maxBackups-1 {
+			_ = os.Remove(older)
+		}
+		if _, err := os.Stat(older); err == nil {
+			_ = os.Rename(older, newer)
+		}
+	}
+	_ = os.Rename(logPath, logPath+".1")
 }
