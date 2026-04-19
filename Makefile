@@ -89,9 +89,12 @@ DOTCOR_HOME ?= /tmp/dotcor-home
 
 sandbox-setup:
 	@mkdir -p $(DOTCOR_HOME)
-	@mkdir -p $(DOTCOR_DIR)/git $(DOTCOR_DIR)/nvim $(DOTCOR_DIR)/starship $(DOTCOR_DIR)/tmux $(DOTCOR_DIR)/zsh
-	@mkdir -p $(DOTCOR_DIR)/alacritty $(DOTCOR_DIR)/bat $(DOTCOR_DIR)/eza $(DOTCOR_DIR)/fzf $(DOTCOR_DIR)/htop
-	@mkdir -p $(DOTCOR_DIR)/lazygit $(DOTCOR_DIR)/ripgrep $(DOTCOR_DIR)/ssh $(DOTCOR_DIR)/vim $(DOTCOR_DIR)/zoxide
+	@mkdir -p $(DOTCOR_DIR)/git $(DOTCOR_DIR)/nvim $(DOTCOR_DIR)/tmux $(DOTCOR_DIR)/zsh $(DOTCOR_DIR)/vim
+	@mkdir -p $(DOTCOR_DIR)/starship/.config/starship $(DOTCOR_DIR)/alacritty/.config/alacritty
+	@mkdir -p $(DOTCOR_DIR)/bat/.config/bat $(DOTCOR_DIR)/eza/.config/eza
+	@mkdir -p $(DOTCOR_DIR)/fzf/.config/fzf $(DOTCOR_DIR)/htop/.config/htop
+	@mkdir -p $(DOTCOR_DIR)/lazygit/.config/lazygit $(DOTCOR_DIR)/ripgrep/.config/ripgrep
+	@mkdir -p $(DOTCOR_DIR)/ssh/.ssh $(DOTCOR_DIR)/zoxide/.config/zoxide
 	@# --- unmanaged files in DOTCOR_HOME for testing the add wizard ---
 	@test -f $(DOTCOR_HOME)/.bashrc || printf "export PATH=$$HOME/.local/bin:$$PATH\nalias ll='ls -la'\nalias gs='git status'\n" > $(DOTCOR_HOME)/.bashrc
 	@test -f $(DOTCOR_HOME)/.profile || printf "if [ -f $$HOME/.bashrc ]; then\n  . $$HOME/.bashrc\nfi\n" > $(DOTCOR_HOME)/.profile
@@ -139,28 +142,28 @@ sandbox-setup:
 	@# --- zsh (1 file) ---
 	@test -f $(DOTCOR_DIR)/zsh/.zshrc || printf "export ZSH=\"$$HOME/.oh-my-zsh\"\nZSH_THEME=\"robbyrussell\"\nplugins=(git zsh-autosuggestions zsh-syntax-highlighting)\nsource $$ZSH/oh-my-zsh.sh\n" > $(DOTCOR_DIR)/zsh/.zshrc
 	@# --- starship ---
-	@test -f $(DOTCOR_DIR)/starship/config.toml || printf "[character]\nsuccess_symbol = '[➜](bold green)'\nerror_symbol = '[✗](bold red)'\n\n[git_branch]\nformat = '[$$symbol$$branch]($$style) '\n" > $(DOTCOR_DIR)/starship/config.toml
+	@test -f $(DOTCOR_DIR)/starship/.config/starship/config.toml || printf "[character]\nsuccess_symbol = '[➜](bold green)'\nerror_symbol = '[✗](bold red)'\n\n[git_branch]\nformat = '[$$symbol$$branch]($$style) '\n" > $(DOTCOR_DIR)/starship/.config/starship/config.toml
 	@# --- alacritty ---
-	@test -f $(DOTCOR_DIR)/alacritty/alacritty.toml || printf "[window]\nopacity = 0.95\n\n[font]\nnormal.family = \"JetBrainsMono Nerd Font\"\nsize = 13.0\n" > $(DOTCOR_DIR)/alacritty/alacritty.toml
+	@test -f $(DOTCOR_DIR)/alacritty/.config/alacritty/alacritty.toml || printf "[window]\nopacity = 0.95\n\n[font]\nnormal.family = \"JetBrainsMono Nerd Font\"\nsize = 13.0\n" > $(DOTCOR_DIR)/alacritty/.config/alacritty/alacritty.toml
 	@# --- bat ---
-	@test -f $(DOTCOR_DIR)/bat/config || printf '%s\n' '--style="full"' '--italic-text=always' '--theme="Catppuccin Mocha"' > $(DOTCOR_DIR)/bat/config
+	@test -f $(DOTCOR_DIR)/bat/.config/bat/config || printf '%s\n' '--style="full"' '--italic-text=always' '--theme="Catppuccin Mocha"' > $(DOTCOR_DIR)/bat/.config/bat/config
 	@# --- eza ---
-	@test -f $(DOTCOR_DIR)/eza/config.yml || printf "icons: when\ncolor: always\nhyperlink: auto\n" > $(DOTCOR_DIR)/eza/config.yml
+	@test -f $(DOTCOR_DIR)/eza/.config/eza/config.yml || printf "icons: when\ncolor: always\nhyperlink: auto\n" > $(DOTCOR_DIR)/eza/.config/eza/config.yml
 	@# --- fzf ---
-	@test -f $(DOTCOR_DIR)/fzf/config.sh || printf 'export FZF_DEFAULT_OPTS='"'"'--height 40%% --layout=reverse --border'"'"'\nexport FZF_CTRL_T_OPTS='"'"'--preview "cat {}"'"'"'\n' > $(DOTCOR_DIR)/fzf/config.sh
+	@test -f $(DOTCOR_DIR)/fzf/.config/fzf/config.sh || printf 'export FZF_DEFAULT_OPTS='"'"'--height 40%% --layout=reverse --border'"'"'\nexport FZF_CTRL_T_OPTS='"'"'--preview "cat {}"'"'"'\n' > $(DOTCOR_DIR)/fzf/.config/fzf/config.sh
 	@# --- htop ---
-	@test -f $(DOTCOR_DIR)/htop/htoprc || printf "fields=0 48 17 18 38 39 40 2 46 47 49 1\nsort_key=46\nsort_direction=1\nhide_threads=0\n" > $(DOTCOR_DIR)/htop/htoprc
+	@test -f $(DOTCOR_DIR)/htop/.config/htop/htoprc || printf "fields=0 48 17 18 38 39 40 2 46 47 49 1\nsort_key=46\nsort_direction=1\nhide_threads=0\n" > $(DOTCOR_DIR)/htop/.config/htop/htoprc
 	@# --- lazygit ---
-	@test -f $(DOTCOR_DIR)/lazygit/config.yml || printf "gui:\n  showIcons: true\n  theme:\n    activeBorderColor:\n      - green\n      - bold\n" > $(DOTCOR_DIR)/lazygit/config.yml
+	@test -f $(DOTCOR_DIR)/lazygit/.config/lazygit/config.yml || printf "gui:\n  showIcons: true\n  theme:\n    activeBorderColor:\n      - green\n      - bold\n" > $(DOTCOR_DIR)/lazygit/.config/lazygit/config.yml
 	@# --- ripgrep ---
-	@test -f $(DOTCOR_DIR)/ripgrep/config || printf '%s\n' '--smart-case' '--follow' '--hidden' '--glob=!.git/*' '--max-columns=150' > $(DOTCOR_DIR)/ripgrep/config
+	@test -f $(DOTCOR_DIR)/ripgrep/.config/ripgrep/config || printf '%s\n' '--smart-case' '--follow' '--hidden' '--glob=!.git/*' '--max-columns=150' > $(DOTCOR_DIR)/ripgrep/.config/ripgrep/config
 	@# --- ssh (2 files) ---
-	@test -f $(DOTCOR_DIR)/ssh/config || printf "Host github.com\n  HostName github.com\n  User git\n  IdentityFile ~/.ssh/id_ed25519\n  AddKeysToAgent yes\n\nHost gitlab.com\n  HostName gitlab.com\n  User git\n  IdentityFile ~/.ssh/id_ed25519\n" > $(DOTCOR_DIR)/ssh/config
-	@test -f $(DOTCOR_DIR)/ssh/known_hosts || printf "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n" > $(DOTCOR_DIR)/ssh/known_hosts
+	@test -f $(DOTCOR_DIR)/ssh/.ssh/config || printf "Host github.com\n  HostName github.com\n  User git\n  IdentityFile ~/.ssh/id_ed25519\n  AddKeysToAgent yes\n\nHost gitlab.com\n  HostName gitlab.com\n  User git\n  IdentityFile ~/.ssh/id_ed25519\n" > $(DOTCOR_DIR)/ssh/.ssh/config
+	@test -f $(DOTCOR_DIR)/ssh/.ssh/known_hosts || printf "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n" > $(DOTCOR_DIR)/ssh/.ssh/known_hosts
 	@# --- vim ---
 	@test -f $(DOTCOR_DIR)/vim/vimrc || printf "set nocompatible\nset number\nset relativenumber\nset tabstop=4\nset shiftwidth=4\nset expandtab\nsyntax on\n" > $(DOTCOR_DIR)/vim/vimrc
 	@# --- zoxide ---
-	@test -f $(DOTCOR_DIR)/zoxide/config.sh || printf 'export _ZO_ECHO=1\nexport _ZO_FZF_OPTS="--height 40%%"\n' > $(DOTCOR_DIR)/zoxide/config.sh
+	@test -f $(DOTCOR_DIR)/zoxide/.config/zoxide/config.sh || printf 'export _ZO_ECHO=1\nexport _ZO_FZF_OPTS="--height 40%%"\n' > $(DOTCOR_DIR)/zoxide/.config/zoxide/config.sh
 
 sandbox: binary
 	@rm -rf $(DOTCOR_DIR) $(DOTCOR_HOME)

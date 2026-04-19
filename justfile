@@ -76,7 +76,17 @@ sandbox-setup:
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "{{dotcor_home}}"
-    mkdir -p "{{dotcor_dir}}"/{git,nvim,starship,tmux,zsh,alacritty,bat,eza,fzf,htop,lazygit,ripgrep,ssh,vim,zoxide}
+    mkdir -p "{{dotcor_dir}}"/{git,nvim,tmux,zsh,vim}
+    mkdir -p "{{dotcor_dir}}"/starship/.config/starship
+    mkdir -p "{{dotcor_dir}}"/alacritty/.config/alacritty
+    mkdir -p "{{dotcor_dir}}"/bat/.config/bat
+    mkdir -p "{{dotcor_dir}}"/eza/.config/eza
+    mkdir -p "{{dotcor_dir}}"/fzf/.config/fzf
+    mkdir -p "{{dotcor_dir}}"/htop/.config/htop
+    mkdir -p "{{dotcor_dir}}"/lazygit/.config/lazygit
+    mkdir -p "{{dotcor_dir}}"/ripgrep/.config/ripgrep
+    mkdir -p "{{dotcor_dir}}"/ssh/.ssh
+    mkdir -p "{{dotcor_dir}}"/zoxide/.config/zoxide
 
     # unmanaged files in home for testing the add wizard
     home="{{dotcor_home}}"
@@ -132,38 +142,38 @@ sandbox-setup:
     test -f "$repo"/zsh/.zshrc || printf 'export ZSH="$HOME/.oh-my-zsh"\nZSH_THEME="robbyrussell"\nplugins=(git zsh-autosuggestions zsh-syntax-highlighting)\nsource $ZSH/oh-my-zsh.sh\n' > "$repo"/zsh/.zshrc
 
     # starship
-    test -f "$repo"/starship/config.toml || printf '[character]\nsuccess_symbol = '\''[➜](bold green)'\''\nerror_symbol = '\''[✗](bold red)'\''\n\n[git_branch]\nformat = '\''[$symbol$branch]($style) '\''\n' > "$repo"/starship/config.toml
+    test -f "$repo"/starship/.config/starship/config.toml || printf '[character]\nsuccess_symbol = '\''[➜](bold green)'\''\nerror_symbol = '\''[✗](bold red)'\''\n\n[git_branch]\nformat = '\''[$symbol$branch]($style) '\''\n' > "$repo"/starship/.config/starship/config.toml
 
     # alacritty
-    test -f "$repo"/alacritty/alacritty.toml || printf '[window]\nopacity = 0.95\n\n[font]\nnormal.family = "JetBrainsMono Nerd Font"\nsize = 13.0\n' > "$repo"/alacritty/alacritty.toml
+    test -f "$repo"/alacritty/.config/alacritty/alacritty.toml || printf '[window]\nopacity = 0.95\n\n[font]\nnormal.family = "JetBrainsMono Nerd Font"\nsize = 13.0\n' > "$repo"/alacritty/.config/alacritty/alacritty.toml
 
     # bat
-    test -f "$repo"/bat/config || printf '%s\n' '--style="full"' '--italic-text=always' '--theme="Catppuccin Mocha"' > "$repo"/bat/config
+    test -f "$repo"/bat/.config/bat/config || printf '%s\n' '--style="full"' '--italic-text=always' '--theme="Catppuccin Mocha"' > "$repo"/bat/.config/bat/config
 
     # eza
-    test -f "$repo"/eza/config.yml || printf 'icons: when\ncolor: always\nhyperlink: auto\n' > "$repo"/eza/config.yml
+    test -f "$repo"/eza/.config/eza/config.yml || printf 'icons: when\ncolor: always\nhyperlink: auto\n' > "$repo"/eza/.config/eza/config.yml
 
     # fzf
-    test -f "$repo"/fzf/config.sh || printf 'export FZF_DEFAULT_OPTS='\''--height 40%% --layout=reverse --border'\''\nexport FZF_CTRL_T_OPTS='\''--preview "cat {}"'\''\n' > "$repo"/fzf/config.sh
+    test -f "$repo"/fzf/.config/fzf/config.sh || printf 'export FZF_DEFAULT_OPTS='\''--height 40%% --layout=reverse --border'\''\nexport FZF_CTRL_T_OPTS='\''--preview "cat {}"'\''\n' > "$repo"/fzf/.config/fzf/config.sh
 
     # htop
-    test -f "$repo"/htop/htoprc || printf 'fields=0 48 17 18 38 39 40 2 46 47 49 1\nsort_key=46\nsort_direction=1\nhide_threads=0\n' > "$repo"/htop/htoprc
+    test -f "$repo"/htop/.config/htop/htoprc || printf 'fields=0 48 17 18 38 39 40 2 46 47 49 1\nsort_key=46\nsort_direction=1\nhide_threads=0\n' > "$repo"/htop/.config/htop/htoprc
 
     # lazygit
-    test -f "$repo"/lazygit/config.yml || printf 'gui:\n  showIcons: true\n  theme:\n    activeBorderColor:\n      - green\n      - bold\n' > "$repo"/lazygit/config.yml
+    test -f "$repo"/lazygit/.config/lazygit/config.yml || printf 'gui:\n  showIcons: true\n  theme:\n    activeBorderColor:\n      - green\n      - bold\n' > "$repo"/lazygit/.config/lazygit/config.yml
 
     # ripgrep
-    test -f "$repo"/ripgrep/config || printf '%s\n' '--smart-case' '--follow' '--hidden' '--glob=!.git/*' '--max-columns=150' > "$repo"/ripgrep/config
+    test -f "$repo"/ripgrep/.config/ripgrep/config || printf '%s\n' '--smart-case' '--follow' '--hidden' '--glob=!.git/*' '--max-columns=150' > "$repo"/ripgrep/.config/ripgrep/config
 
     # ssh (2 files)
-    test -f "$repo"/ssh/config       || printf 'Host github.com\n  HostName github.com\n  User git\n  IdentityFile ~/.ssh/id_ed25519\n  AddKeysToAgent yes\n\nHost gitlab.com\n  HostName gitlab.com\n  User git\n  IdentityFile ~/.ssh/id_ed25519\n' > "$repo"/ssh/config
-    test -f "$repo"/ssh/known_hosts  || printf 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n' > "$repo"/ssh/known_hosts
+    test -f "$repo"/ssh/.ssh/config       || printf 'Host github.com\n  HostName github.com\n  User git\n  IdentityFile ~/.ssh/id_ed25519\n  AddKeysToAgent yes\n\nHost gitlab.com\n  HostName gitlab.com\n  User git\n  IdentityFile ~/.ssh/id_ed25519\n' > "$repo"/ssh/.ssh/config
+    test -f "$repo"/ssh/.ssh/known_hosts  || printf 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n' > "$repo"/ssh/.ssh/known_hosts
 
     # vim
     test -f "$repo"/vim/vimrc || printf 'set nocompatible\nset number\nset relativenumber\nset tabstop=4\nset shiftwidth=4\nset expandtab\nsyntax on\n' > "$repo"/vim/vimrc
 
     # zoxide
-    test -f "$repo"/zoxide/config.sh || printf 'export _ZO_ECHO=1\nexport _ZO_FZF_OPTS="--height 40%%"\n' > "$repo"/zoxide/config.sh
+    test -f "$repo"/zoxide/.config/zoxide/config.sh || printf 'export _ZO_ECHO=1\nexport _ZO_FZF_OPTS="--height 40%%"\n' > "$repo"/zoxide/.config/zoxide/config.sh
 
 sandbox: (binary)
     #!/usr/bin/env bash
