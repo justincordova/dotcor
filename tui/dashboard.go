@@ -339,17 +339,22 @@ func renderPackageCard(m Model, i, width int) string {
 		contentWidth = 20
 	}
 
-	linked, total := 0, len(pkg.Files)
+	linked, conflicts, total := 0, 0, len(pkg.Files)
 	for _, f := range pkg.Files {
 		if f.IsLinked {
 			linked++
+		} else if f.Exists {
+			conflicts++
 		}
 	}
 
 	name := textStyle.Bold(true).Render(pkg.Name)
 	tag := categoryTag(pkg.Name)
 
-	// Line 1: circle + name + flexible gap + tag
+	if conflicts > 0 {
+		tag = pill(fmt.Sprintf("⚠%d", conflicts), colBase, colRed) + " " + tag
+	}
+
 	leftW := lipgloss.Width(name)
 	rightW := lipgloss.Width(tag)
 	gap := contentWidth - leftW - rightW
@@ -364,6 +369,8 @@ func renderPackageCard(m Model, i, width int) string {
 		progress = dimStyle.Render("empty")
 	case linked == total:
 		progress = successStyle.Render(fmt.Sprintf("✓ %d/%d", linked, total))
+	case linked == 0 && conflicts > 0:
+		progress = errorStyle.Render(fmt.Sprintf("✗ %d/%d", linked, total))
 	case linked == 0:
 		progress = errorStyle.Render(fmt.Sprintf("✗ %d/%d", linked, total))
 	default:
@@ -412,7 +419,7 @@ func renderFileDetail(m Model, width, maxLines int) string {
 	for _, f := range pkg.Files {
 		if f.IsLinked {
 			linked++
-		} else if f.Exists && !f.IsSymlink {
+		} else if f.Exists {
 			conflicts++
 		}
 	}
