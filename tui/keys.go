@@ -26,6 +26,7 @@ type keyMap struct {
 	Init     key.Binding
 	StowAll  key.Binding
 	Remove   key.Binding
+	Adopt    key.Binding
 	Quit     key.Binding
 }
 
@@ -51,18 +52,19 @@ func newKeyMap() keyMap {
 		Init:     key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "init git")),
 		StowAll:  key.NewBinding(key.WithKeys("A"), key.WithHelp("A", "stow all")),
 		Remove:   key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "remove")),
+		Adopt:    key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "adopt")),
 		Quit:     key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 	}
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Help, k.Add, k.Stow, k.Unstow, k.Init, k.Sync, k.Search, k.Quit}
+	return []key.Binding{k.Help, k.Add, k.Stow, k.Unstow, k.Adopt, k.Init, k.Sync, k.Search, k.Quit}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Enter, k.Esc},
-		{k.Stow, k.Unstow, k.StowAll, k.Sync},
+		{k.Stow, k.Unstow, k.Adopt, k.StowAll, k.Sync},
 		{k.Add, k.Remove, k.Init},
 		{k.Push, k.Pull, k.Diff, k.History},
 		{k.Logs, k.Settings, k.Search, k.Help},

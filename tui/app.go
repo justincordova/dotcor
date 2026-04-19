@@ -397,6 +397,8 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.removeFileFromPackage()
 			case "resolve-conflicts":
 				return m, m.resolveConflicts(target)
+			case "adopt":
+				return m, m.adoptPackage()
 			case "restore":
 				return m, m.restoreFromCommit(restoreRef)
 			}
@@ -463,6 +465,34 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.confirmTarget = pkg.Name
 			m.confirmTitle = fmt.Sprintf("Unstow %s?", pkg.Name)
 			m.confirmBody = fmt.Sprintf("%d symlinks to remove", linked)
+			m.confirmHint = "enter confirm · any key cancel"
+			m.confirmDanger = false
+		}
+		return m, nil
+
+	case key.Matches(keyMsg, m.keys.Adopt):
+		m.clearErr()
+		if m.selectedPkg < len(m.packages) {
+			pkg := m.packages[m.selectedPkg]
+			var adoptable []string
+			for _, f := range pkg.Files {
+				if !f.InRepo && f.IsSymlink && !f.IsLinked {
+					adoptable = append(adoptable, f.RelPath)
+				}
+			}
+			if len(adoptable) == 0 {
+				m.statusMsg = "No foreign symlinks to adopt"
+				return m, clearStatusAfter(3 * time.Second)
+			}
+			m.confirmOpen = true
+			m.confirmAction = "adopt"
+			m.confirmTarget = pkg.Name
+			m.confirmTitle = fmt.Sprintf("Adopt %d foreign symlinks into %s?", len(adoptable), pkg.Name)
+			var lines []string
+			for _, a := range adoptable {
+				lines = append(lines, "  • "+a)
+			}
+			m.confirmBody = strings.Join(lines, "\n")
 			m.confirmHint = "enter confirm · any key cancel"
 			m.confirmDanger = false
 		}
@@ -905,6 +935,29 @@ func (m Model) resolveConflicts(pkgName string) tea.Cmd {
 			return stowResultMsg{err: err}
 		}
 		msg := fmt.Sprintf("Resolved %d conflicts in %s", result.Linked, pkgName)
+		return stowResultMsg{msg: msg}
+	}
+}
+
+func (m Model) adoptPackage() tea.Cmd {
+	if m.selectedPkg >= len(m.packages) {
+		return nil
+	}
+	pkg := m.packages[m.selectedPkg]
+	repoDir, homeDir := m.repoDir, m.homeDir
+	return func() tea.Msg {
+		result, err := stow.Adopt(repoDir, homeDir, pkg.Name)
+		if err != nil {
+			return stowResultMsg{err: err}
+		}
+		msg := fmt.Sprintf("Adopted %s (%d reparented", pkg.Name, result.Adopted)
+		if result.Skipped > 0 {
+			msg += fmt.Sprintf(", %d skipped", result.Skipped)
+		}
+		if len(result.Failures) > 0 {
+			msg += fmt.Sprintf(", %d failed", len(result.Failures))
+		}
+		msg += ")"
 		return stowResultMsg{msg: msg}
 	}
 }

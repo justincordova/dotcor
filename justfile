@@ -175,9 +175,19 @@ sandbox-setup:
     # zoxide
     test -f "$repo"/zoxide/.config/zoxide/config.sh || printf 'export _ZO_ECHO=1\nexport _ZO_FZF_OPTS="--height 40%%"\n' > "$repo"/zoxide/.config/zoxide/config.sh
 
+    # ─── foreign symlinks for testing adopt (o key) ──────────────────────────────
+    old="{{dotcor_dir}}"/../old-dotfiles
+    mkdir -p "$old"/nvim/lua/plugins "$old"/nvim/lua/config
+
+    # nvim package tracks .config/nvim/* — foreign symlinks in same tree
+    printf 'return { "nvim-cmp" }\n' > "$old"/nvim/lua/plugins/cmp.lua
+    printf 'vim.opt.scrolloff = 8\n' > "$old"/nvim/lua/config/autocmds_old.lua
+    ln -sf "$old"/nvim/lua/plugins/cmp.lua "$home"/.config/nvim/lua/plugins/cmp.lua
+    ln -sf "$old"/nvim/lua/config/autocmds_old.lua "$home"/.config/nvim/lua/config/autocmds_old.lua
+
 sandbox: (binary)
     #!/usr/bin/env bash
     set -euo pipefail
-    rm -rf "{{dotcor_dir}}" "{{dotcor_home}}"
+    rm -rf "{{dotcor_dir}}" "{{dotcor_home}}" "{{dotcor_dir}}"/../old-dotfiles
     just sandbox-setup
     DOTCOR_DIR="{{dotcor_dir}}" DOTCOR_HOME="{{dotcor_home}}" ./bin/dotcor
