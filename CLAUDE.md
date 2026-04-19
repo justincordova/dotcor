@@ -72,12 +72,15 @@ Never include in commit messages or code comments:
 
 ## Building and Running
 
+This project uses [just](https://github.com/casey/just) as its task runner. See `justfile` for all available recipes.
+
 ```bash
-go build -o dotcor cmd/dotcor/main.go   # Build
-./dotcor                                 # Run (launches TUI)
-./dotcor --version                       # Print version
-go test ./...                            # Run all tests
-go test ./internal/stow/...              # Run specific package
+just build              # Build all packages
+just run                # Build and run the TUI
+just test               # Run all tests
+just lint               # Run golangci-lint
+just                    # lint + test + build (default)
+just --list             # Show all recipes
 ```
 
 ### Linting

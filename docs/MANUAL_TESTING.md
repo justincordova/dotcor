@@ -152,13 +152,13 @@ ls -la ~/
 vim internal/stow/package.go
 
 # Rebuild
-make binary
+just binary
 
 # Test immediately
 DOTCOR_DIR=/tmp/dotcor-test ./bin/dotcor
 
 # Quick test cycle
-make binary && DOTCOR_DIR=/tmp/dotcor-test ./bin/dotcor
+just binary && DOTCOR_DIR=/tmp/dotcor-test ./bin/dotcor
 ```
 
 ---
