@@ -6,6 +6,9 @@ dotcor_home := env("DOTCOR_HOME", "/tmp/dotcor-home")
 # default recipe
 default: lint test build
 
+# pre-commit gate: build, test, and lint
+check: build test lint
+
 # run all tests
 test:
     go test ./...
@@ -122,11 +125,16 @@ sandbox-setup:
     mkdir -p "$old"/nvim/.config/nvim/lua/{plugins,config}
     printf 'return { "nvim-cmp" }\n' > "$old"/nvim/.config/nvim/lua/plugins/cmp.lua
     printf 'vim.opt.scrolloff = 8\n' > "$old"/nvim/.config/nvim/lua/config/autocmds_old.lua
+    printf 'return { "folke/which-key.nvim" }\n' > "$old"/nvim/.config/nvim/lua/plugins/which-key.lua
+    printf 'return { "lewis6991/gitsigns.nvim" }\n' > "$old"/nvim/.config/nvim/lua/plugins/gitsigns.lua
     ln -sf "$old"/nvim/.config/nvim/lua/plugins/cmp.lua "$home"/.config/nvim/lua/plugins/cmp.lua
     ln -sf "$old"/nvim/.config/nvim/lua/config/autocmds_old.lua "$home"/.config/nvim/lua/config/autocmds_old.lua
+    ln -sf "$old"/nvim/.config/nvim/lua/plugins/which-key.lua "$home"/.config/nvim/lua/plugins/which-key.lua
+    ln -sf "$old"/nvim/.config/nvim/lua/plugins/gitsigns.lua "$home"/.config/nvim/lua/plugins/gitsigns.lua
 
-    # ─── nvim: conflict (regular file blocking, not a symlink) ──────────────────
+    # ─── nvim: conflicts (regular files blocking, not symlinks) ──────────────────
     printf 'old colorscheme config\n' > "$home"/.config/nvim/lua/config/colors.lua
+    printf 'vim.keymap.set("n", "<leader>x", "<cmd>bufclose<cr>")\n' > "$home"/.config/nvim/lua/config/close.lua
 
     # ─── tmux (2 files, all stowed) ─────────────────────────────────────────────
     stow tmux .tmux.conf       'set -g prefix C-a\nset -g base-index 1\nsetw -g pane-base-index 1\nset -g mouse on\nbind | split-window -h\nbind - split-window -v\n'
@@ -181,3 +189,100 @@ sandbox: (binary)
     rm -rf "{{dotcor_dir}}" "{{dotcor_home}}" "{{dotcor_dir}}"/../old-dotfiles
     just sandbox-setup
     DOTCOR_DIR="{{dotcor_dir}}" DOTCOR_HOME="{{dotcor_home}}" ./bin/dotcor
+
+# ─── sandbox 2 (import testing) ───────────────────────────────────────────────
+# Empty dotcor repo. Home has two source folders for import testing:
+#   ~/dotfiles/   — GNU Stow format (top-level dirs = packages, files mirror $HOME)
+#   ~/random-dots/ — flat/non-Stow format (files at root, mirror $HOME directly)
+
+sandbox2-setup:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    home="/tmp/dotcor-home2"
+    repo="/tmp/dotcor-test2"
+
+    rm -rf "$home" "$repo"
+    mkdir -p "$home" "$repo"
+
+    # ── helper: write a plain file (no symlinks) ──────────────────────────────
+    file() {
+        local dst="$1"
+        mkdir -p "$(dirname "$dst")"
+        printf '%s' "$2" > "$dst"
+    }
+
+    # ── ~/dotfiles/ — GNU Stow format ─────────────────────────────────────────
+    # Each top-level dir is a package. Files inside mirror $HOME paths.
+
+    # zsh package
+    file "$home/dotfiles/zsh/.zshrc" \
+        'export ZSH="$HOME/.oh-my-zsh"\nZSH_THEME="robbyrussell"\nplugins=(git)\nsource $ZSH/oh-my-zsh.sh\n'
+    file "$home/dotfiles/zsh/.zprofile" \
+        'export PATH="$HOME/.local/bin:$PATH"\n'
+
+    # git package
+    file "$home/dotfiles/git/.gitconfig" \
+        '[user]\n\tname = Test User\n\temail = test@example.com\n[core]\n\teditor = nvim\n'
+    file "$home/dotfiles/git/.gitignore_global" \
+        '.DS_Store\n*.swp\n*~\n.env\n'
+
+    # nvim package (nested under .config)
+    file "$home/dotfiles/nvim/.config/nvim/init.lua" \
+        'require("config.lazy")\nrequire("config.options")\n'
+    file "$home/dotfiles/nvim/.config/nvim/lua/config/options.lua" \
+        'vim.opt.number = true\nvim.opt.relativenumber = true\n'
+    file "$home/dotfiles/nvim/.config/nvim/lua/plugins/telescope.lua" \
+        'return { "nvim-telescope/telescope.nvim" }\n'
+
+    # tmux package
+    file "$home/dotfiles/tmux/.tmux.conf" \
+        'set -g prefix C-a\nset -g mouse on\n'
+
+    # starship package (nested under .config)
+    file "$home/dotfiles/starship/.config/starship/config.toml" \
+        '[character]\nsuccess_symbol = "[➜](bold green)"\n'
+
+    # ── ~/random-dots/ — flat format (NOT Stow) ───────────────────────────────
+    # Files here mirror $HOME directly (no package subdirs).
+    # Intended to be imported as a single package.
+
+    file "$home/random-dots/.bashrc" \
+        'export PATH=$HOME/.local/bin:$PATH\nalias ll="ls -la"\n'
+    file "$home/random-dots/.inputrc" \
+        '"\e[A": history-search-backward\nset completion-ignore-case on\n'
+    file "$home/random-dots/.config/bat/config" \
+        '--style="full"\n--theme="Catppuccin Mocha"\n'
+    file "$home/random-dots/.config/ripgrep/config" \
+        '--smart-case\n--hidden\n--glob=!.git/*\n'
+    file "$home/random-dots/.editorconfig" \
+        'root = true\n\n[*]\nindent_style = space\nindent_size = 2\n'
+
+    # ── Symlinks: $HOME → source dirs (simulates real dotfiles setup) ─────────
+    link() {
+        local src="$1" dst="$2"
+        mkdir -p "$(dirname "$dst")"
+        ln -sf "$src" "$dst"
+    }
+
+    # dotfiles (Stow format): symlinks from $HOME into dotfiles packages
+    link "$home/dotfiles/zsh/.zshrc"      "$home/.zshrc"
+    link "$home/dotfiles/zsh/.zprofile"   "$home/.zprofile"
+    link "$home/dotfiles/git/.gitconfig"  "$home/.gitconfig"
+    link "$home/dotfiles/tmux/.tmux.conf" "$home/.tmux.conf"
+
+    # random-dots (flat format): symlinks from $HOME into random-dots
+    link "$home/random-dots/.bashrc"       "$home/.bashrc"
+    link "$home/random-dots/.inputrc"      "$home/.inputrc"
+    link "$home/random-dots/.editorconfig" "$home/.editorconfig"
+
+    echo "sandbox2 ready."
+    echo "  home: $home"
+    echo "  repo: $repo  (empty — nothing imported yet)"
+    echo "  ~/dotfiles/  — Stow format: zsh, git, nvim, tmux, starship (with $HOME symlinks)"
+    echo "  ~/random-dots/ — flat format: .bashrc .inputrc .config/bat .config/ripgrep .editorconfig (with $HOME symlinks)"
+
+sandbox2: (binary)
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just sandbox2-setup
+    DOTCOR_DIR="/tmp/dotcor-test2" DOTCOR_HOME="/tmp/dotcor-home2" ./bin/dotcor
