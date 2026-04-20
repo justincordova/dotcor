@@ -75,6 +75,16 @@ type recentCommitsMsg struct {
 	commits []git.CommitInfo
 }
 
+type classifyPlanMsg struct {
+	plan *stow.ClassificationPlan
+	err  error
+}
+
+type classifyResultMsg struct {
+	result *stow.ClassificationResult
+	err    error
+}
+
 // ─── Model ───────────────────────────────────────────────────────────────────
 
 type Model struct {
@@ -103,14 +113,17 @@ type Model struct {
 	loading      bool
 	expanded     map[int]bool
 
-	addInput      textinput.Model
-	addStep       int
-	addPkgName    string
-	addPreview    string
-	addSecrets    []string
-	addPkgChoices []string
-	addPkgIdx     int
-	addPkgEditing bool
+	addStep int
+
+	// Preview step (step 1) state.
+	previewPlan    *stow.ClassificationPlan
+	previewRows    []previewRow // cached flat row list; rebuilt when plan changes
+	previewToggles map[string]bool
+	previewCursor  int
+	previewScroll  int
+
+	// Result step (step 2) state.
+	classifyResult *stow.ClassificationResult
 
 	browserEntries   map[string][]os.DirEntry
 	browserExpanded  map[string]bool
@@ -166,10 +179,6 @@ func NewModel(cfg *config.Config, version string) Model {
 	si.Placeholder = "search packages…"
 	si.CharLimit = 50
 
-	ai := textinput.New()
-	ai.Placeholder = "~/.config/app/config"
-	ai.CharLimit = 200
-
 	sti := textinput.New()
 	sti.Placeholder = "https://github.com/…"
 	sti.CharLimit = 200
@@ -185,7 +194,6 @@ func NewModel(cfg *config.Config, version string) Model {
 		help:             newHelpModel(),
 		keys:             newKeyMap(),
 		searchInput:      si,
-		addInput:         ai,
 		settingsInput:    sti,
 		viewport:         vp,
 		expanded:         make(map[int]bool),
@@ -296,16 +304,52 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, fetchGitStatus(m.repoDir), fetchRecentCommits(m.repoDir))
 		return m, tea.Batch(cmds...)
 
-	case addResultMsg:
+	case classifyPlanMsg:
 		if msg.err != nil {
 			m.err = msg.err
+			m.addStep = addStepSelect
 		} else {
-			m.statusMsg = msg.msg
+			m.previewPlan = msg.plan
+			m.previewRows = buildPreviewRows(msg.plan) // cache once
+			m.previewToggles = stow.BuildDefaultToggles(msg.plan)
+			m.previewScroll = 0
+			// Advance cursor past the first header row(s) to first file row.
+			m.previewCursor = firstFileRow(m.previewRows, 0)
+			m.addStep = addStepPreview
 			m.err = nil
-			m.resetAddState()
-			m.activeView = DashboardView
-			cmds = append(cmds, clearStatusAfter(3*time.Second))
-			cmds = append(cmds, m.autoCommitCmd("add: "+msg.msg))
+		}
+		return m, nil
+
+	case classifyResultMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			m.addStep = addStepPreview
+		} else {
+			m.classifyResult = msg.result
+			m.addStep = addStepResult
+			m.err = nil
+			r := msg.result
+			total := r.Added + r.Adopted + r.Tracked + r.Foreign
+			if total > 0 {
+				var commitParts []string
+				if r.Adopted > 0 {
+					commitParts = append(commitParts, fmt.Sprintf("%d adopted", r.Adopted))
+				}
+				if r.Added > 0 {
+					commitParts = append(commitParts, fmt.Sprintf("%d added", r.Added))
+				}
+				if r.Tracked > 0 {
+					commitParts = append(commitParts, fmt.Sprintf("%d tracked", r.Tracked))
+				}
+				if r.Foreign > 0 {
+					commitParts = append(commitParts, fmt.Sprintf("%d foreign", r.Foreign))
+				}
+				if len(r.Failures) > 0 {
+					commitParts = append(commitParts, fmt.Sprintf("%d failed", len(r.Failures)))
+				}
+				commitMsg := "add: " + strings.Join(commitParts, ", ")
+				cmds = append(cmds, m.autoCommitCmd(commitMsg))
+			}
 		}
 		cmds = append(cmds, m.refreshAll())
 		return m, tea.Batch(cmds...)
@@ -605,8 +649,7 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case key.Matches(keyMsg, m.keys.Add):
 		m.clearErr()
 		m.activeView = AddView
-		m.addStep = 0
-		m.addInput.SetValue("")
+		m.addStep = addStepSelect
 		m.browserExpanded = make(map[string]bool)
 		m.browserCursor = 0
 		m.browserScroll = 0
@@ -865,15 +908,7 @@ func (m Model) nextSortedPkg() int {
 }
 
 func (m *Model) resetAddState() {
-	m.addStep = 0
-	m.addInput.SetValue("")
-	m.addInput.Blur()
-	m.addPkgName = ""
-	m.addPreview = ""
-	m.addSecrets = nil
-	m.addPkgChoices = nil
-	m.addPkgIdx = 0
-	m.addPkgEditing = false
+	m.addStep = addStepSelect
 	m.browserExpanded = make(map[string]bool)
 	m.browserCursor = 0
 	m.browserScroll = 0
@@ -883,6 +918,12 @@ func (m *Model) resetAddState() {
 	m.browserJumping = false
 	m.browserJumpInput.SetValue("")
 	m.browserJumpInput.Blur()
+	m.previewPlan = nil
+	m.previewRows = nil
+	m.previewToggles = nil
+	m.previewCursor = 0
+	m.previewScroll = 0
+	m.classifyResult = nil
 }
 
 func clearStatusAfter(d time.Duration) tea.Cmd {

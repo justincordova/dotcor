@@ -2,10 +2,8 @@ package tui
 
 import (
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 
@@ -14,15 +12,15 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/justincordova/dotcor/internal/config"
-	"github.com/justincordova/dotcor/internal/core"
-	"github.com/justincordova/dotcor/internal/fs"
+	"github.com/justincordova/dotcor/internal/stow"
 )
 
-type addResultMsg struct {
-	msg string
-	err error
-}
+// addStep constants — keep magic numbers in one place.
+const (
+	addStepSelect  = 0
+	addStepPreview = 1
+	addStepResult  = 2
+)
 
 type browserItem struct {
 	path   string
@@ -41,7 +39,7 @@ func viewAdd(m Model) string {
 	innerW := cw - 4
 	var footer string
 
-	if m.addStep == 0 {
+	if m.addStep == addStepSelect {
 		body := renderAddStep0(m) + errLine
 		footerHints := []string{
 			kbd("↑/k", "up"), kbd("↓/j", "down"),
@@ -54,7 +52,7 @@ func viewAdd(m Model) string {
 		}
 		footer = plainFooter(innerW, footerHints...)
 		content := lipgloss.JoinVertical(lipgloss.Left,
-			renderStepper(innerW, m.addStep),
+			renderAddStepper(innerW, m.addStep),
 			lipgloss.NewStyle().Padding(1, 0).Render(body),
 			footer,
 		)
@@ -69,18 +67,24 @@ func viewAdd(m Model) string {
 
 	var body string
 	switch m.addStep {
-	case 1:
-		body = renderAddStep1(m) + errLine
-	case 2:
-		body = renderAddStep2(m) + errLine
-	case 3:
-		body = renderAddStep3(m)
+	case addStepPreview:
+		body = renderPreviewStep(m) + errLine
+		footer = plainFooter(innerW,
+			kbd("↑/k", "up"), kbd("↓/j", "down"),
+			kbd("space", "toggle"), kbd("enter", "execute"),
+			kbd("esc", "back"),
+		)
+	case addStepResult:
+		body = renderResultStep(m)
+		footer = plainFooter(innerW, kbd("esc", "close"))
+	default:
+		// Invariant violation — reset to select step.
+		body = dimStyle.Render("  (internal error — press esc)")
+		footer = plainFooter(innerW, kbd("esc", "back"))
 	}
 
-	footer = plainFooter(innerW, addFooterHints(m)...)
-
 	content := lipgloss.JoinVertical(lipgloss.Left,
-		renderStepper(innerW, m.addStep),
+		renderAddStepper(innerW, m.addStep),
 		lipgloss.NewStyle().Padding(1, 0).Render(body),
 		footer,
 	)
@@ -93,13 +97,13 @@ func viewAdd(m Model) string {
 	)
 }
 
-func renderStepper(width, step int) string {
+func renderAddStepper(width, step int) string {
 	title := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(colMauve)).
 		Bold(true).
-		Render("◆ Add File")
+		Render("◆ Add / Adopt")
 
-	steps := []string{"Select", "Package", "Review"}
+	steps := []string{"Select", "Preview", "Done"}
 	var parts []string
 	for i, s := range steps {
 		num := fmt.Sprintf("%d", i+1)
@@ -127,6 +131,8 @@ func renderStepper(width, step int) string {
 	row := title + strings.Repeat(" ", gap) + stepRow
 	return lipgloss.NewStyle().Width(width).Padding(0, 2).Render(row)
 }
+
+// ─── Step 0: File browser ─────────────────────────────────────────────────────
 
 func renderAddStep0(m Model) string {
 	var b strings.Builder
@@ -175,21 +181,20 @@ func renderAddStep0(m Model) string {
 		var icon string
 		var styledName string
 		if item.isDir {
-			selected := m.browserSelected[item.path]
 			expanded := m.browserExpanded[item.path]
 			if expanded {
 				icon = "▾"
-			} else if selected {
+			} else if m.browserSelected[item.path] {
 				icon = "●"
 			} else {
 				icon = "▸"
 			}
-			if selected {
+			if m.browserSelected[item.path] {
 				styledName = successStyle.Render(name + "/")
 			} else {
 				styledName = accentStyle.Render(name + "/")
 			}
-			if selected && !expanded {
+			if m.browserSelected[item.path] && !expanded {
 				count := countFilesRecursive(item.path)
 				styledName += dimStyle.Render(fmt.Sprintf(" (%d files)", count))
 			}
@@ -201,12 +206,7 @@ func renderAddStep0(m Model) string {
 			}
 			target, _ := os.Readlink(item.path)
 			display := truncate(filepath.Base(target), 20)
-			managed, _ := fs.SymlinkPointsToRepo(item.path, m.repoDir)
-			if managed {
-				styledName = successStyle.Render(name + " → dotcor")
-			} else {
-				styledName = warningStyle.Render(name + " → " + display + " ⚠ foreign")
-			}
+			styledName = warningStyle.Render(name + " → " + display + " ⚠ foreign")
 		} else {
 			if m.browserSelected[item.path] {
 				icon = "●"
@@ -238,6 +238,327 @@ func renderAddStep0(m Model) string {
 
 	return b.String()
 }
+
+// ─── Step 1: Preview ──────────────────────────────────────────────────────────
+
+// previewRow is a single entry in the flat row list used for preview rendering
+// and cursor navigation.
+type previewRow struct {
+	pkgName     string
+	relPath     string
+	class       stow.Class
+	isHeader    bool
+	headerLabel string
+}
+
+// buildPreviewRows returns the flat row list from the plan, for cursor navigation.
+func buildPreviewRows(plan *stow.ClassificationPlan) []previewRow {
+	if plan == nil {
+		return nil
+	}
+
+	classOrder := []stow.Class{stow.ClassAdopt, stow.ClassAdd, stow.ClassTrack, stow.ClassForeign, stow.ClassManaged}
+
+	var rows []previewRow
+	for _, pkg := range plan.Packages {
+		// Group files by class within this package.
+		byClass := make(map[stow.Class][]stow.ClassifiedFile)
+		for _, cf := range pkg.Files {
+			byClass[cf.Class] = append(byClass[cf.Class], cf)
+		}
+
+		// Package header row (non-navigable, used for display only).
+		rows = append(rows, previewRow{
+			pkgName:     pkg.Name,
+			isHeader:    true,
+			headerLabel: "pkg:" + pkg.Name,
+		})
+
+		for _, class := range classOrder {
+			files, ok := byClass[class]
+			if !ok || len(files) == 0 {
+				continue
+			}
+			// Section header row (non-navigable).
+			rows = append(rows, previewRow{
+				pkgName:     pkg.Name,
+				class:       class,
+				isHeader:    true,
+				headerLabel: class.String(),
+			})
+			for _, cf := range files {
+				rows = append(rows, previewRow{
+					pkgName: pkg.Name,
+					relPath: cf.RelPath,
+					class:   class,
+				})
+			}
+		}
+	}
+	return rows
+}
+
+// firstFileRow returns the index of the first non-header row at or after start,
+// searching forward. Returns start if no file row is found.
+func firstFileRow(rows []previewRow, start int) int {
+	for i := start; i < len(rows); i++ {
+		if !rows[i].isHeader {
+			return i
+		}
+	}
+	return start
+}
+
+// lastFileRow returns the index of the last non-header row at or before start,
+// searching backward. Returns start if no file row is found.
+func lastFileRow(rows []previewRow, start int) int {
+	for i := start; i >= 0; i-- {
+		if !rows[i].isHeader {
+			return i
+		}
+	}
+	return start
+}
+
+func renderPreviewStep(m Model) string {
+	if m.previewPlan == nil {
+		return dimStyle.Render("  Classifying files…")
+	}
+
+	var b strings.Builder
+
+	rows := m.previewRows
+	bw := bodyWidth(m.width)
+
+	contentHeight := m.height - 10
+	if contentHeight < 4 {
+		contentHeight = 4
+	}
+
+	start := m.previewScroll
+	end := start + contentHeight
+	if end > len(rows) {
+		end = len(rows)
+	}
+
+	for i := start; i < end; i++ {
+		row := rows[i]
+		if row.isHeader {
+			b.WriteString(renderPreviewHeader(row, bw))
+			b.WriteString("\n")
+			continue
+		}
+
+		// File row.
+		cf := findClassifiedFile(m.previewPlan, row.pkgName, row.relPath)
+		if cf == nil {
+			continue
+		}
+		id := stow.FileID(row.pkgName, row.relPath)
+		toggled := m.previewToggles[id]
+		selected := i == m.previewCursor
+
+		line := renderPreviewFileRow(*cf, toggled, row.pkgName, selected, bw)
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+
+	if end < len(rows) {
+		b.WriteString(dimStyle.Render(fmt.Sprintf("  … %d more", len(rows)-end)))
+		b.WriteString("\n")
+	}
+
+	// Summary counts.
+	b.WriteString("\n")
+	b.WriteString(renderPreviewCounts(m.previewPlan, m.previewToggles))
+
+	return b.String()
+}
+
+func renderPreviewHeader(row previewRow, bw int) string {
+	if strings.HasPrefix(row.headerLabel, "pkg:") {
+		pkgName := strings.TrimPrefix(row.headerLabel, "pkg:")
+		return accentStyle.Render("  Package: "+pkgName) + "\n" +
+			subtleStyle.Render("  "+strings.Repeat("─", max(bw-2, 4)))
+	}
+
+	// Class section header.
+	class := row.class
+	var label string
+	var color string
+	switch class {
+	case stow.ClassAdopt:
+		label, color = "ADOPT", colGreen
+	case stow.ClassAdd:
+		label, color = "ADD", colBlue
+	case stow.ClassTrack:
+		label, color = "TRACK", colMauve
+	case stow.ClassForeign:
+		label, color = "FOREIGN", colYellow
+	case stow.ClassManaged:
+		label, color = "MANAGED", colOverlay0
+	default:
+		label, color = "UNKNOWN", colOverlay0
+	}
+	return "  " + pill(" "+label+" ", colBase, color)
+}
+
+func renderPreviewFileRow(cf stow.ClassifiedFile, toggled bool, pkgName string, selected bool, bw int) string {
+	isManaged := cf.Class == stow.ClassManaged
+
+	var checkbox string
+	if isManaged {
+		checkbox = "    " // no checkbox for managed
+	} else if toggled {
+		checkbox = successStyle.Render("[x] ")
+	} else {
+		checkbox = dimStyle.Render("[ ] ")
+	}
+
+	name := cf.RelPath
+	var detail string
+	switch cf.Class {
+	case stow.ClassAdopt:
+		detail = dimStyle.Render(fmt.Sprintf("~/%s → repo/%s/%s", filepath.Base(cf.HomeSymlink), pkgName, cf.RelPath))
+	case stow.ClassAdd:
+		detail = dimStyle.Render(fmt.Sprintf("→ repo/%s/%s", pkgName, cf.RelPath))
+	case stow.ClassTrack:
+		detail = dimStyle.Render(fmt.Sprintf("repo/%s/%s (no $HOME link)", pkgName, cf.RelPath))
+	case stow.ClassForeign:
+		target := truncate(cf.ForeignTarget, 30)
+		detail = warningStyle.Render(fmt.Sprintf("→ %s (toggle to adopt)", target))
+	case stow.ClassManaged:
+		detail = dimStyle.Render(fmt.Sprintf("already in repo/%s/", pkgName))
+	}
+
+	var styledName string
+	if isManaged {
+		styledName = dimStyle.Render(name)
+	} else if toggled {
+		styledName = textStyle.Render(name)
+	} else {
+		styledName = dimStyle.Render(name)
+	}
+
+	line := fmt.Sprintf("  %s%-24s  %s", checkbox, styledName, detail)
+
+	if selected && !isManaged {
+		return selectedRowStyle.Width(bw).Render(line)
+	}
+	return lipgloss.NewStyle().Width(bw).Render(line)
+}
+
+func findClassifiedFile(plan *stow.ClassificationPlan, pkgName, relPath string) *stow.ClassifiedFile {
+	for i := range plan.Packages {
+		if plan.Packages[i].Name != pkgName {
+			continue
+		}
+		for j := range plan.Packages[i].Files {
+			if plan.Packages[i].Files[j].RelPath == relPath {
+				return &plan.Packages[i].Files[j]
+			}
+		}
+	}
+	return nil
+}
+
+func renderPreviewCounts(plan *stow.ClassificationPlan, toggles map[string]bool) string {
+	counts := make(map[stow.Class]int)
+	activeCount := 0
+	for _, pkg := range plan.Packages {
+		for _, cf := range pkg.Files {
+			counts[cf.Class]++
+			id := stow.FileID(pkg.Name, cf.RelPath)
+			if toggles[id] {
+				activeCount++
+			}
+		}
+	}
+
+	var parts []string
+	if n := counts[stow.ClassAdopt]; n > 0 {
+		parts = append(parts, pill(fmt.Sprintf(" adopt %d ", n), colBase, colGreen))
+	}
+	if n := counts[stow.ClassAdd]; n > 0 {
+		parts = append(parts, pill(fmt.Sprintf(" add %d ", n), colBase, colBlue))
+	}
+	if n := counts[stow.ClassTrack]; n > 0 {
+		parts = append(parts, pill(fmt.Sprintf(" track %d ", n), colBase, colMauve))
+	}
+	if n := counts[stow.ClassForeign]; n > 0 {
+		parts = append(parts, pill(fmt.Sprintf(" foreign %d ", n), colBase, colYellow))
+	}
+	if n := counts[stow.ClassManaged]; n > 0 {
+		parts = append(parts, pill(fmt.Sprintf(" managed %d ", n), colBase, colOverlay0))
+	}
+
+	active := dimStyle.Render(fmt.Sprintf("  %d active", activeCount))
+	if len(parts) == 0 {
+		return "  " + active
+	}
+	return "  " + strings.Join(parts, " ") + "  " + active
+}
+
+// ─── Step 2: Result ───────────────────────────────────────────────────────────
+
+func renderResultStep(m Model) string {
+	var b strings.Builder
+
+	if m.classifyResult == nil {
+		b.WriteString(dimStyle.Render("  No result."))
+		return b.String()
+	}
+
+	result := m.classifyResult
+
+	b.WriteString(accentStyle.Render("  Done"))
+	b.WriteString("\n")
+	b.WriteString(subtleStyle.Render("  " + strings.Repeat("─", 40)))
+	b.WriteString("\n\n")
+
+	var pills []string
+	if result.Adopted > 0 {
+		pills = append(pills, pill(fmt.Sprintf(" adopted %d ", result.Adopted), colBase, colGreen))
+	}
+	if result.Added > 0 {
+		pills = append(pills, pill(fmt.Sprintf(" added %d ", result.Added), colBase, colBlue))
+	}
+	if result.Tracked > 0 {
+		pills = append(pills, pill(fmt.Sprintf(" tracked %d ", result.Tracked), colBase, colMauve))
+	}
+	if result.Foreign > 0 {
+		pills = append(pills, pill(fmt.Sprintf(" foreign %d ", result.Foreign), colBase, colYellow))
+	}
+	if result.Managed > 0 {
+		pills = append(pills, pill(fmt.Sprintf(" managed %d ", result.Managed), colBase, colOverlay0))
+	}
+
+	if len(pills) > 0 {
+		b.WriteString("  " + strings.Join(pills, " ") + "\n\n")
+	} else {
+		b.WriteString(dimStyle.Render("  Nothing was changed."))
+		b.WriteString("\n\n")
+	}
+
+	if len(result.Failures) > 0 {
+		b.WriteString(pill(fmt.Sprintf(" %d failed ", len(result.Failures)), colBase, colRed))
+		b.WriteString("\n")
+		maxShow := 6
+		for i, f := range result.Failures {
+			if i >= maxShow {
+				b.WriteString(dimStyle.Render(fmt.Sprintf("  … %d more", len(result.Failures)-maxShow)))
+				b.WriteString("\n")
+				break
+			}
+			b.WriteString(errorStyle.Render(fmt.Sprintf("  ✗ %s/%s: %v", f.PackageName, f.RelPath, f.Err)))
+			b.WriteString("\n")
+		}
+	}
+
+	return b.String()
+}
+
+// ─── Browser helpers (shared with step 0) ────────────────────────────────────
 
 var browserSkipDirs = map[string]bool{
 	".git": true, "node_modules": true, ".cache": true, "__pycache__": true,
@@ -292,6 +613,17 @@ func (m *Model) walkBrowserDir(dir string, indent int, items *[]browserItem) {
 
 	for _, e := range entries {
 		fullPath := filepath.Join(dir, e.Name())
+
+		if e.IsDir() {
+			if allFilesManaged(fullPath, m.repoDir) {
+				continue
+			}
+		} else if isSymlink(fullPath) {
+			if managed, _ := managedSymlink(fullPath, m.repoDir); managed {
+				continue
+			}
+		}
+
 		*items = append(*items, browserItem{
 			path:   fullPath,
 			name:   e.Name(),
@@ -318,174 +650,43 @@ func (m *Model) browserAdjustScroll() {
 	}
 }
 
-func renderAddStep1(m Model) string {
-	var b strings.Builder
-
-	if m.addPkgEditing {
-		b.WriteString(textStyle.Render("Select package:"))
-		b.WriteString("\n\n")
-		for i, name := range m.addPkgChoices {
-			line := fmt.Sprintf("  ○ %s", name)
-			if i == m.addPkgIdx {
-				line = selectedRowStyle.Width(bodyWidth(m.width)).Render(" ▸ " + name)
-			}
-			b.WriteString(line)
-			b.WriteString("\n")
-		}
-		b.WriteString("\n")
-		b.WriteString(dimStyle.Render(m.addPreviewSummary()))
-	} else {
-		b.WriteString(textStyle.Render("Package name:"))
-		b.WriteString("\n\n")
-		b.WriteString(m.addInput.View())
-		b.WriteString("\n\n")
-		if len(m.addPkgChoices) > 0 {
-			b.WriteString(dimStyle.Render("tab to pick from existing packages"))
-			b.WriteString("\n")
-		}
-		b.WriteString(dimStyle.Render(m.addPreviewSummary()))
+func (m *Model) previewAdjustScroll() {
+	rows := m.previewRows
+	contentHeight := m.height - 10
+	if contentHeight < 4 {
+		contentHeight = 4
 	}
 
-	return b.String()
+	if m.previewCursor < m.previewScroll {
+		m.previewScroll = m.previewCursor
+	}
+	if m.previewCursor >= m.previewScroll+contentHeight {
+		m.previewScroll = m.previewCursor - contentHeight + 1
+	}
+	if m.previewScroll < 0 {
+		m.previewScroll = 0
+	}
+	_ = rows
 }
 
-func (m Model) addPreviewSummary() string {
-	files := m.addPreviewFiles()
-	if len(files) == 1 {
-		return fmt.Sprintf("adding %s", collapseHome(files[0], m.homeDir))
-	}
-	return fmt.Sprintf("adding %s", countLabel(len(files), "file"))
-}
-
-func renderAddStep2(m Model) string {
-	var b strings.Builder
-	b.WriteString(accentStyle.Render("Review"))
-	b.WriteString("\n")
-	b.WriteString(subtleStyle.Render(strings.Repeat("─", 40)))
-	b.WriteString("\n\n")
-
-	files := m.addPreviewFiles()
-
-	if len(files) == 1 {
-		path := collapseHome(files[0], m.homeDir)
-		relPath, _ := filepath.Rel(m.homeDir, files[0])
-		repoPath := filepath.Join(m.repoDir, m.addPkgName, relPath)
-		info, _ := os.Stat(files[0])
-		isForeignLink := isSymlink(files[0])
-
-		if info != nil && info.IsDir() {
-			n := countFiles(files[0])
-			b.WriteString("  " + padRight(textStyle.Render("Folder"), 12) + "  " + textStyle.Render(path) + "\n")
-			b.WriteString("  " + padRight(textStyle.Render("Package"), 12) + "  " + accentStyle.Render(m.addPkgName) + "\n")
-			b.WriteString("  " + padRight(textStyle.Render("Files"), 12) + "  " + dimStyle.Render(countLabel(n, "file")) + "\n")
-			b.WriteString("  " + padRight(textStyle.Render("Destination"), 12) + "  " + dimStyle.Render(collapseHome(repoPath, m.homeDir)) + "\n")
-		} else {
-			b.WriteString("  " + padRight(textStyle.Render("File"), 12) + "  " + textStyle.Render(path) + "\n")
-			b.WriteString("  " + padRight(textStyle.Render("Package"), 12) + "  " + accentStyle.Render(m.addPkgName) + "\n")
-			b.WriteString("  " + padRight(textStyle.Render("Destination"), 12) + "  " + dimStyle.Render(collapseHome(repoPath, m.homeDir)) + "\n")
-		}
-
-		if isForeignLink {
-			target, _ := os.Readlink(files[0])
-			if !filepath.IsAbs(target) {
-				target = filepath.Join(filepath.Dir(files[0]), target)
-			}
-			b.WriteString("\n")
-			b.WriteString(pill(" ADOPT ", colBase, colYellow) + "\n")
-			b.WriteString("  " + warningStyle.Render("Foreign symlink detected") + "\n")
-			b.WriteString("  " + dimStyle.Render("Currently points to:") + "\n")
-			b.WriteString("  " + dimStyle.Render("  "+collapseHome(filepath.Clean(target), m.homeDir)) + "\n")
-			b.WriteString("  " + dimStyle.Render("Will be reparented to dotcor repo.") + "\n")
-		}
-	} else {
-		b.WriteString("  " + padRight(textStyle.Render("Files"), 12) + "  " + dimStyle.Render(countLabel(len(files), "file")) + "\n")
-		b.WriteString("  " + padRight(textStyle.Render("Package"), 12) + "  " + accentStyle.Render(m.addPkgName) + "\n")
-		b.WriteString("\n")
-		maxShow := 8
-		for i, f := range files {
-			if i >= maxShow {
-				b.WriteString(dimStyle.Render(fmt.Sprintf("  … %d more", len(files)-maxShow)))
-				b.WriteString("\n")
-				break
-			}
-			b.WriteString("  " + dimStyle.Render(collapseHome(f, m.homeDir)) + "\n")
-		}
-	}
-
-	if len(m.addSecrets) > 0 {
-		b.WriteString("\n")
-		b.WriteString(pill(" SECRETS DETECTED ", colBase, colRed))
-		b.WriteString("\n")
-		for _, s := range m.addSecrets {
-			fmt.Fprintf(&b, "  %s %s\n",
-				errorStyle.Render("⚠"),
-				warningStyle.Render(truncate(s, 80)),
-			)
-		}
-		b.WriteString("\n")
-		b.WriteString(warningStyle.Render("Review before committing — these may be sensitive."))
-	}
-
-	return b.String()
-}
-
-func renderAddStep3(m Model) string {
-	files := m.addPreviewFiles()
-	label := "Adding file…"
-	if len(files) > 1 {
-		label = fmt.Sprintf("Adding %d files…", len(files))
-	}
-	return fmt.Sprintf("%s  %s", m.spinner.View(), textStyle.Render(label))
-}
-
-func (m Model) addPreviewFiles() []string {
-	if m.addPreview == "" {
-		return nil
-	}
-	files := strings.Split(m.addPreview, "\n")
-	var clean []string
-	for _, f := range files {
-		f = strings.TrimSpace(f)
-		if f != "" {
-			clean = append(clean, f)
-		}
-	}
-	return clean
-}
-
-func addFooterHints(m Model) []string {
-	switch m.addStep {
-	case 1:
-		if m.addPkgEditing {
-			return []string{kbd("↑/k", "up"), kbd("↓/j", "down"), kbd("enter", "select"), kbd("esc", "back")}
-		}
-		hints := []string{kbd("enter", "confirm"), kbd("esc", "back")}
-		if len(m.addPkgChoices) > 0 {
-			hints = append(hints, kbd("tab", "existing packages"))
-		}
-		return hints
-	case 2:
-		return []string{kbd("enter", "confirm"), kbd("esc", "back")}
-	default:
-		return []string{kbd("esc", "back")}
-	}
-}
+// ─── Update handlers ──────────────────────────────────────────────────────────
 
 func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch {
 		case key.Matches(keyMsg, m.keys.Esc):
-			if m.addStep == 0 {
+			if m.addStep == addStepSelect {
 				m.activeView = DashboardView
 				m.resetAddState()
 				m.err = nil
 				return m, nil
 			}
-			if m.addStep == 1 && m.addPkgEditing {
-				m.addPkgEditing = false
-				m.addInput.Blur()
+			if m.addStep == addStepResult {
+				// From result: go back to dashboard and refresh.
+				m.activeView = DashboardView
+				m.resetAddState()
 				m.err = nil
-				return m, nil
+				return m, m.refreshAll()
 			}
 			m.addStep--
 			m.err = nil
@@ -493,9 +694,9 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(keyMsg, m.keys.Enter):
 			switch m.addStep {
-			case 0:
+			case addStepSelect:
 				if len(m.browserSelected) > 0 {
-					return m.confirmBrowserSelection()
+					return m.confirmBrowserSelectionAndClassify()
 				}
 				items := m.buildBrowserItems()
 				if m.browserCursor < 0 || m.browserCursor >= len(items) {
@@ -507,89 +708,72 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.browserItems = nil
 					return m, nil
 				}
-				return m.browserSelectFile(item.path)
+				// Single file selected via cursor — classify it.
+				return m.browserSelectAndClassify(item.path)
 
-			case 1:
-				if m.addPkgEditing {
-					if m.addPkgIdx < len(m.addPkgChoices) {
-						m.addPkgName = m.addPkgChoices[m.addPkgIdx]
-						m.addStep = 2
-						return m, nil
-					}
-					m.addPkgEditing = false
+			case addStepPreview:
+				// Execute classification — snapshot toggles to avoid concurrent mutation.
+				if m.previewPlan == nil {
 					return m, nil
 				}
-				pkgName := m.addInput.Value()
-				if pkgName == "" {
-					return m, nil
-				}
-				if err := validatePackageName(pkgName); err != nil {
-					m.err = err
-					return m, nil
-				}
-				m.addPkgName = pkgName
-				m.addInput.Blur()
-				m.addStep = 2
-				return m, nil
-
-			case 2:
-				m.addStep = 3
-				return m, m.executeAdd()
+				return m, runClassification(m.previewPlan, stow.CopyToggles(m.previewToggles), m.repoDir, m.homeDir)
 			}
 
-		case key.Matches(keyMsg, m.keys.Tab) && m.addStep == 1:
-			if !m.addPkgEditing && len(m.addPkgChoices) > 0 {
-				m.addPkgEditing = true
-				m.addPkgIdx = 0
-				return m, nil
-			} else if m.addPkgEditing {
-				m.addPkgEditing = false
-				m.addInput.SetValue(m.addPkgName)
-				m.addInput.SetCursor(len(m.addPkgName))
+		case keyMsg.String() == " " && m.addStep == addStepPreview:
+			// Toggle row in preview.
+			rows := m.previewRows
+			if m.previewCursor < 0 || m.previewCursor >= len(rows) {
 				return m, nil
 			}
+			row := rows[m.previewCursor]
+			if row.isHeader {
+				return m, nil
+			}
+			if row.class == stow.ClassManaged {
+				return m, nil // no-op for managed
+			}
+			id := stow.FileID(row.pkgName, row.relPath)
+			m.previewToggles[id] = !m.previewToggles[id]
 			return m, nil
 		}
 
-		if m.addStep == 0 {
+		if m.addStep == addStepSelect {
 			return m.browserHandleKey(keyMsg)
 		}
 
-		if m.addStep == 1 && !m.addPkgEditing {
-			var cmd tea.Cmd
-			m.addInput, cmd = m.addInput.Update(msg)
-			return m, cmd
+		if m.addStep == addStepPreview {
+			return m.previewHandleKey(keyMsg)
 		}
-
-		if m.addStep == 1 && m.addPkgEditing {
-			return m.step1HandleKey(keyMsg)
-		}
-	}
-
-	if m.addStep == 1 {
-		if m.addPkgEditing {
-			var cmd tea.Cmd
-			m.addInput, cmd = m.addInput.Update(msg)
-			return m, cmd
-		}
-		return m, nil
 	}
 
 	return m, nil
 }
 
-func (m Model) step1HandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	maxIdx := len(m.addPkgChoices) - 1
+func (m Model) previewHandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.previewPlan == nil {
+		return m, nil
+	}
+	rows := m.previewRows
+
 	switch keyMsg.String() {
 	case "up", "k":
-		if m.addPkgIdx > 0 {
-			m.addPkgIdx--
+		if m.previewCursor > 0 {
+			next := lastFileRow(rows, m.previewCursor-1)
+			if !rows[next].isHeader {
+				m.previewCursor = next
+			}
 		}
+		m.previewAdjustScroll()
 		return m, nil
+
 	case "down", "j":
-		if m.addPkgIdx < maxIdx {
-			m.addPkgIdx++
+		if m.previewCursor < len(rows)-1 {
+			next := firstFileRow(rows, m.previewCursor+1)
+			if !rows[next].isHeader {
+				m.previewCursor = next
+			}
 		}
+		m.previewAdjustScroll()
 		return m, nil
 	}
 	return m, nil
@@ -624,7 +808,12 @@ func (m Model) browserHandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if item.isDir {
 			m.toggleDirSelection(item.path)
 		} else {
-			m.browserSelected[item.path] = !m.browserSelected[item.path]
+			// Use delete-on-clear for consistency with toggleDirSelection.
+			if m.browserSelected[item.path] {
+				delete(m.browserSelected, item.path)
+			} else {
+				m.browserSelected[item.path] = true
+			}
 		}
 		return m, nil
 
@@ -632,18 +821,19 @@ func (m Model) browserHandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.browserCursor >= 0 && m.browserCursor < len(items) {
 			item := items[m.browserCursor]
 			if item.isDir && m.browserExpanded[item.path] {
+				// Collapse the item itself.
 				m.browserExpanded[item.path] = false
 				delete(m.browserEntries, item.path)
 				m.browserItems = nil
 				return m, nil
 			}
-			for dir := range m.browserExpanded {
-				if strings.HasPrefix(item.path, dir+string(filepath.Separator)) {
-					m.browserExpanded[dir] = false
-					delete(m.browserEntries, dir)
-					m.browserItems = nil
-					return m, nil
-				}
+			// Find the nearest (deepest) expanded ancestor.
+			nearest := m.nearestExpandedAncestor(item.path)
+			if nearest != "" {
+				m.browserExpanded[nearest] = false
+				delete(m.browserEntries, nearest)
+				m.browserItems = nil
+				return m, nil
 			}
 		}
 		return m, nil
@@ -657,6 +847,24 @@ func (m Model) browserHandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// nearestExpandedAncestor returns the deepest expanded ancestor directory of
+// path, or "" if none found. This avoids non-deterministic map iteration.
+func (m *Model) nearestExpandedAncestor(path string) string {
+	best := ""
+	for dir, expanded := range m.browserExpanded {
+		if !expanded {
+			continue
+		}
+		if strings.HasPrefix(path, dir+string(filepath.Separator)) {
+			// dir is an ancestor — prefer the deepest one.
+			if len(dir) > len(best) {
+				best = dir
+			}
+		}
+	}
+	return best
 }
 
 func (m Model) browserHandleJumpKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -709,58 +917,40 @@ func expandBrowserPath(raw, homeDir string) string {
 	return raw
 }
 
-func (m Model) confirmBrowserSelection() (tea.Model, tea.Cmd) {
-	var files []string
+// confirmBrowserSelectionAndClassify gathers selected paths and kicks off
+// ClassifyFiles as a Bubble Tea command.
+func (m Model) confirmBrowserSelectionAndClassify() (tea.Model, tea.Cmd) {
+	var selections []string
 	for path, selected := range m.browserSelected {
-		if !selected {
-			continue
-		}
-		if info, err := os.Stat(path); err == nil && info.IsDir() {
-			_ = filepath.Walk(path, func(p string, fi os.FileInfo, err error) error {
-				if err != nil || fi.IsDir() || isSymlink(p) {
-					return nil
-				}
-				files = append(files, p)
-				return nil
-			})
-		} else {
-			files = append(files, path)
+		if selected {
+			selections = append(selections, path)
 		}
 	}
-	sort.Strings(files)
+	sort.Strings(selections)
 
-	if len(files) == 0 {
+	if len(selections) == 0 {
 		return m, nil
 	}
 
-	m.addPreview = strings.Join(files, "\n")
 	m.err = nil
+	return m, classifySelections(selections, m.repoDir, m.homeDir)
+}
 
-	seen := make(map[string]bool)
-	var choices []string
-	for _, pkg := range m.packages {
-		if !seen[pkg.Name] {
-			seen[pkg.Name] = true
-			choices = append(choices, pkg.Name)
+func (m Model) browserSelectAndClassify(fullPath string) (tea.Model, tea.Cmd) {
+	if isSymlink(fullPath) {
+		if managed, _ := managedSymlink(fullPath, m.repoDir); managed {
+			m.err = fmt.Errorf("already managed by dotcor — use the dashboard to manage this file")
+			return m, nil
 		}
 	}
-	m.addPkgChoices = choices
-	m.addPkgIdx = 0
-	m.addPkgEditing = false
 
-	detected := detectPackageNameMulti(files, m.homeDir)
-	for i, name := range choices {
-		if name == detected {
-			m.addPkgIdx = i
-			break
-		}
+	if _, err := os.Stat(fullPath); err != nil {
+		m.err = fmt.Errorf("file not found: %s", fullPath)
+		return m, nil
 	}
-	m.addPkgName = detected
-	m.addInput.SetValue(detected)
-	m.addInput.SetCursor(len(detected))
-	m.addInput.Focus()
-	m.addStep = 1
-	return m, nil
+
+	m.err = nil
+	return m, classifySelections([]string{fullPath}, m.repoDir, m.homeDir)
 }
 
 func (m *Model) toggleDirSelection(dirPath string) {
@@ -771,53 +961,55 @@ func (m *Model) toggleDirSelection(dirPath string) {
 	m.browserSelected[dirPath] = true
 }
 
-func (m Model) browserSelectFile(fullPath string) (tea.Model, tea.Cmd) {
-	if isSymlink(fullPath) {
-		managed, _ := fs.SymlinkPointsToRepo(fullPath, m.repoDir)
-		if managed {
-			m.err = fmt.Errorf("already managed by dotcor — use the dashboard to manage this file")
-			return m, nil
-		}
-	}
+// ─── File system helpers ──────────────────────────────────────────────────────
 
-	if _, err := os.Stat(fullPath); err != nil {
-		m.err = fmt.Errorf("file not found: %s", fullPath)
-		return m, nil
-	}
-	warnings, err := core.ValidateAll(fullPath, m.cfg)
+// managedSymlink returns true if path is a symlink pointing into repoDir.
+func managedSymlink(path, repoDir string) (bool, error) {
+	lfi, err := os.Lstat(path)
 	if err != nil {
-		m.err = err
-		return m, nil
+		return false, err
 	}
-	m.err = nil
-	m.addPreview = fullPath
-	m.addSecrets = warnings
+	if lfi.Mode()&os.ModeSymlink == 0 {
+		return false, nil
+	}
+	target, err := os.Readlink(path)
+	if err != nil {
+		return false, err
+	}
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(filepath.Dir(path), target)
+	}
+	resolved, err := filepath.EvalSymlinks(target)
+	if err != nil {
+		return false, err
+	}
+	// Resolve repoDir too.
+	resolvedRepo := repoDir
+	if r, rerr := filepath.EvalSymlinks(repoDir); rerr == nil {
+		resolvedRepo = r
+	}
+	return strings.HasPrefix(resolved, resolvedRepo+string(filepath.Separator)) || resolved == resolvedRepo, nil
+}
 
-	seen := make(map[string]bool)
-	var choices []string
-	for _, pkg := range m.packages {
-		if !seen[pkg.Name] {
-			seen[pkg.Name] = true
-			choices = append(choices, pkg.Name)
+// allFilesManaged returns true only when every regular file under dir is a
+// symlink that points into repoDir. A single unmanaged or non-symlink file
+// makes it return false. An empty directory returns false.
+func allFilesManaged(dir, repoDir string) bool {
+	total := 0
+	managed := 0
+	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
 		}
-	}
-	m.addPkgChoices = choices
-	m.addPkgIdx = 0
-	m.addPkgEditing = false
-
-	detected := detectPackageName(fullPath)
-	for i, name := range choices {
-		if name == detected {
-			m.addPkgIdx = i
-			break
+		total++
+		if isSymlink(path) {
+			if ok, _ := managedSymlink(path, repoDir); ok {
+				managed++
+			}
 		}
-	}
-	m.addPkgName = detected
-	m.addInput.SetValue(detected)
-	m.addInput.SetCursor(len(detected))
-	m.addInput.Focus()
-	m.addStep = 1
-	return m, nil
+		return nil
+	})
+	return total > 0 && managed == total
 }
 
 func countFilesRecursive(dir string) int {
@@ -845,327 +1037,18 @@ func selectionCount(selected map[string]bool) string {
 	return dimStyle.Render(fmt.Sprintf("%d selected", n))
 }
 
-func countFiles(dir string) int {
-	count := 0
-	_ = filepath.Walk(dir, func(_ string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return nil
-		}
-		count++
-		return nil
-	})
-	return count
-}
+// ─── Tea commands ─────────────────────────────────────────────────────────────
 
-func (m Model) executeAdd() tea.Cmd {
-	files := m.addPreviewFiles()
-	pkgName := m.addPkgName
-	repoDir := m.repoDir
-	homeDir := m.homeDir
-	logger := m.cfg.Logger
-
+func classifySelections(selections []string, repoDir, homeDir string) tea.Cmd {
 	return func() tea.Msg {
-		pkgDir := filepath.Join(repoDir, pkgName)
-		if err := os.MkdirAll(pkgDir, 0755); err != nil {
-			return addResultMsg{err: fmt.Errorf("creating package directory: %w", err)}
-		}
-
-		if len(files) == 1 {
-			info, err := os.Stat(files[0])
-			if err != nil {
-				return addResultMsg{err: fmt.Errorf("source not found: %w", err)}
-			}
-			if info.IsDir() {
-				return executeAddDir(files[0], pkgDir, pkgName, homeDir, logger)
-			}
-			return executeAddFile(files[0], pkgDir, pkgName, homeDir, logger)
-		}
-
-		var totalLinked, totalSkipped int
-		var firstErr string
-		for _, f := range files {
-			result := executeAddFile(f, pkgDir, pkgName, homeDir, logger)
-			if result.err != nil {
-				if firstErr == "" {
-					firstErr = result.err.Error()
-				}
-				totalSkipped++
-				continue
-			}
-			totalLinked++
-		}
-
-		if firstErr != "" {
-			return addResultMsg{err: fmt.Errorf("errors adding files: %s", firstErr)}
-		}
-
-		msg := fmt.Sprintf("Added %d file(s) → %s", totalLinked, pkgName)
-		if totalSkipped > 0 {
-			msg += fmt.Sprintf(" (%d skipped)", totalSkipped)
-		}
-		return addResultMsg{msg: msg}
+		plan, err := stow.ClassifyFiles(selections, repoDir, homeDir)
+		return classifyPlanMsg{plan: plan, err: err}
 	}
 }
 
-func executeAddFile(srcPath, pkgDir, pkgName, homeDir string, logger *slog.Logger) addResultMsg {
-	relPath, err := filepath.Rel(homeDir, srcPath)
-	if err != nil {
-		relPath = filepath.Base(srcPath)
+func runClassification(plan *stow.ClassificationPlan, toggles map[string]bool, repoDir, homeDir string) tea.Cmd {
+	return func() tea.Msg {
+		result, err := stow.ExecuteClassification(plan, toggles, repoDir, homeDir)
+		return classifyResultMsg{result: result, err: err}
 	}
-
-	if err := validateRelPath(relPath); err != nil {
-		return addResultMsg{err: err}
-	}
-
-	dstPath := filepath.Join(pkgDir, relPath)
-	if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
-		return addResultMsg{err: fmt.Errorf("creating destination directory: %w", err)}
-	}
-
-	srcData, err := os.ReadFile(srcPath)
-	if err != nil {
-		return addResultMsg{err: fmt.Errorf("reading source file: %w", err)}
-	}
-
-	srcInfo, err := os.Stat(srcPath)
-	srcPerm := os.FileMode(0644)
-	if err == nil {
-		srcPerm = srcInfo.Mode().Perm()
-	}
-
-	if err := os.WriteFile(dstPath, srcData, srcPerm); err != nil {
-		return addResultMsg{err: fmt.Errorf("writing to repo: %w", err)}
-	}
-
-	relSymlink, err := filepath.Rel(filepath.Dir(srcPath), dstPath)
-	if err != nil {
-		return addResultMsg{err: fmt.Errorf("computing symlink path: %w", err)}
-	}
-
-	tempLink := srcPath + ".dotcor-tmp"
-	if err := os.Symlink(relSymlink, tempLink); err != nil {
-		return addResultMsg{err: fmt.Errorf("creating temp symlink: %w", err)}
-	}
-
-	if err := os.Remove(srcPath); err != nil {
-		_ = os.Remove(tempLink)
-		if logger != nil {
-			logger.Warn("failed to remove original file", "file", srcPath, "error", err)
-		}
-		return addResultMsg{err: fmt.Errorf("removing original file: %w", err)}
-	}
-
-	if err := os.Rename(tempLink, srcPath); err != nil {
-		_ = os.Remove(tempLink)
-		if writeErr := os.WriteFile(srcPath, srcData, srcPerm); writeErr != nil {
-			if logger != nil {
-				logger.Error("failed to restore original file after rename failure", "file", srcPath, "error", writeErr)
-			}
-		}
-		return addResultMsg{err: fmt.Errorf("moving symlink into place: %w", err)}
-	}
-
-	return addResultMsg{msg: fmt.Sprintf("Added %s → %s", filepath.Base(srcPath), pkgName)}
-}
-
-func executeAddDir(srcPath, pkgDir, pkgName, homeDir string, logger *slog.Logger) addResultMsg {
-	var linked, skipped int
-	var firstErr string
-
-	_ = filepath.Walk(srcPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return nil
-		}
-		if isSymlink(path) {
-			skipped++
-			return nil
-		}
-
-		relPath, err := filepath.Rel(homeDir, path)
-		if err != nil || strings.HasPrefix(relPath, "..") {
-			skipped++
-			return nil
-		}
-
-		dstPath := filepath.Join(pkgDir, relPath)
-		if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
-			if firstErr == "" {
-				firstErr = err.Error()
-			}
-			skipped++
-			return nil
-		}
-
-		srcData, err := os.ReadFile(path)
-		if err != nil {
-			if firstErr == "" {
-				firstErr = err.Error()
-			}
-			skipped++
-			return nil
-		}
-
-		srcPerm := info.Mode().Perm()
-		if err := os.WriteFile(dstPath, srcData, srcPerm); err != nil {
-			if firstErr == "" {
-				firstErr = err.Error()
-			}
-			skipped++
-			return nil
-		}
-
-		relSymlink, err := filepath.Rel(filepath.Dir(path), dstPath)
-		if err != nil {
-			skipped++
-			return nil
-		}
-
-		tempLink := path + ".dotcor-tmp"
-		if err := os.Symlink(relSymlink, tempLink); err != nil {
-			skipped++
-			return nil
-		}
-
-		if err := os.Remove(path); err != nil {
-			_ = os.Remove(tempLink)
-			skipped++
-			return nil
-		}
-
-		if err := os.Rename(tempLink, path); err != nil {
-			_ = os.Remove(tempLink)
-			if writeErr := os.WriteFile(path, srcData, srcPerm); writeErr != nil {
-				skipped++
-				return nil
-			}
-			skipped++
-			return nil
-		}
-
-		linked++
-		return nil
-	})
-
-	if firstErr != "" {
-		return addResultMsg{err: fmt.Errorf("errors adding directory: %s", firstErr)}
-	}
-
-	msg := fmt.Sprintf("Added %s/ → %s (%d linked", filepath.Base(srcPath), pkgName, linked)
-	if skipped > 0 {
-		msg += fmt.Sprintf(", %d skipped", skipped)
-	}
-	msg += ")"
-	return addResultMsg{msg: msg}
-}
-
-var validPkgName = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
-
-func validatePackageName(name string) error {
-	if !validPkgName.MatchString(name) {
-		return fmt.Errorf("invalid package name %q: must contain only letters, numbers, dots, hyphens, underscores", name)
-	}
-	if strings.Contains(name, "..") {
-		return fmt.Errorf("invalid package name %q: must not contain '..'", name)
-	}
-	return nil
-}
-
-func validateRelPath(rel string) error {
-	if strings.HasPrefix(rel, "..") {
-		return fmt.Errorf("file path escapes home directory: %s", rel)
-	}
-	return nil
-}
-
-func detectPackageName(path string) string {
-	home, err := config.GetHomeDir()
-	if err != nil || home == "" {
-		return filepath.Base(filepath.Dir(path))
-	}
-	rel, err := filepath.Rel(home, path)
-	if err != nil {
-		rel = path
-	}
-
-	parts := strings.Split(rel, string(filepath.Separator))
-
-	if len(parts) >= 2 && parts[0] == ".config" {
-		name := parts[1]
-		if idx := strings.LastIndex(name, "."); idx > 0 {
-			name = name[:idx]
-		}
-		if name != "" {
-			return name
-		}
-	}
-
-	if len(parts) >= 1 {
-		name := strings.TrimPrefix(parts[0], ".")
-		name = strings.TrimSuffix(name, "rc")
-		name = strings.TrimSuffix(name, "config")
-		if name != "" {
-			return name
-		}
-	}
-
-	return filepath.Base(filepath.Dir(path))
-}
-
-func detectPackageNameMulti(paths []string, homeDir string) string {
-	if len(paths) == 0 {
-		return "misc"
-	}
-	if len(paths) == 1 {
-		return detectPackageName(paths[0])
-	}
-
-	common := findCommonParent(paths, homeDir)
-	if common != "" {
-		return common
-	}
-	return "misc"
-}
-
-func findCommonParent(paths []string, homeDir string) string {
-	if len(paths) == 0 {
-		return ""
-	}
-
-	var partsList [][]string
-	for _, p := range paths {
-		rel, err := filepath.Rel(homeDir, p)
-		if err != nil {
-			rel = p
-		}
-		partsList = append(partsList, strings.Split(rel, string(filepath.Separator)))
-	}
-
-	first := partsList[0]
-	var common []string
-	for i := 0; i < len(first); i++ {
-		match := true
-		for _, parts := range partsList[1:] {
-			if i >= len(parts) || parts[i] != first[i] {
-				match = false
-				break
-			}
-		}
-		if !match {
-			break
-		}
-		common = append(common, first[i])
-	}
-
-	if len(common) == 0 {
-		return ""
-	}
-
-	candidate := common[len(common)-1]
-	name := strings.TrimPrefix(candidate, ".")
-	name = strings.TrimSuffix(name, "rc")
-	name = strings.TrimSuffix(name, "config")
-	if name != "" {
-		return name
-	}
-	return ""
 }
