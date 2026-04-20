@@ -19,7 +19,7 @@ import (
 const (
 	addStepSelect  = 0
 	addStepPreview = 1
-	addStepResult  = 2
+	addStepConfirm = 2
 )
 
 type browserItem struct {
@@ -71,14 +71,15 @@ func viewAdd(m Model) string {
 		body = renderPreviewStep(m) + errLine
 		footer = plainFooter(innerW,
 			kbd("↑/k", "up"), kbd("↓/j", "down"),
-			kbd("space", "toggle"), kbd("enter", "execute"),
+			kbd("space", "toggle"), kbd("enter", "confirm"),
 			kbd("esc", "back"),
 		)
-	case addStepResult:
-		body = renderResultStep(m)
-		footer = plainFooter(innerW, kbd("esc", "close"))
+	case addStepConfirm:
+		body = renderConfirmStep(m) + errLine
+		footer = plainFooter(innerW,
+			kbd("enter", "execute"), kbd("esc", "back"),
+		)
 	default:
-		// Invariant violation — reset to select step.
 		body = dimStyle.Render("  (internal error — press esc)")
 		footer = plainFooter(innerW, kbd("esc", "back"))
 	}
@@ -103,7 +104,7 @@ func renderAddStepper(width, step int) string {
 		Bold(true).
 		Render("◆ Add / Adopt")
 
-	steps := []string{"Select", "Preview", "Done"}
+	steps := []string{"Select", "Preview", "Confirm"}
 	var parts []string
 	for i, s := range steps {
 		num := fmt.Sprintf("%d", i+1)
@@ -499,61 +500,120 @@ func renderPreviewCounts(plan *stow.ClassificationPlan, toggles map[string]bool)
 	return "  " + strings.Join(parts, " ") + "  " + active
 }
 
-// ─── Step 2: Result ───────────────────────────────────────────────────────────
+// ─── Step 2: Confirm ───────────────────────────────────────────────────────────
 
-func renderResultStep(m Model) string {
+func renderConfirmStep(m Model) string {
+	if m.previewPlan == nil {
+		return dimStyle.Render("  No plan to confirm.")
+	}
+
+	plan := m.previewPlan
+	toggles := m.previewToggles
+	bw := bodyWidth(m.width)
+
 	var b strings.Builder
 
-	if m.classifyResult == nil {
-		b.WriteString(dimStyle.Render("  No result."))
-		return b.String()
-	}
-
-	result := m.classifyResult
-
-	b.WriteString(accentStyle.Render("  Done"))
+	b.WriteString(accentStyle.Render("  Confirm changes"))
 	b.WriteString("\n")
-	b.WriteString(subtleStyle.Render("  " + strings.Repeat("─", 40)))
-	b.WriteString("\n\n")
+	b.WriteString(subtleStyle.Render("  " + strings.Repeat("─", max(bw-2, 4))))
+	b.WriteString("\n")
 
-	var pills []string
-	if result.Adopted > 0 {
-		pills = append(pills, pill(fmt.Sprintf(" adopted %d ", result.Adopted), colBase, colGreen))
-	}
-	if result.Added > 0 {
-		pills = append(pills, pill(fmt.Sprintf(" added %d ", result.Added), colBase, colBlue))
-	}
-	if result.Tracked > 0 {
-		pills = append(pills, pill(fmt.Sprintf(" tracked %d ", result.Tracked), colBase, colMauve))
-	}
-	if result.Foreign > 0 {
-		pills = append(pills, pill(fmt.Sprintf(" foreign %d ", result.Foreign), colBase, colYellow))
-	}
-	if result.Managed > 0 {
-		pills = append(pills, pill(fmt.Sprintf(" managed %d ", result.Managed), colBase, colOverlay0))
-	}
+	classOrder := []stow.Class{stow.ClassAdopt, stow.ClassAdd, stow.ClassTrack, stow.ClassForeign}
+	for _, pkg := range plan.Packages {
+		byClass := make(map[stow.Class][]stow.ClassifiedFile)
+		for _, cf := range pkg.Files {
+			byClass[cf.Class] = append(byClass[cf.Class], cf)
+		}
 
-	if len(pills) > 0 {
-		b.WriteString("  " + strings.Join(pills, " ") + "\n\n")
-	} else {
-		b.WriteString(dimStyle.Render("  Nothing was changed."))
-		b.WriteString("\n\n")
-	}
-
-	if len(result.Failures) > 0 {
-		b.WriteString(pill(fmt.Sprintf(" %d failed ", len(result.Failures)), colBase, colRed))
-		b.WriteString("\n")
-		maxShow := 6
-		for i, f := range result.Failures {
-			if i >= maxShow {
-				b.WriteString(dimStyle.Render(fmt.Sprintf("  … %d more", len(result.Failures)-maxShow)))
-				b.WriteString("\n")
+		var hasActive bool
+		for _, class := range classOrder {
+			for _, cf := range byClass[class] {
+				if toggles[stow.FileID(pkg.Name, cf.RelPath)] {
+					hasActive = true
+					break
+				}
+			}
+			if hasActive {
 				break
 			}
-			b.WriteString(errorStyle.Render(fmt.Sprintf("  ✗ %s/%s: %v", f.PackageName, f.RelPath, f.Err)))
+		}
+		if !hasActive {
+			continue
+		}
+
+		b.WriteString("\n")
+		b.WriteString(accentStyle.Render("  Package: " + pkg.Name))
+		b.WriteString("\n")
+		b.WriteString(subtleStyle.Render("  " + strings.Repeat("─", max(bw-2, 4))))
+		b.WriteString("\n")
+
+		for _, class := range classOrder {
+			files := byClass[class]
+			if len(files) == 0 {
+				continue
+			}
+			var active []stow.ClassifiedFile
+			for _, cf := range files {
+				if toggles[stow.FileID(pkg.Name, cf.RelPath)] {
+					active = append(active, cf)
+				}
+			}
+			if len(active) == 0 {
+				continue
+			}
+
+			var label, color string
+			switch class {
+			case stow.ClassAdopt:
+				label, color = "ADOPT", colGreen
+			case stow.ClassAdd:
+				label, color = "ADD", colBlue
+			case stow.ClassTrack:
+				label, color = "TRACK", colMauve
+			case stow.ClassForeign:
+				label, color = "FOREIGN", colYellow
+			}
+
+			b.WriteString("  " + pill(fmt.Sprintf(" %s %d ", label, len(active)), colBase, color))
 			b.WriteString("\n")
+			for _, cf := range active {
+				var detail string
+				switch class {
+				case stow.ClassAdopt:
+					detail = fmt.Sprintf("← %s → repo/%s/%s", cf.HomeSymlink, pkg.Name, cf.RelPath)
+				case stow.ClassAdd:
+					detail = fmt.Sprintf("→ repo/%s/%s", pkg.Name, cf.RelPath)
+				case stow.ClassTrack:
+					detail = fmt.Sprintf("repo/%s/%s (no $HOME link)", pkg.Name, cf.RelPath)
+				case stow.ClassForeign:
+					detail = fmt.Sprintf("→ %s → repo/%s/%s", truncate(cf.ForeignTarget, 30), pkg.Name, cf.RelPath)
+				}
+				line := fmt.Sprintf("      %-28s  %s", cf.RelPath, detail)
+				if lipgloss.Width(line) > bw {
+					line = truncate(line, bw-2)
+				}
+				b.WriteString(dimStyle.Render(line))
+				b.WriteString("\n")
+			}
 		}
 	}
+
+	var managedCount int
+	for _, pkg := range plan.Packages {
+		for _, cf := range pkg.Files {
+			if cf.Class == stow.ClassManaged {
+				managedCount++
+			}
+		}
+	}
+	if managedCount > 0 {
+		b.WriteString("\n")
+		b.WriteString("  " + pill(fmt.Sprintf(" MANAGED %d (skipped) ", managedCount), colBase, colOverlay0))
+		b.WriteString("\n")
+	}
+
+	b.WriteString("\n")
+	b.WriteString(dimStyle.Render("  enter to execute · esc to go back"))
 
 	return b.String()
 }
@@ -681,13 +741,6 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.err = nil
 				return m, nil
 			}
-			if m.addStep == addStepResult {
-				// From result: go back to dashboard and refresh.
-				m.activeView = DashboardView
-				m.resetAddState()
-				m.err = nil
-				return m, m.refreshAll()
-			}
 			m.addStep--
 			m.err = nil
 			return m, nil
@@ -708,11 +761,17 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.browserItems = nil
 					return m, nil
 				}
-				// Single file selected via cursor — classify it.
 				return m.browserSelectAndClassify(item.path)
 
 			case addStepPreview:
-				// Execute classification — snapshot toggles to avoid concurrent mutation.
+				if m.previewPlan == nil {
+					return m, nil
+				}
+				m.addStep = addStepConfirm
+				m.err = nil
+				return m, nil
+
+			case addStepConfirm:
 				if m.previewPlan == nil {
 					return m, nil
 				}

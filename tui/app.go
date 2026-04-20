@@ -323,10 +323,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case classifyResultMsg:
 		if msg.err != nil {
 			m.err = msg.err
-			m.addStep = addStepPreview
+			m.addStep = addStepConfirm
 		} else {
 			m.classifyResult = msg.result
-			m.addStep = addStepResult
+			m.activeView = DashboardView
 			m.err = nil
 			r := msg.result
 			total := r.Added + r.Adopted + r.Tracked + r.Foreign
@@ -349,6 +349,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				commitMsg := "add: " + strings.Join(commitParts, ", ")
 				cmds = append(cmds, m.autoCommitCmd(commitMsg))
+			}
+			var parts []string
+			if r.Adopted > 0 {
+				parts = append(parts, fmt.Sprintf("%d adopted", r.Adopted))
+			}
+			if r.Added > 0 {
+				parts = append(parts, fmt.Sprintf("%d added", r.Added))
+			}
+			if r.Tracked > 0 {
+				parts = append(parts, fmt.Sprintf("%d tracked", r.Tracked))
+			}
+			if r.Foreign > 0 {
+				parts = append(parts, fmt.Sprintf("%d foreign", r.Foreign))
+			}
+			if len(r.Failures) > 0 {
+				parts = append(parts, fmt.Sprintf("%d failed", len(r.Failures)))
+			}
+			if len(parts) > 0 {
+				m.statusMsg = "Added: " + strings.Join(parts, ", ")
+				cmds = append(cmds, clearStatusAfter(3*time.Second))
 			}
 		}
 		cmds = append(cmds, m.refreshAll())
