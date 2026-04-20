@@ -444,7 +444,14 @@ func renderFileDetail(m Model, width, maxLines int) string {
 	b.WriteString(hRule(width))
 	b.WriteString("\n")
 
-	start, end := visibleRange(m.selectedFile, len(pkg.Files), maxLines-3)
+	// Each file entry renders as 2 lines (name + target path).
+	// Reserve 3 lines for: summary pills, separator, and optional overflow notice.
+	// Divide remaining lines by 2 to get the number of file entries that fit.
+	fileSlots := (maxLines - 3) / 2
+	if fileSlots < 1 {
+		fileSlots = 1
+	}
+	start, end := visibleRange(m.selectedFile, len(pkg.Files), fileSlots)
 	for i := start; i < end; i++ {
 		f := pkg.Files[i]
 		selected := i == m.selectedFile && m.expanded[m.selectedPkg]
@@ -456,15 +463,16 @@ func renderFileDetail(m Model, width, maxLines int) string {
 		if selected {
 			b.WriteString(selectedRowStyle.Width(width).Render(fmt.Sprintf("▸ %s %s", statusBadge, rel)))
 			b.WriteString("\n")
-			b.WriteString(selectedRowStyle.Width(width).Render(fmt.Sprintf("  %s→ %s", strings.Repeat(" ", lipgloss.Width(statusBadge)-1), target)))
+			b.WriteString(selectedRowStyle.Width(width).Render(fmt.Sprintf("  %s→ %s", strings.Repeat(" ", lipgloss.Width(statusBadge)), target)))
+			b.WriteString("\n")
 		} else {
 			fmt.Fprintf(&b, "  %s %s\n", statusBadge, textStyle.Render(rel))
 			fmt.Fprintf(&b, "  %s%s %s\n", strings.Repeat(" ", lipgloss.Width(statusBadge)), dimStyle.Render("→"), dimStyle.Render(target))
 		}
 	}
 
-	if len(pkg.Files) > maxLines-3 {
-		b.WriteString(dimStyle.Render(fmt.Sprintf("  … showing %d of %d", end-start, len(pkg.Files))))
+	if len(pkg.Files) > fileSlots {
+		b.WriteString(dimStyle.Render(fmt.Sprintf("  … %d–%d of %d", start+1, end, len(pkg.Files))))
 	}
 
 	return b.String()
@@ -590,7 +598,7 @@ func renderFooter(m Model) string {
 			Render("  " + accentStyle.Render("/") + " " + m.searchInput.View())
 	}
 
-	hints := joinHints(
+	allHints := []string{
 		kbd("↑↓/jk", "nav"),
 		kbd("tab", "sort"),
 		kbd("s", "stow"),
@@ -602,15 +610,50 @@ func renderFooter(m Model) string {
 		kbd("S", "sync"),
 		kbd("/", "search"),
 		kbd("q", "quit"),
-	)
-
-	hintsW := lipgloss.Width(hints)
-	gap := (m.width - hintsW) / 2
-	if gap < 2 {
-		gap = 2
 	}
 
-	return lipgloss.NewStyle().Width(m.width).Render(strings.Repeat(" ", gap) + hints)
+	sep := dimStyle.Render("  ·  ")
+	sepW := lipgloss.Width(sep)
+
+	// Greedily pack hints into rows that fit within m.width.
+	var rows []string
+	rowHints := []string{}
+	rowW := 0
+	for _, h := range allHints {
+		hw := lipgloss.Width(h)
+		needed := hw
+		if len(rowHints) > 0 {
+			needed += sepW
+		}
+		if len(rowHints) > 0 && rowW+needed > m.width {
+			rows = append(rows, joinHints(rowHints...))
+			rowHints = []string{h}
+			rowW = hw
+		} else {
+			rowHints = append(rowHints, h)
+			rowW += needed
+		}
+	}
+	if len(rowHints) > 0 {
+		rows = append(rows, joinHints(rowHints...))
+	}
+
+	// Center each row within m.width.
+	centerRow := func(row string) string {
+		w := lipgloss.Width(row)
+		gap := (m.width - w) / 2
+		if gap < 0 {
+			gap = 0
+		}
+		return lipgloss.NewStyle().Width(m.width).Render(strings.Repeat(" ", gap) + row)
+	}
+
+	centeredRows := make([]string, len(rows))
+	for i, row := range rows {
+		centeredRows[i] = centerRow(row)
+	}
+
+	return strings.Join(centeredRows, "\n")
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
