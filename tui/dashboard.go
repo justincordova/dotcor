@@ -224,7 +224,8 @@ func renderPackagePanel(m Model, width, height int) string {
 	sortLabels := []string{"alpha", "status", "recent"}
 	title := fmt.Sprintf(" Packages %s %s", dimStyle.Render(fmt.Sprintf("(%d)", len(m.packages))), dimStyle.Render("↑"+sortLabels[m.sortMode]))
 	body := renderPackageList(m, width-4, height-4)
-	return panel(title, body, width, height, !m.searching)
+	active := !m.expanded[m.selectedPkg] && !m.searching
+	return panel(title, body, width, height, active)
 }
 
 func renderDetailPanel(m Model, width, height int) string {
@@ -240,7 +241,8 @@ func renderDetailPanel(m Model, width, height int) string {
 	}
 
 	body := renderFileDetail(m, width-4, height-4)
-	return panel(title, body, width, height, false)
+	active := m.expanded[m.selectedPkg] && !m.searching
+	return panel(title, body, width, height, active)
 }
 
 // ─── Package list as cards ───────────────────────────────────────────────────
@@ -369,8 +371,6 @@ func renderPackageCard(m Model, i, width int) string {
 		progress = dimStyle.Render("empty")
 	case linked == total:
 		progress = successStyle.Render(fmt.Sprintf("✓ %d/%d", linked, total))
-	case linked == 0 && conflicts > 0:
-		progress = errorStyle.Render(fmt.Sprintf("✗ %d/%d", linked, total))
 	case linked == 0:
 		progress = errorStyle.Render(fmt.Sprintf("✗ %d/%d", linked, total))
 	default:
@@ -460,15 +460,15 @@ func renderFileDetail(m Model, width, maxLines int) string {
 		rel := f.RelPath
 		target := collapseHome(f.TargetPath, m.homeDir)
 
+		barStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colSurface1))
 		if selected {
-			b.WriteString(selectedRowStyle.Width(width).Render(fmt.Sprintf("▸ %s %s", statusBadge, rel)))
-			b.WriteString("\n")
-			b.WriteString(selectedRowStyle.Width(width).Render(fmt.Sprintf("  %s→ %s", strings.Repeat(" ", lipgloss.Width(statusBadge)), target)))
-			b.WriteString("\n")
-		} else {
-			fmt.Fprintf(&b, "  %s %s\n", statusBadge, textStyle.Render(rel))
-			fmt.Fprintf(&b, "  %s%s %s\n", strings.Repeat(" ", lipgloss.Width(statusBadge)), dimStyle.Render("→"), dimStyle.Render(target))
+			barStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colMauve)).Bold(true)
 		}
+		bar := barStyle.Render("▌")
+
+		fmt.Fprintf(&b, "%s %s %s\n", bar, statusBadge, textStyle.Render(rel))
+		pad := strings.Repeat(" ", lipgloss.Width(statusBadge))
+		fmt.Fprintf(&b, "%s %s%s %s\n", bar, pad, dimStyle.Render("→"), dimStyle.Render(target))
 	}
 
 	if len(pkg.Files) > fileSlots {

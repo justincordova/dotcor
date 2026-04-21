@@ -122,7 +122,6 @@ type Model struct {
 	previewCursor  int
 	previewScroll  int
 
-	// Result step (step 2) state.
 	classifyResult *stow.ClassificationResult
 
 	browserEntries   map[string][]os.DirEntry
@@ -329,42 +328,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.activeView = DashboardView
 			m.err = nil
 			r := msg.result
+			parts := classifyResultParts(r)
 			total := r.Added + r.Adopted + r.Tracked + r.Foreign
 			if total > 0 {
-				var commitParts []string
-				if r.Adopted > 0 {
-					commitParts = append(commitParts, fmt.Sprintf("%d adopted", r.Adopted))
-				}
-				if r.Added > 0 {
-					commitParts = append(commitParts, fmt.Sprintf("%d added", r.Added))
-				}
-				if r.Tracked > 0 {
-					commitParts = append(commitParts, fmt.Sprintf("%d tracked", r.Tracked))
-				}
-				if r.Foreign > 0 {
-					commitParts = append(commitParts, fmt.Sprintf("%d foreign", r.Foreign))
-				}
-				if len(r.Failures) > 0 {
-					commitParts = append(commitParts, fmt.Sprintf("%d failed", len(r.Failures)))
-				}
-				commitMsg := "add: " + strings.Join(commitParts, ", ")
+				commitMsg := "add: " + strings.Join(parts, ", ")
 				cmds = append(cmds, m.autoCommitCmd(commitMsg))
-			}
-			var parts []string
-			if r.Adopted > 0 {
-				parts = append(parts, fmt.Sprintf("%d adopted", r.Adopted))
-			}
-			if r.Added > 0 {
-				parts = append(parts, fmt.Sprintf("%d added", r.Added))
-			}
-			if r.Tracked > 0 {
-				parts = append(parts, fmt.Sprintf("%d tracked", r.Tracked))
-			}
-			if r.Foreign > 0 {
-				parts = append(parts, fmt.Sprintf("%d foreign", r.Foreign))
-			}
-			if len(r.Failures) > 0 {
-				parts = append(parts, fmt.Sprintf("%d failed", len(r.Failures)))
 			}
 			if len(parts) > 0 {
 				m.statusMsg = "Added: " + strings.Join(parts, ", ")
@@ -881,6 +849,26 @@ func (m *Model) clearConfirm() {
 	m.confirmHint = ""
 	m.confirmDanger = false
 	m.confirmRestoreRef = ""
+}
+
+func classifyResultParts(r *stow.ClassificationResult) []string {
+	var parts []string
+	if r.Adopted > 0 {
+		parts = append(parts, fmt.Sprintf("%d adopted", r.Adopted))
+	}
+	if r.Added > 0 {
+		parts = append(parts, fmt.Sprintf("%d added", r.Added))
+	}
+	if r.Tracked > 0 {
+		parts = append(parts, fmt.Sprintf("%d tracked", r.Tracked))
+	}
+	if r.Foreign > 0 {
+		parts = append(parts, fmt.Sprintf("%d foreign", r.Foreign))
+	}
+	if len(r.Failures) > 0 {
+		parts = append(parts, fmt.Sprintf("%d failed", len(r.Failures)))
+	}
+	return parts
 }
 
 func countLinked(files []stow.FileEntry) (linked, total int) {

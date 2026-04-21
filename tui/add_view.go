@@ -217,17 +217,17 @@ func renderAddStep0(m Model) string {
 			styledName = textStyle.Render(name)
 		}
 
-		if m.browserSelected[item.path] || (item.isDir && m.browserSelected[item.path]) {
+		if m.browserSelected[item.path] {
 			icon = successStyle.Render(icon)
 		}
 
-		line := fmt.Sprintf("  %s%s %s", indent, icon, styledName)
-		bw := bodyWidth(m.width)
+		cursor := " "
 		if i == m.browserCursor {
-			line = selectedRowStyle.Width(bw).Render(line)
-		} else {
-			line = lipgloss.NewStyle().Width(bw).Render(line)
+			cursor = accentStyle.Render("▌")
 		}
+		line := fmt.Sprintf(" %s%s%s %s", indent, cursor, icon, styledName)
+		bw := bodyWidth(m.width)
+		line = lipgloss.NewStyle().Width(bw).Render(line)
 		b.WriteString(line)
 		b.WriteString("\n")
 	}
@@ -441,11 +441,18 @@ func renderPreviewFileRow(cf stow.ClassifiedFile, toggled bool, pkgName string, 
 		styledName = dimStyle.Render(name)
 	}
 
-	line := fmt.Sprintf("  %s%-24s  %s", checkbox, styledName, detail)
-
+	prefix := "  "
 	if selected && !isManaged {
-		return selectedRowStyle.Width(bw).Render(line)
+		prefix = accentStyle.Render("▌ ")
 	}
+
+	nameW := lipgloss.Width(styledName)
+	namePad := ""
+	if nameW < 24 {
+		namePad = strings.Repeat(" ", 24-nameW)
+	}
+	line := fmt.Sprintf("%s%s%s%s  %s", prefix, checkbox, styledName, namePad, detail)
+
 	return lipgloss.NewStyle().Width(bw).Render(line)
 }
 
@@ -711,7 +718,6 @@ func (m *Model) browserAdjustScroll() {
 }
 
 func (m *Model) previewAdjustScroll() {
-	rows := m.previewRows
 	contentHeight := m.height - 10
 	if contentHeight < 4 {
 		contentHeight = 4
@@ -726,7 +732,6 @@ func (m *Model) previewAdjustScroll() {
 	if m.previewScroll < 0 {
 		m.previewScroll = 0
 	}
-	_ = rows
 }
 
 // ─── Update handlers ──────────────────────────────────────────────────────────
