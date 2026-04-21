@@ -483,7 +483,7 @@ func renderFileDetail(m Model, width, maxLines int) string {
 func renderActivityPanel(m Model) string {
 	var body string
 	if len(m.recentCommits) == 0 {
-		body = dimStyle.Render("No commits yet — press ") + kbd("S", "sync") + dimStyle.Render(" to commit changes")
+		body = dimStyle.Render(" No commits yet — press ") + kbd("S", "sync") + dimStyle.Render(" to commit changes")
 	} else {
 		var lines []string
 		n := 3
