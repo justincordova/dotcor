@@ -348,3 +348,81 @@ func TestLink_AutoDetectedFiles_CopiesToRepoAndLinks(t *testing.T) {
 	require.NoError(t, readErr)
 	assert.False(t, filepath.IsAbs(linkTarget))
 }
+
+// TestLink_ForeignSymlink_SurfacedNotAdopted pins the fix for issue #27:
+// a $HOME entry that is a symlink pointing outside the repo must be reported
+// in result.Foreign and left untouched. The previous behavior silently copied
+// the linked target into the repo.
+func TestLink_ForeignSymlink_SurfacedNotAdopted(t *testing.T) {
+	tmpDir := t.TempDir()
+	repoDir := filepath.Join(tmpDir, "repo")
+	homeDir := filepath.Join(tmpDir, "home")
+	externalDir := filepath.Join(tmpDir, "external")
+	pkgDir := filepath.Join(repoDir, "nvim")
+	require.NoError(t, os.MkdirAll(filepath.Join(pkgDir, ".config", "nvim"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(homeDir, ".config", "nvim", "lua", "plugins"), 0755))
+	require.NoError(t, os.MkdirAll(externalDir, 0755))
+
+	// Repo has one file so the package has a managed root to scan from.
+	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".config", "nvim", "init.lua"), []byte("init"), 0644))
+
+	// $HOME has a symlink pointing OUTSIDE the repo — this is the foreign case.
+	externalFile := filepath.Join(externalDir, "telescope.lua")
+	require.NoError(t, os.WriteFile(externalFile, []byte("external"), 0644))
+	foreignLink := filepath.Join(homeDir, ".config", "nvim", "lua", "plugins", "telescope.lua")
+	require.NoError(t, os.Symlink(externalFile, foreignLink))
+
+	result, err := Link(repoDir, homeDir, "nvim")
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Linked, "init.lua should still link")
+	assert.Contains(t, result.Foreign, filepath.Join(".config", "nvim", "lua", "plugins", "telescope.lua"),
+		"foreign symlink should be reported in Foreign")
+
+	// Critical: the foreign symlink must still point at the external file,
+	// untouched. No silent adoption into the repo.
+	target, readErr := os.Readlink(foreignLink)
+	require.NoError(t, readErr)
+	assert.Equal(t, externalFile, target, "foreign symlink should be left alone")
+
+	// And nothing should have been copied into the repo.
+	_, statErr := os.Stat(filepath.Join(pkgDir, ".config", "nvim", "lua", "plugins", "telescope.lua"))
+	assert.True(t, os.IsNotExist(statErr), "foreign symlink target should not be copied into repo")
+}
+
+// TestLinkWithBackup_RejectsForeignSymlinkConflict ensures LinkWithBackup never
+// follows a symlink during conflict resolution — otherwise it would read the
+// external file and adopt it unchallenged.
+func TestLinkWithBackup_RejectsForeignSymlinkConflict(t *testing.T) {
+	tmpDir := t.TempDir()
+	repoDir := filepath.Join(tmpDir, "repo")
+	homeDir := filepath.Join(tmpDir, "home")
+	backupDir := filepath.Join(tmpDir, "backups")
+	externalDir := filepath.Join(tmpDir, "external")
+	pkgDir := filepath.Join(repoDir, "zsh")
+	require.NoError(t, os.MkdirAll(pkgDir, 0755))
+	require.NoError(t, os.MkdirAll(homeDir, 0755))
+	require.NoError(t, os.MkdirAll(externalDir, 0755))
+
+	// Repo version.
+	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".zshrc"), []byte("repo"), 0644))
+
+	// $HOME has a symlink to an external file (foreign). This is a different
+	// conflict than the normal "regular file in $HOME" case that LinkWithBackup
+	// is designed to resolve.
+	externalFile := filepath.Join(externalDir, "zshrc-original")
+	require.NoError(t, os.WriteFile(externalFile, []byte("external"), 0600))
+	require.NoError(t, os.Symlink(externalFile, filepath.Join(homeDir, ".zshrc")))
+
+	// Pre-seed the conflicts list as it would arrive from a prior Link call
+	// (foreign symlinks were classified as Conflicts before the fix). The
+	// current Link surfaces them via Foreign, but LinkWithBackup must also
+	// defend itself when handed such a list directly.
+	_, err := LinkWithBackup(repoDir, homeDir, "zsh", backupDir)
+	require.NoError(t, err)
+
+	// External file must be untouched.
+	data, readErr := os.ReadFile(externalFile)
+	require.NoError(t, readErr)
+	assert.Equal(t, "external", string(data), "external target must not be rewritten")
+}

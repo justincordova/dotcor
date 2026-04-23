@@ -37,6 +37,10 @@ type LinkResult struct {
 	Linked    int
 	Skipped   int
 	Conflicts []string
+	// Foreign lists $HOME paths that are symlinks pointing outside repoDir.
+	// Link deliberately does not adopt these — the user must confirm via the
+	// explicit Add/Adopt flow so external symlinks are never silently rewritten.
+	Foreign []string
 }
 
 type UnlinkResult struct {

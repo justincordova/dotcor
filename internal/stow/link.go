@@ -97,7 +97,10 @@ func linkAutoDetectedFile(result *LinkResult, pkgDir, homeDir string, f FileEntr
 				return
 			}
 		}
-		result.Conflicts = append(result.Conflicts, f.RelPath)
+		// Foreign symlink in $HOME — do NOT silently rewrite it. The user
+		// must confirm via the explicit Add/Adopt flow (the `o` key), where
+		// the actual owner of the target is visible in the preview.
+		result.Foreign = append(result.Foreign, f.RelPath)
 		result.Skipped++
 		return
 	}
@@ -223,17 +226,28 @@ func LinkWithBackup(repoDir, homeDir, packageName, backupDir string) (*LinkResul
 		targetPath := filepath.Join(homeDir, relPath)
 		repoPath := filepath.Join(pkgDir, relPath)
 
+		// Never follow a symlink at the conflict target — doing so would
+		// read+copy whatever is on the other end, silently adopting a
+		// foreign file. Foreign symlinks should be handled by the explicit
+		// Add/Adopt flow, not by conflict resolution during stow.
+		srcInfo, statErr := os.Lstat(targetPath)
+		if statErr != nil {
+			remaining = append(remaining, relPath)
+			continue
+		}
+		if srcInfo.Mode()&os.ModeSymlink != 0 {
+			result.Foreign = append(result.Foreign, relPath)
+			remaining = append(remaining, relPath)
+			continue
+		}
+
 		srcData, readErr := os.ReadFile(targetPath)
 		if readErr != nil {
 			remaining = append(remaining, relPath)
 			continue
 		}
 
-		srcInfo, statErr := os.Lstat(targetPath)
-		srcPerm := os.FileMode(0644)
-		if statErr == nil {
-			srcPerm = srcInfo.Mode().Perm()
-		}
+		srcPerm := srcInfo.Mode().Perm()
 
 		backupPath := filepath.Join(backupDir, ts, relPath)
 		if mkdirErr := os.MkdirAll(filepath.Dir(backupPath), 0755); mkdirErr != nil {

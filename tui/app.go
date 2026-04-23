@@ -1016,6 +1016,9 @@ func (m Model) stowPackage() tea.Cmd {
 		if result.Skipped > 0 {
 			msg += fmt.Sprintf(", %d skipped", result.Skipped)
 		}
+		if n := len(result.Foreign); n > 0 {
+			msg += fmt.Sprintf(", %d foreign — use 'o' to adopt", n)
+		}
 		msg += ")"
 		return stowResultMsg{msg: msg}
 	}
@@ -1090,7 +1093,7 @@ func (m Model) stowAllPackages() tea.Cmd {
 			return stowResultMsg{msg: "All packages already stowed"}
 		}
 
-		var totalLinked, totalSkipped int
+		var totalLinked, totalSkipped, totalForeign int
 		var stowedNames []string
 		for _, pkg := range toStow {
 			result, err := stow.Link(repoDir, homeDir, pkg.Name)
@@ -1102,12 +1105,16 @@ func (m Model) stowAllPackages() tea.Cmd {
 			}
 			totalLinked += result.Linked
 			totalSkipped += result.Skipped
+			totalForeign += len(result.Foreign)
 			stowedNames = append(stowedNames, pkg.Name)
 		}
 
 		msg := fmt.Sprintf("Stowed %d packages (%d linked", len(stowedNames), totalLinked)
 		if totalSkipped > 0 {
 			msg += fmt.Sprintf(", %d skipped", totalSkipped)
+		}
+		if totalForeign > 0 {
+			msg += fmt.Sprintf(", %d foreign — use 'o' to adopt", totalForeign)
 		}
 		msg += ")"
 		return stowResultMsg{msg: msg}
