@@ -143,6 +143,10 @@ func (m Model) updateHistory(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case msg.String() == "D":
 			if m.selectedCommit < len(m.commits) {
+				// Switch to DiffView before the diff content arrives so the
+				// user sees the transition immediately. The diffMsg handler
+				// populates the viewport without changing views.
+				m.activeView = DiffView
 				return m, m.diffFromCommit(m.commits[m.selectedCommit].Hash)
 			}
 		}
