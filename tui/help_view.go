@@ -29,6 +29,7 @@ func viewHelp(m Model) string {
 				formatBinding("u", "unstow package"),
 				formatBinding("A", "stow all"),
 				formatBinding("a", "add file (browser)"),
+				formatBinding("o", "adopt foreign symlinks"),
 				formatBinding("r", "remove (context-aware)"),
 			},
 		},
