@@ -1132,8 +1132,14 @@ func (m Model) deletePackage() tea.Cmd {
 		pkgDir := filepath.Join(repoDir, pkg.Name)
 		ts := time.Now().Format("2006-01-02_15-04-05")
 		backupPath := filepath.Join(backupDir, "pre-delete-"+ts, pkg.Name)
-		_ = os.MkdirAll(filepath.Dir(backupPath), 0755)
-		_ = copyDir(pkgDir, backupPath)
+		if err := os.MkdirAll(filepath.Dir(backupPath), 0755); err != nil {
+			return stowResultMsg{err: fmt.Errorf("creating backup directory: %w", err)}
+		}
+		if err := copyDir(pkgDir, backupPath); err != nil {
+			// Clean partial backup so the user isn't left with a misleading recovery path.
+			_ = os.RemoveAll(backupPath)
+			return stowResultMsg{err: fmt.Errorf("backing up package before delete: %w", err)}
+		}
 
 		if err := os.RemoveAll(pkgDir); err != nil {
 			return stowResultMsg{err: fmt.Errorf("removing package directory: %w", err)}
@@ -1141,7 +1147,7 @@ func (m Model) deletePackage() tea.Cmd {
 		if logger != nil {
 			logger.Info("deleted package", "name", pkg.Name, "unlinked", result.Unlinked, "backup", backupPath)
 		}
-		return stowResultMsg{msg: fmt.Sprintf("Deleted %s (%d unlinked, backup saved)", pkg.Name, result.Unlinked)}
+		return stowResultMsg{msg: fmt.Sprintf("Deleted %s (%d unlinked, backup: %s)", pkg.Name, result.Unlinked, backupPath)}
 	}
 }
 func copyDir(src, dst string) error {
