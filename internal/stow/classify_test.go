@@ -30,7 +30,7 @@ func TestClassifyFiles_Add_FileDirectlyInHome(t *testing.T) {
 	filePath := filepath.Join(homeDir, ".bashrc")
 	writeFile(t, filePath, "bash content")
 
-	plan, err := ClassifyFiles([]string{filePath}, repoDir, homeDir)
+	plan, err := ClassifyFiles([]string{filePath}, repoDir, homeDir, nil)
 
 	require.NoError(t, err)
 	require.Len(t, plan.Packages, 1)
@@ -54,7 +54,7 @@ func TestClassifyFiles_Adopt_HomeSymlinkPointsAtFile(t *testing.T) {
 	homeLink := filepath.Join(homeDir, ".zshrc")
 	require.NoError(t, os.Symlink(filePath, homeLink))
 
-	plan, err := ClassifyFiles([]string{filePath}, repoDir, homeDir)
+	plan, err := ClassifyFiles([]string{filePath}, repoDir, homeDir, nil)
 
 	require.NoError(t, err)
 	require.Len(t, plan.Packages, 1)
@@ -76,7 +76,7 @@ func TestClassifyFiles_Track_RegularFileInFolder_NoHomeLink(t *testing.T) {
 	filePath := filepath.Join(srcDir, "README.md")
 	writeFile(t, filePath, "readme")
 
-	plan, err := ClassifyFiles([]string{filePath}, repoDir, homeDir)
+	plan, err := ClassifyFiles([]string{filePath}, repoDir, homeDir, nil)
 
 	require.NoError(t, err)
 	require.Len(t, plan.Packages, 1)
@@ -98,7 +98,7 @@ func TestClassifyFiles_Managed_SymlinkIntoRepo(t *testing.T) {
 	require.NoError(t, os.Symlink(repoFile, homeLink))
 
 	// The home symlink is the "file" we're classifying.
-	plan, err := ClassifyFiles([]string{homeLink}, repoDir, homeDir)
+	plan, err := ClassifyFiles([]string{homeLink}, repoDir, homeDir, nil)
 
 	require.NoError(t, err)
 	require.Len(t, plan.Packages, 1)
@@ -119,7 +119,7 @@ func TestClassifyFiles_Foreign_SymlinkOutsideRepo(t *testing.T) {
 	homeLink := filepath.Join(homeDir, "work.conf")
 	require.NoError(t, os.Symlink(externalFile, homeLink))
 
-	plan, err := ClassifyFiles([]string{homeLink}, repoDir, homeDir)
+	plan, err := ClassifyFiles([]string{homeLink}, repoDir, homeDir, nil)
 
 	require.NoError(t, err)
 	require.Len(t, plan.Packages, 1)
@@ -145,7 +145,7 @@ func TestClassifyFiles_StowParentSplit(t *testing.T) {
 	writeFile(t, filepath.Join(dotfiles, "git", ".gitconfig"), "git")
 	writeFile(t, filepath.Join(dotfiles, "nvim", ".config", "nvim", "init.lua"), "nvim")
 
-	plan, err := ClassifyFiles([]string{dotfiles}, repoDir, homeDir)
+	plan, err := ClassifyFiles([]string{dotfiles}, repoDir, homeDir, nil)
 
 	require.NoError(t, err)
 	assert.Len(t, plan.Packages, 3)
@@ -172,7 +172,7 @@ func TestClassifyFiles_MixedSelection_FolderAndLooseHomeFile(t *testing.T) {
 	homeFile := filepath.Join(homeDir, ".bashrc")
 	writeFile(t, homeFile, "bash")
 
-	plan, err := ClassifyFiles([]string{srcDir, homeFile}, repoDir, homeDir)
+	plan, err := ClassifyFiles([]string{srcDir, homeFile}, repoDir, homeDir, nil)
 
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(plan.Packages), 1)
@@ -205,7 +205,7 @@ func TestClassifyFiles_NestedReAdd_ManagedFilesAppear(t *testing.T) {
 	managedLink := filepath.Join(parentDir, "managed.txt")
 	require.NoError(t, os.Symlink(repoFile, managedLink))
 
-	plan, err := ClassifyFiles([]string{parentDir}, repoDir, homeDir)
+	plan, err := ClassifyFiles([]string{parentDir}, repoDir, homeDir, nil)
 
 	require.NoError(t, err)
 	require.Len(t, plan.Packages, 1)
@@ -231,7 +231,7 @@ func TestClassifyFiles_PackageMerge_SameNameCollides(t *testing.T) {
 	writeFile(t, file1, "bashrc")
 	writeFile(t, file2, "bash_profile")
 
-	plan, err := ClassifyFiles([]string{file1, file2}, repoDir, homeDir)
+	plan, err := ClassifyFiles([]string{file1, file2}, repoDir, homeDir, nil)
 
 	require.NoError(t, err)
 	// Both files should end up in the same "home" package.
@@ -252,7 +252,7 @@ func TestClassifyFiles_ForeignDefault_IsOff(t *testing.T) {
 	homeLink := filepath.Join(homeDir, "work.conf")
 	require.NoError(t, os.Symlink(externalFile, homeLink))
 
-	plan, err := ClassifyFiles([]string{homeLink}, repoDir, homeDir)
+	plan, err := ClassifyFiles([]string{homeLink}, repoDir, homeDir, nil)
 
 	require.NoError(t, err)
 	require.Len(t, plan.Packages[0].Files, 1)
@@ -281,7 +281,7 @@ func TestClassifyFiles_SymlinkedDir_NotFollowed(t *testing.T) {
 	writeFile(t, filepath.Join(walkRoot, "real.txt"), "real")
 	require.NoError(t, os.Symlink(realDir, filepath.Join(walkRoot, "linked_dir")))
 
-	plan, err := ClassifyFiles([]string{walkRoot}, repoDir, homeDir)
+	plan, err := ClassifyFiles([]string{walkRoot}, repoDir, homeDir, nil)
 
 	require.NoError(t, err)
 	require.Len(t, plan.Packages, 1)
@@ -303,7 +303,7 @@ func TestExecuteClassification_Add_HappyPath(t *testing.T) {
 	srcPath := filepath.Join(homeDir, ".bashrc")
 	writeFile(t, srcPath, "bash content")
 
-	plan, err := ClassifyFiles([]string{srcPath}, repoDir, homeDir)
+	plan, err := ClassifyFiles([]string{srcPath}, repoDir, homeDir, nil)
 	require.NoError(t, err)
 
 	toggles := BuildDefaultToggles(plan)
@@ -339,7 +339,7 @@ func TestExecuteClassification_Adopt_HappyPath(t *testing.T) {
 	homeLink := filepath.Join(homeDir, ".zshrc")
 	require.NoError(t, os.Symlink(filePath, homeLink))
 
-	plan, err := ClassifyFiles([]string{filePath}, repoDir, homeDir)
+	plan, err := ClassifyFiles([]string{filePath}, repoDir, homeDir, nil)
 	require.NoError(t, err)
 
 	require.Len(t, plan.Packages[0].Files, 1)
@@ -374,7 +374,7 @@ func TestExecuteClassification_Track_HappyPath(t *testing.T) {
 	filePath := filepath.Join(srcDir, "README.md")
 	writeFile(t, filePath, "readme content")
 
-	plan, err := ClassifyFiles([]string{filePath}, repoDir, homeDir)
+	plan, err := ClassifyFiles([]string{filePath}, repoDir, homeDir, nil)
 	require.NoError(t, err)
 
 	require.Len(t, plan.Packages[0].Files, 1)
@@ -410,7 +410,7 @@ func TestExecuteClassification_Foreign_ToggleOnPath(t *testing.T) {
 	homeLink := filepath.Join(homeDir, "work.conf")
 	require.NoError(t, os.Symlink(externalFile, homeLink))
 
-	plan, err := ClassifyFiles([]string{homeLink}, repoDir, homeDir)
+	plan, err := ClassifyFiles([]string{homeLink}, repoDir, homeDir, nil)
 	require.NoError(t, err)
 
 	require.Len(t, plan.Packages[0].Files, 1)
@@ -447,7 +447,7 @@ func TestExecuteClassification_Managed_NeverTouched(t *testing.T) {
 	homeLink := filepath.Join(homeDir, ".zshrc")
 	require.NoError(t, os.Symlink(repoFile, homeLink))
 
-	plan, err := ClassifyFiles([]string{homeLink}, repoDir, homeDir)
+	plan, err := ClassifyFiles([]string{homeLink}, repoDir, homeDir, nil)
 	require.NoError(t, err)
 
 	require.Len(t, plan.Packages[0].Files, 1)
@@ -486,7 +486,7 @@ func TestExecuteClassification_Rollback_PartialFailureContinues(t *testing.T) {
 	file2 := filepath.Join(srcDir, "locked.txt")
 	writeFile(t, file2, "locked")
 
-	plan, err := ClassifyFiles([]string{file1, file2}, repoDir, homeDir)
+	plan, err := ClassifyFiles([]string{file1, file2}, repoDir, homeDir, nil)
 	require.NoError(t, err)
 	require.Len(t, plan.Packages, 2)
 
@@ -538,7 +538,7 @@ func TestExecuteClassification_MultiPackage_AllExecute(t *testing.T) {
 		filepath.Join(homeDir, ".gitconfig"),
 	))
 
-	plan, err := ClassifyFiles([]string{dotfiles}, repoDir, homeDir)
+	plan, err := ClassifyFiles([]string{dotfiles}, repoDir, homeDir, nil)
 	require.NoError(t, err)
 	assert.Len(t, plan.Packages, 2)
 
@@ -548,4 +548,54 @@ func TestExecuteClassification_MultiPackage_AllExecute(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, result.Adopted)
 	assert.Empty(t, result.Failures)
+}
+
+func TestClassifyFiles_IgnorePatterns_SkipSecretsAndRecordFiltered(t *testing.T) {
+	tmpDir := t.TempDir()
+	homeDir := filepath.Join(tmpDir, "home")
+	repoDir := filepath.Join(tmpDir, "repo")
+	pkgDir := filepath.Join(tmpDir, "src", "ssh")
+	require.NoError(t, os.MkdirAll(homeDir, 0755))
+	require.NoError(t, os.MkdirAll(repoDir, 0755))
+
+	// Three files: one private key (ignored), one env file (ignored), one config (kept).
+	writeFile(t, filepath.Join(pkgDir, "id_rsa"), "PRIVATE KEY")
+	writeFile(t, filepath.Join(pkgDir, ".env"), "SECRET=42")
+	writeFile(t, filepath.Join(pkgDir, "config"), "Host example")
+
+	patterns := []string{"*.key", "id_rsa*", ".env"}
+	plan, err := ClassifyFiles([]string{pkgDir}, repoDir, homeDir, patterns)
+	require.NoError(t, err)
+
+	// Only the non-secret config file should be classified.
+	require.Len(t, plan.Packages, 1)
+	require.Len(t, plan.Packages[0].Files, 1)
+	assert.Equal(t, "config", plan.Packages[0].Files[0].RelPath)
+
+	// Both secrets should appear in Filtered with the matching pattern.
+	require.Len(t, plan.Filtered, 2)
+	byBase := make(map[string]string)
+	for _, f := range plan.Filtered {
+		byBase[filepath.Base(f.AbsPath)] = f.Pattern
+	}
+	assert.Equal(t, "id_rsa*", byBase["id_rsa"])
+	assert.Equal(t, ".env", byBase[".env"])
+}
+
+func TestClassifyFiles_IgnorePatterns_NilMeansNoFiltering(t *testing.T) {
+	tmpDir := t.TempDir()
+	homeDir := filepath.Join(tmpDir, "home")
+	repoDir := filepath.Join(tmpDir, "repo")
+	pkgDir := filepath.Join(tmpDir, "src", "ssh")
+	require.NoError(t, os.MkdirAll(homeDir, 0755))
+	require.NoError(t, os.MkdirAll(repoDir, 0755))
+
+	writeFile(t, filepath.Join(pkgDir, "id_rsa"), "PRIVATE KEY")
+
+	plan, err := ClassifyFiles([]string{pkgDir}, repoDir, homeDir, nil)
+	require.NoError(t, err)
+
+	require.Len(t, plan.Packages, 1)
+	require.Len(t, plan.Packages[0].Files, 1)
+	assert.Empty(t, plan.Filtered)
 }

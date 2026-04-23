@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/justincordova/dotcor/internal/core"
 )
 
 // Class represents how a file is classified relative to $HOME and repoDir.
@@ -80,6 +82,16 @@ type PackagePlan struct {
 // ClassificationPlan is the top-level result returned by ClassifyFiles.
 type ClassificationPlan struct {
 	Packages []PackagePlan
+	// Filtered lists files that were skipped because they matched an ignore
+	// pattern. Surfaced in the preview so the user understands why expected
+	// files are missing.
+	Filtered []FilteredFile
+}
+
+// FilteredFile records a file skipped by ignore patterns and which pattern matched.
+type FilteredFile struct {
+	AbsPath string
+	Pattern string
 }
 
 // ClassificationResult is returned by ExecuteClassification.
@@ -122,8 +134,10 @@ var classifySkipDirs = map[string]bool{
 
 // ClassifyFiles walks each selection path, classifies every file, and groups
 // results by auto-derived package. selections is a list of absolute paths
-// (files or directories) selected in the browser.
-func ClassifyFiles(selections []string, repoDir, homeDir string) (*ClassificationPlan, error) {
+// (files or directories) selected in the browser. ignorePatterns, if non-nil,
+// causes any file matching a pattern (via core.ShouldIgnore) to be recorded in
+// plan.Filtered and omitted from every package.
+func ClassifyFiles(selections []string, repoDir, homeDir string, ignorePatterns []string) (*ClassificationPlan, error) {
 	// Resolve repoDir through EvalSymlinks once to handle macOS /var→/private/var.
 	if resolved, err := filepath.EvalSymlinks(repoDir); err == nil {
 		repoDir = resolved
@@ -153,6 +167,10 @@ func ClassifyFiles(selections []string, repoDir, homeDir string) (*Classificatio
 
 		if lfi.Mode()&os.ModeSymlink != 0 {
 			// Selection itself is a symlink — classify as a single file.
+			if matched, pattern := matchIgnore(sel, ignorePatterns); matched {
+				plan.Filtered = append(plan.Filtered, FilteredFile{AbsPath: sel, Pattern: pattern})
+				continue
+			}
 			cf, err := classifyFile(sel, sel, repoDir, homeDir, homeIndex)
 			if err != nil {
 				return nil, err
@@ -163,6 +181,10 @@ func ClassifyFiles(selections []string, repoDir, homeDir string) (*Classificatio
 
 		if !lfi.IsDir() {
 			// Single regular file.
+			if matched, pattern := matchIgnore(sel, ignorePatterns); matched {
+				plan.Filtered = append(plan.Filtered, FilteredFile{AbsPath: sel, Pattern: pattern})
+				continue
+			}
 			cf, err := classifyFile(sel, sel, repoDir, homeDir, homeIndex)
 			if err != nil {
 				return nil, err
@@ -182,7 +204,7 @@ func ClassifyFiles(selections []string, repoDir, homeDir string) (*Classificatio
 					continue
 				}
 				pkgDir := filepath.Join(sel, entry.Name())
-				if err := walkAndClassify(plan, pkgIndex, pkgDir, entry.Name(), repoDir, homeDir, homeIndex); err != nil {
+				if err := walkAndClassify(plan, pkgIndex, pkgDir, entry.Name(), repoDir, homeDir, homeIndex, ignorePatterns); err != nil {
 					return nil, err
 				}
 			}
@@ -191,7 +213,7 @@ func ClassifyFiles(selections []string, repoDir, homeDir string) (*Classificatio
 
 		// Regular directory selection — derive one package name.
 		pkgName := derivePkgName(sel, homeDir)
-		if err := walkAndClassify(plan, pkgIndex, sel, pkgName, repoDir, homeDir, homeIndex); err != nil {
+		if err := walkAndClassify(plan, pkgIndex, sel, pkgName, repoDir, homeDir, homeIndex, ignorePatterns); err != nil {
 			return nil, err
 		}
 	}
@@ -326,7 +348,9 @@ func derivePkgNameForFile(absPath, homeDir string) string {
 }
 
 // walkAndClassify walks selDir and classifies every file into pkgName.
-func walkAndClassify(plan *ClassificationPlan, pkgIndex map[string]int, selDir, pkgName, repoDir, homeDir string, homeIndex map[string]string) error {
+// Files matching any pattern in ignorePatterns are recorded in plan.Filtered
+// and skipped.
+func walkAndClassify(plan *ClassificationPlan, pkgIndex map[string]int, selDir, pkgName, repoDir, homeDir string, homeIndex map[string]string, ignorePatterns []string) error {
 	return filepath.Walk(selDir, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return nil // skip unreadable entries
@@ -358,6 +382,13 @@ func walkAndClassify(plan *ClassificationPlan, pkgIndex map[string]int, selDir, 
 			}
 		}
 
+		// Respect user ignore patterns (e.g. *.key, .env, id_rsa*) so secrets
+		// never reach the repo — matches both filename and full path.
+		if matched, pattern := matchIgnore(path, ignorePatterns); matched {
+			plan.Filtered = append(plan.Filtered, FilteredFile{AbsPath: path, Pattern: pattern})
+			return nil
+		}
+
 		cf, err := classifyFileInDir(path, selDir, pkgName, repoDir, homeDir, homeIndex)
 		if err != nil {
 			return nil // skip files we can't classify
@@ -366,6 +397,15 @@ func walkAndClassify(plan *ClassificationPlan, pkgIndex map[string]int, selDir, 
 		mergeFile(plan, pkgIndex, cf)
 		return nil
 	})
+}
+
+// matchIgnore returns (true, pattern) if path matches any ignore pattern.
+// Empty/nil patterns means nothing is filtered.
+func matchIgnore(path string, patterns []string) (bool, string) {
+	if len(patterns) == 0 {
+		return false, ""
+	}
+	return core.ShouldIgnore(path, patterns)
 }
 
 // classifyFile classifies a single file (not inside a walked directory).

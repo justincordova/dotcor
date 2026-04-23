@@ -499,6 +499,9 @@ func renderPreviewCounts(plan *stow.ClassificationPlan, toggles map[string]bool)
 	if n := counts[stow.ClassManaged]; n > 0 {
 		parts = append(parts, pill(fmt.Sprintf(" managed %d ", n), colBase, colOverlay0))
 	}
+	if n := len(plan.Filtered); n > 0 {
+		parts = append(parts, pill(fmt.Sprintf(" filtered %d ", n), colBase, colRed))
+	}
 
 	active := dimStyle.Render(fmt.Sprintf("  %d active", activeCount))
 	if len(parts) == 0 {
@@ -997,7 +1000,7 @@ func (m Model) confirmBrowserSelectionAndClassify() (tea.Model, tea.Cmd) {
 	}
 
 	m.err = nil
-	return m, classifySelections(selections, m.repoDir, m.homeDir)
+	return m, classifySelections(selections, m.repoDir, m.homeDir, m.cfg.IgnorePatterns)
 }
 
 func (m Model) browserSelectAndClassify(fullPath string) (tea.Model, tea.Cmd) {
@@ -1014,7 +1017,7 @@ func (m Model) browserSelectAndClassify(fullPath string) (tea.Model, tea.Cmd) {
 	}
 
 	m.err = nil
-	return m, classifySelections([]string{fullPath}, m.repoDir, m.homeDir)
+	return m, classifySelections([]string{fullPath}, m.repoDir, m.homeDir, m.cfg.IgnorePatterns)
 }
 
 func (m *Model) toggleDirSelection(dirPath string) {
@@ -1103,9 +1106,9 @@ func selectionCount(selected map[string]bool) string {
 
 // ─── Tea commands ─────────────────────────────────────────────────────────────
 
-func classifySelections(selections []string, repoDir, homeDir string) tea.Cmd {
+func classifySelections(selections []string, repoDir, homeDir string, ignorePatterns []string) tea.Cmd {
 	return func() tea.Msg {
-		plan, err := stow.ClassifyFiles(selections, repoDir, homeDir)
+		plan, err := stow.ClassifyFiles(selections, repoDir, homeDir, ignorePatterns)
 		return classifyPlanMsg{plan: plan, err: err}
 	}
 }
