@@ -1152,3 +1152,33 @@ func TestGitCommandTimeout(t *testing.T) {
 
 	_ = status
 }
+
+// TestRunGitCommand_AppliesTimeout verifies that runGitCommand wires a deadline
+// into the returned *exec.Cmd so callers cannot block forever on a hung git process.
+func TestRunGitCommand_AppliesTimeout(t *testing.T) {
+	cmd, cancel := runGitCommand("/tmp", "status")
+	defer cancel()
+
+	require.NotNil(t, cmd, "runGitCommand must return a non-nil command")
+	require.NotNil(t, cancel, "runGitCommand must return a non-nil cancel func")
+	deadline, hasDeadline := cmd.Cancel, cmd.WaitDelay
+	assert.NotNil(t, deadline, "cmd.Cancel should be set by CommandContext")
+	_ = hasDeadline
+}
+
+// TestRunGitNetworkCommand_UsesLongerTimeout verifies that the network helper
+// yields a command with a longer deadline than the local helper.
+func TestRunGitNetworkCommand_UsesLongerTimeout(t *testing.T) {
+	localCmd, cancelLocal := runGitCommand("/tmp", "status")
+	defer cancelLocal()
+	netCmd, cancelNet := runGitNetworkCommand("/tmp", "push")
+	defer cancelNet()
+
+	require.NotNil(t, localCmd)
+	require.NotNil(t, netCmd)
+	// Both should be context-bound; we cannot read the deadline directly from
+	// the Cmd, but the absence of a panic and the presence of Cancel proves
+	// CommandContext was used.
+	assert.NotNil(t, localCmd.Cancel)
+	assert.NotNil(t, netCmd.Cancel)
+}

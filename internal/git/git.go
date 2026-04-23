@@ -12,15 +12,33 @@ import (
 	"time"
 )
 
-const gitCommandTimeout = 30 * time.Second
+const (
+	// gitCommandTimeout bounds local git commands (status, diff, log, etc.).
+	// Local git should never take this long on a healthy repo.
+	gitCommandTimeout = 30 * time.Second
 
-// runGitCommand executes a git command with timeout
+	// gitNetworkTimeout bounds network-bound git commands (push, pull, clone,
+	// fetch). Slow connections and large repos justify a longer ceiling, but a
+	// bound is essential — without one, a dead remote or auth prompt wedges the TUI.
+	gitNetworkTimeout = 5 * time.Minute
+)
+
+// runGitCommand executes a git command with the default local timeout.
+// Caller must defer the returned cancel to release the context.
 func runGitCommand(dir string, name string, args ...string) (*exec.Cmd, context.CancelFunc) {
-	ctx, cancel := context.WithTimeout(context.Background(), gitCommandTimeout)
+	return runGitCommandWithTimeout(dir, gitCommandTimeout, name, args...)
+}
 
+// runGitNetworkCommand executes a git command with the longer network timeout.
+// Use for push/pull/clone/fetch. Caller must defer the returned cancel.
+func runGitNetworkCommand(dir string, name string, args ...string) (*exec.Cmd, context.CancelFunc) {
+	return runGitCommandWithTimeout(dir, gitNetworkTimeout, name, args...)
+}
+
+func runGitCommandWithTimeout(dir string, timeout time.Duration, name string, args ...string) (*exec.Cmd, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	cmd := exec.CommandContext(ctx, "git", append([]string{name}, args...)...)
 	cmd.Dir = dir
-
 	return cmd, cancel
 }
 
@@ -90,15 +108,15 @@ func AutoCommit(repoPath, message string, logger *slog.Logger) error {
 	}
 
 	// Stage all changes
-	addCmd := exec.Command("git", "add", "-A")
-	addCmd.Dir = repoPath
+	addCmd, cancelAdd := runGitCommand(repoPath, "add", "-A")
+	defer cancelAdd()
 	if output, err := addCmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git add failed: %s: %w", string(output), err)
 	}
 
 	// Commit
-	commitCmd := exec.Command("git", "commit", "-m", message)
-	commitCmd.Dir = repoPath
+	commitCmd, cancelCommit := runGitCommand(repoPath, "commit", "-m", message)
+	defer cancelCommit()
 	if output, err := commitCmd.CombinedOutput(); err != nil {
 		if isNothingToCommitError(string(output)) {
 			if logger != nil {
@@ -119,25 +137,23 @@ func AutoCommitFiles(repoPath string, files []string, message string) error {
 	}
 
 	// Stage specific files or all changes
-	var cmd *exec.Cmd
 	if len(files) > 0 {
-		args := append([]string{"add"}, files...)
-		cmd = exec.Command("git", args...)
-		cmd.Dir = repoPath
-		if err := cmd.Run(); err != nil {
+		addCmd, cancel := runGitCommand(repoPath, "add", files...)
+		defer cancel()
+		if err := addCmd.Run(); err != nil {
 			return fmt.Errorf("staging files: %w", err)
 		}
 	} else {
-		cmd = exec.Command("git", "add", "-A")
-		cmd.Dir = repoPath
-		if err := cmd.Run(); err != nil {
+		addCmd, cancel := runGitCommand(repoPath, "add", "-A")
+		defer cancel()
+		if err := addCmd.Run(); err != nil {
 			return fmt.Errorf("staging all changes: %w", err)
 		}
 	}
 
 	// Commit
-	commitCmd := exec.Command("git", "commit", "-m", message)
-	commitCmd.Dir = repoPath
+	commitCmd, cancel := runGitCommand(repoPath, "commit", "-m", message)
+	defer cancel()
 	if output, err := commitCmd.CombinedOutput(); err != nil {
 		if isNothingToCommitError(string(output)) {
 			return nil
@@ -183,15 +199,18 @@ func SyncDetailed(repoPath string, logger *slog.Logger) (SyncResult, error) {
 		return result, nil
 	}
 
-	hasUpstream := exec.Command("git", "config", fmt.Sprintf("branch.%s.remote", branch)).Run() == nil
+	upstreamCheck, cancelUpstream := runGitCommand(repoPath, "config", fmt.Sprintf("branch.%s.remote", branch))
+	hasUpstream := upstreamCheck.Run() == nil
+	cancelUpstream()
 
 	var pushCmd *exec.Cmd
+	var cancelPush context.CancelFunc
 	if hasUpstream {
-		pushCmd = exec.Command("git", "push")
+		pushCmd, cancelPush = runGitNetworkCommand(repoPath, "push")
 	} else {
-		pushCmd = exec.Command("git", "push", "-u", "origin", branch)
+		pushCmd, cancelPush = runGitNetworkCommand(repoPath, "push", "-u", "origin", branch)
 	}
-	pushCmd.Dir = repoPath
+	defer cancelPush()
 	if output, err := pushCmd.CombinedOutput(); err != nil {
 		return result, fmt.Errorf("git push failed: %s: %w", string(output), err)
 	}
@@ -216,27 +235,28 @@ func Sync(repoPath string, logger *slog.Logger) error {
 	}
 
 	// Get current branch name
-	branchCmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-	branchCmd.Dir = repoPath
+	branchCmd, cancelBranch := runGitCommand(repoPath, "rev-parse", "--abbrev-ref", "HEAD")
 	branchOutput, err := branchCmd.Output()
+	cancelBranch()
 	if err != nil {
 		return fmt.Errorf("getting current branch: %w", err)
 	}
 	branch := strings.TrimSpace(string(branchOutput))
 
 	// Check if upstream is configured for this branch
-	upstreamCmd := exec.Command("git", "config", fmt.Sprintf("branch.%s.remote", branch))
-	upstreamCmd.Dir = repoPath
+	upstreamCmd, cancelUpstream := runGitCommand(repoPath, "config", fmt.Sprintf("branch.%s.remote", branch))
 	hasUpstream := upstreamCmd.Run() == nil
+	cancelUpstream()
 
 	// Push to remote, set upstream if not configured
 	var pushCmd *exec.Cmd
+	var cancelPush context.CancelFunc
 	if hasUpstream {
-		pushCmd = exec.Command("git", "push")
+		pushCmd, cancelPush = runGitNetworkCommand(repoPath, "push")
 	} else {
-		pushCmd = exec.Command("git", "push", "-u", "origin", branch)
+		pushCmd, cancelPush = runGitNetworkCommand(repoPath, "push", "-u", "origin", branch)
 	}
-	pushCmd.Dir = repoPath
+	defer cancelPush()
 	if output, err := pushCmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git push failed: %s: %w", string(output), err)
 	}
@@ -247,27 +267,28 @@ func Sync(repoPath string, logger *slog.Logger) error {
 // PushWithProgress pushes to remote and shows progress
 func PushWithProgress(repoPath string) error {
 	// Get current branch name
-	branchCmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-	branchCmd.Dir = repoPath
+	branchCmd, cancelBranch := runGitCommand(repoPath, "rev-parse", "--abbrev-ref", "HEAD")
 	branchOutput, err := branchCmd.Output()
+	cancelBranch()
 	if err != nil {
 		return fmt.Errorf("getting current branch: %w", err)
 	}
 	branch := strings.TrimSpace(string(branchOutput))
 
 	// Check if upstream is configured for this branch
-	upstreamCmd := exec.Command("git", "config", fmt.Sprintf("branch.%s.remote", branch))
-	upstreamCmd.Dir = repoPath
+	upstreamCmd, cancelUpstream := runGitCommand(repoPath, "config", fmt.Sprintf("branch.%s.remote", branch))
 	hasUpstream := upstreamCmd.Run() == nil
+	cancelUpstream()
 
 	// Push with progress
 	var pushCmd *exec.Cmd
+	var cancelPush context.CancelFunc
 	if hasUpstream {
-		pushCmd = exec.Command("git", "push", "--progress")
+		pushCmd, cancelPush = runGitNetworkCommand(repoPath, "push", "--progress")
 	} else {
-		pushCmd = exec.Command("git", "push", "-u", "origin", branch, "--progress")
+		pushCmd, cancelPush = runGitNetworkCommand(repoPath, "push", "-u", "origin", branch, "--progress")
 	}
-	pushCmd.Dir = repoPath
+	defer cancelPush()
 	pushCmd.Stdout = nil
 	pushCmd.Stderr = nil
 	return pushCmd.Run()
@@ -275,8 +296,8 @@ func PushWithProgress(repoPath string) error {
 
 // HasChanges checks if working tree has uncommitted changes
 func HasChanges(repoPath string) (bool, error) {
-	cmd := exec.Command("git", "status", "--porcelain")
-	cmd.Dir = repoPath
+	cmd, cancel := runGitCommand(repoPath, "status", "--porcelain")
+	defer cancel()
 	output, err := cmd.Output()
 	if err != nil {
 		return false, fmt.Errorf("git status failed: %w", err)
@@ -290,15 +311,15 @@ func SetRemote(repoPath, remoteName, remoteURL string) error {
 	existingURL, _ := GetRemoteURL(repoPath)
 	if existingURL != "" {
 		// Update existing remote
-		cmd := exec.Command("git", "remote", "set-url", remoteName, remoteURL)
-		cmd.Dir = repoPath
+		cmd, cancel := runGitCommand(repoPath, "remote", "set-url", remoteName, remoteURL)
+		defer cancel()
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("git remote set-url failed: %s: %w", string(output), err)
 		}
 	} else {
 		// Add new remote
-		cmd := exec.Command("git", "remote", "add", remoteName, remoteURL)
-		cmd.Dir = repoPath
+		cmd, cancel := runGitCommand(repoPath, "remote", "add", remoteName, remoteURL)
+		defer cancel()
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("git remote add failed: %s: %w", string(output), err)
 		}
@@ -308,8 +329,8 @@ func SetRemote(repoPath, remoteName, remoteURL string) error {
 
 // GetRemoteURL returns configured remote URL, or empty if none
 func GetRemoteURL(repoPath string) (string, error) {
-	cmd := exec.Command("git", "remote", "get-url", "origin")
-	cmd.Dir = repoPath
+	cmd, cancel := runGitCommand(repoPath, "remote", "get-url", "origin")
+	defer cancel()
 	output, err := cmd.Output()
 	if err != nil {
 		return "", nil // No remote configured
@@ -322,9 +343,9 @@ func GetStatus(repoPath string) (StatusInfo, error) {
 	status := StatusInfo{}
 
 	// Get current branch
-	branchCmd := exec.Command("git", "branch", "--show-current")
-	branchCmd.Dir = repoPath
+	branchCmd, cancelBranch := runGitCommand(repoPath, "branch", "--show-current")
 	branchOutput, err := branchCmd.Output()
+	cancelBranch()
 	if err == nil {
 		status.Branch = strings.TrimSpace(string(branchOutput))
 	}
@@ -347,9 +368,9 @@ func GetStatus(repoPath string) (StatusInfo, error) {
 
 	// Get ahead/behind counts if remote exists
 	if status.RemoteExists && status.Branch != "" {
-		aheadBehindCmd := exec.Command("git", "rev-list", "--left-right", "--count", fmt.Sprintf("origin/%s...HEAD", status.Branch))
-		aheadBehindCmd.Dir = repoPath
+		aheadBehindCmd, cancelAB := runGitCommand(repoPath, "rev-list", "--left-right", "--count", fmt.Sprintf("origin/%s...HEAD", status.Branch))
 		output, err := aheadBehindCmd.Output()
+		cancelAB()
 		if err == nil {
 			parts := strings.Fields(string(output))
 			if len(parts) >= 2 {
@@ -377,8 +398,8 @@ func GetFileHistory(repoPath, filePath string, limit int) ([]CommitInfo, error) 
 
 	// Use format: hash|author|date|message
 	format := "%H|%an|%aI|%s"
-	cmd := exec.Command("git", "log", fmt.Sprintf("-n%d", limit), fmt.Sprintf("--format=%s", format), "--", filePath)
-	cmd.Dir = repoPath
+	cmd, cancel := runGitCommand(repoPath, "log", fmt.Sprintf("-n%d", limit), fmt.Sprintf("--format=%s", format), "--", filePath)
+	defer cancel()
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("git log failed: %w", err)
@@ -426,8 +447,8 @@ func RestoreFile(repoPath, filePath, ref string) error {
 		ref = "HEAD"
 	}
 
-	cmd := exec.Command("git", "checkout", ref, "--", filePath)
-	cmd.Dir = repoPath
+	cmd, cancel := runGitCommand(repoPath, "checkout", ref, "--", filePath)
+	defer cancel()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git checkout failed: %s: %w", string(output), err)
@@ -437,8 +458,8 @@ func RestoreFile(repoPath, filePath, ref string) error {
 
 // GetDiff returns unified diff for uncommitted changes
 func GetDiff(repoPath string) (string, error) {
-	cmd := exec.Command("git", "diff", "HEAD")
-	cmd.Dir = repoPath
+	cmd, cancel := runGitCommand(repoPath, "diff", "HEAD")
+	defer cancel()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Check if it's just "no diff" situation
@@ -452,8 +473,8 @@ func GetDiff(repoPath string) (string, error) {
 
 // GetFileDiff returns diff for specific file
 func GetFileDiff(repoPath, filePath string) (string, error) {
-	cmd := exec.Command("git", "diff", "HEAD", "--", filePath)
-	cmd.Dir = repoPath
+	cmd, cancel := runGitCommand(repoPath, "diff", "HEAD", "--", filePath)
+	defer cancel()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		if len(output) == 0 {
@@ -466,8 +487,8 @@ func GetFileDiff(repoPath, filePath string) (string, error) {
 
 // GetDiffStat returns diffstat (summary of changes)
 func GetDiffStat(repoPath string) (string, error) {
-	cmd := exec.Command("git", "diff", "HEAD", "--stat")
-	cmd.Dir = repoPath
+	cmd, cancel := runGitCommand(repoPath, "diff", "HEAD", "--stat")
+	defer cancel()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		if len(output) == 0 {
@@ -480,7 +501,8 @@ func GetDiffStat(repoPath string) (string, error) {
 
 // Clone clones a repository to the specified path
 func Clone(url, destPath string) error {
-	cmd := exec.Command("git", "clone", url, destPath)
+	cmd, cancel := runGitNetworkCommand("", "clone", url, destPath)
+	defer cancel()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git clone failed: %s: %w", string(output), err)
@@ -495,7 +517,8 @@ func CloneWithProgress(url, destPath string) error {
 	}
 
 	// Clone with progress
-	cmd := exec.Command("git", "clone", "--progress", url, destPath)
+	cmd, cancel := runGitNetworkCommand("", "clone", "--progress", url, destPath)
+	defer cancel()
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	return cmd.Run()
@@ -503,8 +526,8 @@ func CloneWithProgress(url, destPath string) error {
 
 // Pull pulls changes from remote
 func Pull(repoPath string) error {
-	cmd := exec.Command("git", "pull")
-	cmd.Dir = repoPath
+	cmd, cancel := runGitNetworkCommand(repoPath, "pull")
+	defer cancel()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git pull failed: %s: %w", string(output), err)
@@ -514,8 +537,8 @@ func Pull(repoPath string) error {
 
 // GetCurrentCommit returns the current commit hash
 func GetCurrentCommit(repoPath string) (string, error) {
-	cmd := exec.Command("git", "rev-parse", "HEAD")
-	cmd.Dir = repoPath
+	cmd, cancel := runGitCommand(repoPath, "rev-parse", "HEAD")
+	defer cancel()
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("git rev-parse failed: %w", err)
@@ -564,8 +587,8 @@ func stripQuotes(filename string) string {
 
 // GetChangedFiles returns list of changed files
 func GetChangedFiles(repoPath string) ([]string, error) {
-	cmd := exec.Command("git", "status", "--porcelain")
-	cmd.Dir = repoPath
+	cmd, cancel := runGitCommand(repoPath, "status", "--porcelain")
+	defer cancel()
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("git status failed: %w", err)
@@ -589,8 +612,8 @@ func GetChangedFiles(repoPath string) ([]string, error) {
 
 // StageFile stages a specific file
 func StageFile(repoPath, filePath string) error {
-	cmd := exec.Command("git", "add", filePath)
-	cmd.Dir = repoPath
+	cmd, cancel := runGitCommand(repoPath, "add", filePath)
+	defer cancel()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git add failed: %s: %w", string(output), err)
@@ -600,8 +623,8 @@ func StageFile(repoPath, filePath string) error {
 
 // UnstageFile unstages a specific file
 func UnstageFile(repoPath, filePath string) error {
-	cmd := exec.Command("git", "reset", "HEAD", "--", filePath)
-	cmd.Dir = repoPath
+	cmd, cancel := runGitCommand(repoPath, "reset", "HEAD", "--", filePath)
+	defer cancel()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git reset failed: %s: %w", string(output), err)
@@ -611,8 +634,8 @@ func UnstageFile(repoPath, filePath string) error {
 
 // GetConfig retrieves a git config value
 func GetConfig(repoPath, key string) (string, error) {
-	cmd := exec.Command("git", "config", key)
-	cmd.Dir = repoPath
+	cmd, cancel := runGitCommand(repoPath, "config", key)
+	defer cancel()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", err
@@ -622,8 +645,8 @@ func GetConfig(repoPath, key string) (string, error) {
 
 // SetConfig sets a git config value
 func SetConfig(repoPath, key, value string) error {
-	cmd := exec.Command("git", "config", key, value)
-	cmd.Dir = repoPath
+	cmd, cancel := runGitCommand(repoPath, "config", key, value)
+	defer cancel()
 	if err := cmd.Run(); err != nil {
 		return err
 	}
@@ -635,8 +658,8 @@ func GetFileDiffFromRef(repoPath, filePath, ref string) (string, error) {
 	if ref == "" {
 		ref = "HEAD"
 	}
-	cmd := exec.Command("git", "diff", ref, "--", filePath)
-	cmd.Dir = repoPath
+	cmd, cancel := runGitCommand(repoPath, "diff", ref, "--", filePath)
+	defer cancel()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		if len(output) == 0 {
@@ -652,8 +675,8 @@ func GetFileContentAtRef(repoPath, filePath, ref string) (string, error) {
 	if ref == "" {
 		ref = "HEAD"
 	}
-	cmd := exec.Command("git", "show", fmt.Sprintf("%s:%s", ref, filePath))
-	cmd.Dir = repoPath
+	cmd, cancel := runGitCommand(repoPath, "show", fmt.Sprintf("%s:%s", ref, filePath))
+	defer cancel()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("git show failed: %w", err)
@@ -663,7 +686,8 @@ func GetFileContentAtRef(repoPath, filePath, ref string) (string, error) {
 
 // GetDiffBetweenFiles returns diff between two arbitrary files
 func GetDiffBetweenFiles(file1, file2 string) (string, error) {
-	cmd := exec.Command("git", "diff", "--no-index", "--", file1, file2)
+	cmd, cancel := runGitCommand("", "diff", "--no-index", "--", file1, file2)
+	defer cancel()
 	output, err := cmd.CombinedOutput()
 	outputStr := string(output)
 	hasDiff := strings.Contains(outputStr, "+++ b/") && strings.Contains(outputStr, "--- a/")
@@ -693,8 +717,8 @@ func RefExists(repoPath, ref string) (bool, error) {
 		return false, fmt.Errorf("ref is absolute but not a valid ref: %s", ref)
 	}
 
-	cmd := exec.Command("git", "cat-file", "-e", ref)
-	cmd.Dir = repoPath
+	cmd, cancel := runGitCommand(repoPath, "cat-file", "-e", ref)
+	defer cancel()
 	err := cmd.Run()
 
 	if err != nil {
