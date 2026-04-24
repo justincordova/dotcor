@@ -54,7 +54,7 @@ A symlink-based dotfile manager with a Bubble Tea TUI and GNU Stow-style package
 
 ### Packages
 
-Top-level directories in `~/.dotcor/` are packages. Excluded: `.git`, `logs`, `backups`, `.stow-local-ignore`, dotfiles like `.dotcorrc`. Each package mirrors the target path from `$HOME`.
+Top-level directories in `~/.dotcor/` are packages. Excluded: `.git`, `logs`, `backups`, `.stow-local-ignore`, `.dotcorrc`. Stow-style dot-prefixed package names (e.g. `.ssh`, `.config`, `.gnupg`, `.aws`) are valid packages and are discovered. Each package mirrors the target path from `$HOME`.
 
 ### Symlinks
 
