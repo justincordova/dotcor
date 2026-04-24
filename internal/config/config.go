@@ -83,6 +83,15 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("parsing config file: %w", err)
 	}
 
+	// Always provide a non-nil logger. main.go overrides this with a real
+	// file-backed logger after LoadConfig returns, but several callers in
+	// internal/core (hooks, backup, templates) call cfg.Logger.X without a
+	// nil guard. Initialise to a discard logger so a partial init never
+	// panics.
+	if cfg.Logger == nil {
+		cfg.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+
 	return &cfg, nil
 }
 
@@ -95,6 +104,10 @@ func LoadConfigFromPath(path string) (*Config, error) {
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parsing config file: %w", err)
+	}
+
+	if cfg.Logger == nil {
+		cfg.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 
 	return &cfg, nil

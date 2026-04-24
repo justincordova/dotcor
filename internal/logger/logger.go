@@ -2,6 +2,7 @@ package logger
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -16,7 +17,21 @@ const (
 	maxBackups = 3
 )
 
+// New is the package's historical entry point — kept for callers that
+// don't need a close handle. Internally it delegates to NewWithCloser
+// and discards the closer, which matches the previous behaviour (the OS
+// reclaims the handle on exit).
 func New(level string, logFilePath string) *slog.Logger {
+	l, _ := NewWithCloser(level, logFilePath)
+	return l
+}
+
+// NewWithCloser builds the logger and returns the underlying file handle
+// (wrapped as an io.Closer) so callers can close it at shutdown. The
+// closer is always non-nil: when the log file couldn't be opened the
+// returned closer is a no-op so callers can always `defer closer.Close()`
+// without a nil check.
+func NewWithCloser(level string, logFilePath string) (*slog.Logger, io.Closer) {
 	var lvl charmlog.Level
 	switch level {
 	case "debug":
@@ -45,7 +60,7 @@ func New(level string, logFilePath string) *slog.Logger {
 		fmt.Fprintf(os.Stderr, "warning: failed to create log directory %s: %v\n", logDir, err)
 		return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 			Level: slog.LevelWarn,
-		}))
+		})), noopCloser{}
 	}
 
 	rotateLogIfNeeded(logFilePath)
@@ -55,7 +70,7 @@ func New(level string, logFilePath string) *slog.Logger {
 		fmt.Fprintf(os.Stderr, "warning: failed to open log file %s: %v\n", logFilePath, err)
 		return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 			Level: slog.LevelWarn,
-		}))
+		})), noopCloser{}
 	}
 
 	handler := charmlog.NewWithOptions(file, charmlog.Options{
@@ -63,8 +78,14 @@ func New(level string, logFilePath string) *slog.Logger {
 		Level:           lvl,
 	})
 
-	return slog.New(handler)
+	return slog.New(handler), file
 }
+
+// noopCloser is returned when there's no real file to close — keeps
+// callers free of nil checks.
+type noopCloser struct{}
+
+func (noopCloser) Close() error { return nil }
 
 func rotateLogIfNeeded(logPath string) {
 	info, err := os.Stat(logPath)
