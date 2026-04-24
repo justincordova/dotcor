@@ -54,17 +54,14 @@ func Adopt(repoDir, homeDir, packageName string) (*AdoptResult, error) {
 			continue
 		}
 
-		srcData, err := os.ReadFile(resolved)
+		// Cap the read so adopting a multi-GB file via the foreign-symlink
+		// path doesn't OOM the TUI. safeReadFile returns the perm too, so
+		// the explicit Stat below is unnecessary in the common path.
+		srcData, srcPerm, err := safeReadFile(resolved)
 		if err != nil {
 			result.Failures = append(result.Failures, f.RelPath)
 			result.Skipped++
 			continue
-		}
-
-		srcInfo, err := os.Stat(resolved)
-		srcPerm := os.FileMode(0644)
-		if err == nil {
-			srcPerm = srcInfo.Mode().Perm()
 		}
 
 		repoPath := filepath.Join(pkgDir, f.RelPath)

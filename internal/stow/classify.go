@@ -2,6 +2,7 @@ package stow
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -86,6 +87,10 @@ type ClassificationPlan struct {
 	// pattern. Surfaced in the preview so the user understands why expected
 	// files are missing.
 	Filtered []FilteredFile
+	// Warnings lists non-fatal issues encountered while building the plan
+	// (e.g. failure to walk $HOME for the symlink index, leading to degraded
+	// adopt detection). Surfaced in the preview header.
+	Warnings []string
 }
 
 // FilteredFile records a file skipped by ignore patterns and which pattern matched.
@@ -145,17 +150,24 @@ func ClassifyFiles(selections []string, repoDir, homeDir string, ignorePatterns 
 	repoDir = filepath.Clean(repoDir)
 	homeDir = filepath.Clean(homeDir)
 
-	// Build the $HOME symlink index once — maps resolvedTarget → symlinkPath.
-	// Used by classifyFileInDir to detect Adopt without walking $HOME per file.
-	homeIndex, err := buildHomeSymlinkIndex(homeDir, repoDir)
-	if err != nil {
-		// Non-fatal: fall back to empty index; adopt detection degrades gracefully.
-		homeIndex = make(map[string]string)
-	}
-
 	// Map from package name → index in plan.Packages, for merge.
 	pkgIndex := make(map[string]int)
 	plan := &ClassificationPlan{}
+
+	// Build the $HOME symlink index once — maps resolvedTarget → symlinkPath.
+	// Used by classifyFileInDir to detect Adopt without walking $HOME per file.
+	// On error, fall back to empty index AND surface a warning so the user
+	// knows adopt detection is degraded — without this, files that should
+	// classify as Adopt silently become Add (which moves the source file
+	// and breaks any external tool owning the original target).
+	homeIndex, err := buildHomeSymlinkIndex(homeDir, repoDir)
+	if err != nil {
+		homeIndex = make(map[string]string)
+		plan.Warnings = append(plan.Warnings,
+			fmt.Sprintf("$HOME symlink index unavailable (%v) — adopt detection disabled; files pointing into the repo via existing $HOME symlinks may be classified as Add instead", err))
+		slog.Default().Warn("classify: home symlink index unavailable",
+			"err", err, "homeDir", homeDir)
+	}
 
 	for _, sel := range selections {
 		sel = filepath.Clean(sel)
@@ -647,6 +659,11 @@ func atomicSymlink(target, dst string) error {
 
 // executeAdd: file lives in $HOME; move to repo, create $HOME symlink.
 // The file IS already at its $HOME location (AbsPath is in $HOME).
+//
+// Sequenced as a fileTxn so any failure rolls every prior step back: if
+// the symlink swap fails, the repo copy is removed and the original file
+// remains in place. If the WriteFile to repo fails, no $HOME mutation has
+// happened yet so there's nothing to undo on the source side.
 func executeAdd(cf ClassifiedFile) error {
 	repoDest := cf.RepoDest
 	srcPath := cf.AbsPath
@@ -656,44 +673,37 @@ func executeAdd(cf ClassifiedFile) error {
 		return fmt.Errorf("reading source: %w", err)
 	}
 
-	// Create parent dirs in repo.
-	if err := os.MkdirAll(filepath.Dir(repoDest), 0755); err != nil {
-		return fmt.Errorf("creating repo dir: %w", err)
-	}
-
-	// Write to repo.
-	if err := os.WriteFile(repoDest, srcData, srcPerm); err != nil {
-		return fmt.Errorf("writing to repo: %w", err)
-	}
-
-	// Compute relative symlink from $HOME location to repo file.
-	srcDir := resolvedDir(srcPath)
-	relSym, err := filepath.Rel(srcDir, repoDest)
+	relSym, err := filepath.Rel(resolvedDir(srcPath), repoDest)
 	if err != nil {
-		_ = os.Remove(repoDest)
 		return fmt.Errorf("computing symlink: %w", err)
 	}
 
-	// Atomic swap: write tmp symlink, rename over source (POSIX rename is atomic).
-	tmp := srcPath + ".dotcor-tmp"
-	_ = os.Remove(tmp)
-	if err := os.Symlink(relSym, tmp); err != nil {
-		_ = os.Remove(repoDest)
-		return fmt.Errorf("creating tmp symlink: %w", err)
+	txn := &fileTxn{}
+	if err := txn.run(stepWriteFile(repoDest, srcData, srcPerm)); err != nil {
+		return err
 	}
-	// Rename atomically replaces srcPath — no separate Remove needed.
-	if err := os.Rename(tmp, srcPath); err != nil {
-		_ = os.Remove(tmp)
-		_ = os.WriteFile(srcPath, srcData, srcPerm)
-		_ = os.Remove(repoDest)
-		return fmt.Errorf("placing symlink: %w", err)
+	if err := txn.run(stepReplaceFileWithSymlink(srcPath, relSym, srcData, srcPerm)); err != nil {
+		return err
 	}
-
+	txn.commit()
 	return nil
 }
 
 // executeAdopt: $HOME has a symlink pointing at cf.AbsPath.
 // Copy to repo; repoint $HOME symlink to repo; replace source with repo symlink.
+//
+// Issue #11 background: the previous implementation returned nil silently
+// when the post-home-repoint steps (Rel, Symlink, Rename of source) failed,
+// leaving srcPath as a regular file disconnected from $HOME. The fix:
+//
+//   - Capture the original $HOME symlink target so a failed repoint can be
+//     undone (transaction rollback).
+//   - Surface the "home repointed but source not relinked" case as an
+//     error rather than swallowing it. The caller records this in
+//     ClassificationFailure so the user sees what happened.
+//   - Do not roll back the $HOME repoint on source-relink failure — that's
+//     the intended end state ($HOME → repo). Only the source-side mutation
+//     is partial.
 func executeAdopt(cf ClassifiedFile) error {
 	repoDest := cf.RepoDest
 	srcPath := cf.AbsPath      // the actual file on disk
@@ -704,53 +714,56 @@ func executeAdopt(cf ClassifiedFile) error {
 		return fmt.Errorf("reading source: %w", err)
 	}
 
-	// Create parent dirs in repo.
-	if err := os.MkdirAll(filepath.Dir(repoDest), 0755); err != nil {
-		return fmt.Errorf("creating repo dir: %w", err)
+	// Capture the pre-adopt $HOME symlink target so a failed repoint can
+	// be unwound. Empty origHomeTarget signals "no link existed" — undo
+	// will remove the new link in that case.
+	var origHomeTarget string
+	if homeLink != "" {
+		if t, rerr := os.Readlink(homeLink); rerr == nil {
+			origHomeTarget = t
+		}
 	}
 
-	// Copy to repo.
-	if err := os.WriteFile(repoDest, srcData, srcPerm); err != nil {
-		return fmt.Errorf("writing to repo: %w", err)
+	txn := &fileTxn{}
+
+	// Step 1: copy to repo.
+	if err := txn.run(stepWriteFile(repoDest, srcData, srcPerm)); err != nil {
+		return err
 	}
 
-	// Repoint $HOME symlink → repo (atomic).
+	// Step 2: repoint the $HOME symlink → repo. Failure unwinds step 1.
 	if homeLink != "" {
 		relHomeToRepo, err := filepath.Rel(resolvedDir(homeLink), repoDest)
 		if err != nil {
-			_ = os.Remove(repoDest)
+			_ = txn.rollback()
 			return fmt.Errorf("computing home symlink: %w", err)
 		}
-		if err := atomicSymlink(relHomeToRepo, homeLink); err != nil {
-			_ = os.Remove(repoDest)
-			return fmt.Errorf("repointing home symlink: %w", err)
+		if err := txn.run(stepRepointSymlink(homeLink, relHomeToRepo, origHomeTarget)); err != nil {
+			return err
 		}
 	}
 
-	// Replace source file with symlink → repo (atomic).
+	// At this point $HOME → repo is the desired end state. The source-side
+	// relink (replacing srcPath with a symlink to repo) is a separate unit
+	// of work — its failure is reported but we do NOT undo the home
+	// repoint, because $HOME → repo is what we wanted.
 	relSrcToRepo, err := filepath.Rel(resolvedDir(srcPath), repoDest)
 	if err != nil {
-		// Home is already repointed; log partial success but don't fail.
-		// The important invariant ($HOME → repo) is satisfied.
-		return nil
+		txn.commit()
+		return fmt.Errorf("home repointed but source not relinked at %s: %w", srcPath, err)
 	}
-	tmp := srcPath + ".dotcor-tmp"
-	_ = os.Remove(tmp)
-	if err := os.Symlink(relSrcToRepo, tmp); err != nil {
-		// Non-fatal: home already repointed.
-		return nil
-	}
-	// Atomic rename replaces the original file at srcPath.
-	if err := os.Rename(tmp, srcPath); err != nil {
-		_ = os.Remove(tmp)
-		// Restore source from memory so disk state is consistent.
-		_ = os.WriteFile(srcPath, srcData, srcPerm)
+	if err := stepReplaceFileWithSymlink(srcPath, relSrcToRepo, srcData, srcPerm).do(); err != nil {
+		txn.commit()
+		return fmt.Errorf("home repointed but source not relinked at %s: %w", srcPath, err)
 	}
 
+	txn.commit()
 	return nil
 }
 
-// executeTrack: file inside a non-$HOME folder. Copy to repo; replace source with symlink.
+// executeTrack: file inside a non-$HOME folder. Copy to repo; replace
+// source with symlink. Same shape as executeAdd; both go through fileTxn
+// so any step failing rolls back to the pre-state.
 func executeTrack(cf ClassifiedFile) error {
 	repoDest := cf.RepoDest
 	srcPath := cf.AbsPath
@@ -760,39 +773,26 @@ func executeTrack(cf ClassifiedFile) error {
 		return fmt.Errorf("reading source: %w", err)
 	}
 
-	// Create parent dirs in repo.
-	if err := os.MkdirAll(filepath.Dir(repoDest), 0755); err != nil {
-		return fmt.Errorf("creating repo dir: %w", err)
-	}
-
-	// Copy to repo.
-	if err := os.WriteFile(repoDest, srcData, srcPerm); err != nil {
-		return fmt.Errorf("writing to repo: %w", err)
-	}
-
 	relSym, err := filepath.Rel(resolvedDir(srcPath), repoDest)
 	if err != nil {
-		_ = os.Remove(repoDest)
 		return fmt.Errorf("computing symlink: %w", err)
 	}
 
-	tmp := srcPath + ".dotcor-tmp"
-	_ = os.Remove(tmp)
-	if err := os.Symlink(relSym, tmp); err != nil {
-		_ = os.Remove(repoDest)
-		return fmt.Errorf("creating tmp symlink: %w", err)
+	txn := &fileTxn{}
+	if err := txn.run(stepWriteFile(repoDest, srcData, srcPerm)); err != nil {
+		return err
 	}
-	if err := os.Rename(tmp, srcPath); err != nil {
-		_ = os.Remove(tmp)
-		_ = os.WriteFile(srcPath, srcData, srcPerm)
-		_ = os.Remove(repoDest)
-		return fmt.Errorf("placing symlink: %w", err)
+	if err := txn.run(stepReplaceFileWithSymlink(srcPath, relSym, srcData, srcPerm)); err != nil {
+		return err
 	}
-
+	txn.commit()
 	return nil
 }
 
-// executeForeign: follow the symlink, copy resolved target to repo, repoint chain.
+// executeForeign: follow the symlink, copy resolved target to repo, repoint
+// chain. cf.AbsPath is the symlink (in $HOME or a tracked folder); the
+// resolved target is somewhere external. The original symlink target is
+// captured for rollback so a failed repoint restores the link unchanged.
 func executeForeign(cf ClassifiedFile) error {
 	repoDest := cf.RepoDest
 	resolvedTarget := cf.ForeignTarget
@@ -806,28 +806,28 @@ func executeForeign(cf ClassifiedFile) error {
 		return fmt.Errorf("reading foreign target: %w", err)
 	}
 
-	// Create parent dirs in repo.
-	if err := os.MkdirAll(filepath.Dir(repoDest), 0755); err != nil {
-		return fmt.Errorf("creating repo dir: %w", err)
-	}
-
-	// Copy to repo.
-	if err := os.WriteFile(repoDest, srcData, srcPerm); err != nil {
-		return fmt.Errorf("writing to repo: %w", err)
-	}
-
-	// Repoint the foreign symlink (cf.AbsPath) to point at repo — atomic.
 	relSym, err := filepath.Rel(resolvedDir(cf.AbsPath), repoDest)
 	if err != nil {
-		_ = os.Remove(repoDest)
 		return fmt.Errorf("computing symlink: %w", err)
 	}
 
-	if err := atomicSymlink(relSym, cf.AbsPath); err != nil {
-		_ = os.Remove(repoDest)
-		return fmt.Errorf("repointing foreign symlink: %w", err)
+	// Capture the original symlink target so rollback can restore it
+	// untouched. The link is guaranteed to exist (we classified it as a
+	// symlink) — but a Readlink failure shouldn't abort the whole op,
+	// just leave undo unable to restore the prior state.
+	var origTarget string
+	if t, rerr := os.Readlink(cf.AbsPath); rerr == nil {
+		origTarget = t
 	}
 
+	txn := &fileTxn{}
+	if err := txn.run(stepWriteFile(repoDest, srcData, srcPerm)); err != nil {
+		return err
+	}
+	if err := txn.run(stepRepointSymlink(cf.AbsPath, relSym, origTarget)); err != nil {
+		return err
+	}
+	txn.commit()
 	return nil
 }
 

@@ -172,6 +172,46 @@ func TestExecuteMigration_NestedFiles(t *testing.T) {
 	assert.True(t, os.IsNotExist(err))
 }
 
+func TestExecuteMigration_RollsBackOnFailure(t *testing.T) {
+	// Arrange: a v1 layout with two files. The first migrates cleanly; the
+	// second is forced to fail by pre-creating a regular file where the
+	// destination directory needs to be — MkdirAll cannot turn a file into
+	// a directory, so step 2 fails. The rollback must restore step 1.
+	tmpDir := t.TempDir()
+	repoDir := filepath.Join(tmpDir, "repo")
+	require.NoError(t, os.MkdirAll(filepath.Join(repoDir, "files", "shell"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(repoDir, "files", "git"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(repoDir, "files", "shell", "zshrc"), []byte("z"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(repoDir, "files", "git", "gitconfig"), []byte("g"), 0644))
+
+	// Plant a file at "git" so MkdirAll(filepath.Dir(repoDir/git/gitconfig))
+	// (which expands to repoDir/git) collides with a file.
+	require.NoError(t, os.WriteFile(filepath.Join(repoDir, "git"), []byte("collision"), 0644))
+
+	steps, err := PlanMigration(repoDir)
+	require.NoError(t, err)
+	require.Len(t, steps, 2)
+
+	// Order steps so shell migrates first, then git fails.
+	if filepath.Base(filepath.Dir(steps[0].Dst)) == "git" {
+		steps[0], steps[1] = steps[1], steps[0]
+	}
+
+	// Act
+	err = ExecuteMigration(repoDir, steps)
+
+	// Assert: error mentions rollback, and the first file is back where it
+	// started — the user is left in their original v1 layout.
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rolled back")
+
+	zshrcSrc := filepath.Join(repoDir, "files", "shell", "zshrc")
+	zshrcDst := filepath.Join(repoDir, "shell", "zshrc")
+	assert.FileExists(t, zshrcSrc, "v1 source must be restored on rollback")
+	_, statErr := os.Stat(zshrcDst)
+	assert.True(t, os.IsNotExist(statErr), "v2 destination must not exist after rollback")
+}
+
 func TestFullMigration_V1ToV2(t *testing.T) {
 	// Arrange
 	tmpDir := t.TempDir()

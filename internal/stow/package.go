@@ -2,6 +2,7 @@ package stow
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,6 +42,16 @@ type LinkResult struct {
 	// Link deliberately does not adopt these — the user must confirm via the
 	// explicit Add/Adopt flow so external symlinks are never silently rewritten.
 	Foreign []string
+	// Resolved counts conflicts that LinkWithBackup successfully backed up
+	// and replaced with a symlink. Linked also increments for these (they
+	// did get linked) but Resolved lets the UI distinguish a clean link
+	// from a conflict-resolution link, e.g. "linked 3 (resolved 2 conflicts)".
+	Resolved int
+	// RestoreFailures lists conflicts where the symlink swap failed AND
+	// the rollback to the original file also failed. These are the most
+	// dangerous cases — the original file may be missing from $HOME with
+	// only the backup directory to recover from.
+	RestoreFailures []string
 }
 
 type UnlinkResult struct {
@@ -57,13 +68,12 @@ var excludedDirs = map[string]bool{
 }
 
 func isExcluded(name string) bool {
-	if excludedDirs[name] {
-		return true
-	}
-	if strings.HasPrefix(name, ".") {
-		return true
-	}
-	return false
+	// Only the explicit excludedDirs map filters out packages. Stow-style
+	// dot-prefixed package names (.ssh, .config, .gnupg, .aws, .kube,
+	// .docker) are valid and must be discoverable. The handful of
+	// dotcor-internal directories (.git, .stow-local-ignore, .dotcorrc) are
+	// listed explicitly above.
+	return excludedDirs[name]
 }
 
 func DiscoverPackages(repoDir, homeDir string) ([]Package, error) {
@@ -84,7 +94,12 @@ func DiscoverPackages(repoDir, homeDir string) ([]Package, error) {
 		pkgPath := filepath.Join(repoDir, entry.Name())
 		files, err := discoverFiles(pkgPath, homeDir)
 		if err != nil {
-			return nil, fmt.Errorf("discovering files for package %s: %w", entry.Name(), err)
+			// Don't abort the entire discovery for one bad package — log and
+			// continue. The user still sees every other package; the broken
+			// one will surface a per-file warning in the logs.
+			slog.Default().Warn("discover: skipping package with walk error",
+				"package", entry.Name(), "err", err)
+			continue
 		}
 
 		files = appendAutoDetected(files, pkgPath, homeDir)
@@ -106,8 +121,14 @@ func discoverFiles(pkgDir, homeDir string) ([]FileEntry, error) {
 	var files []FileEntry
 
 	err := filepath.Walk(pkgDir, func(path string, info os.FileInfo, err error) error {
+		// Per-file errors (unreadable, permission denied, broken symlink) are
+		// logged and skipped — a single bad entry must not abort discovery for
+		// the whole package. The walk root error still aborts; that's surfaced
+		// by the outer Walk error below.
 		if err != nil {
-			return err
+			slog.Default().Warn("discover: skipping unreadable entry",
+				"path", path, "err", err)
+			return nil
 		}
 		if info.IsDir() {
 			return nil
@@ -115,7 +136,9 @@ func discoverFiles(pkgDir, homeDir string) ([]FileEntry, error) {
 
 		relPath, err := filepath.Rel(pkgDir, path)
 		if err != nil {
-			return fmt.Errorf("computing relative path: %w", err)
+			slog.Default().Warn("discover: skipping file with bad rel path",
+				"path", path, "err", err)
+			return nil
 		}
 
 		targetPath := filepath.Join(homeDir, relPath)
@@ -129,7 +152,8 @@ func discoverFiles(pkgDir, homeDir string) ([]FileEntry, error) {
 		targetInfo, err := os.Lstat(targetPath)
 		if err != nil {
 			if !os.IsNotExist(err) {
-				return fmt.Errorf("checking target path %s: %w", targetPath, err)
+				slog.Default().Warn("discover: cannot stat target",
+					"target", targetPath, "err", err)
 			}
 		} else {
 			entry.Exists = true

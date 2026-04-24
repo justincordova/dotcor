@@ -132,14 +132,20 @@ func TestDiscoverPackages_ExcludesSpecialDirs(t *testing.T) {
 	assert.Equal(t, "zsh", packages[0].Name)
 }
 
-func TestDiscoverPackages_ExcludesDotfileDirs(t *testing.T) {
+func TestDiscoverPackages_IncludesDotPrefixedPackages(t *testing.T) {
+	// Stow-style packages with dot-prefixed names (e.g. .ssh, .config,
+	// .gnupg, .aws) must be discoverable. Only the explicit excludedDirs
+	// allowlist (.git, .stow-local-ignore, .dotcorrc) is filtered.
 	// Arrange
 	tmpDir := t.TempDir()
 	repoDir := filepath.Join(tmpDir, "repo")
 	homeDir := filepath.Join(tmpDir, "home")
-	require.NoError(t, os.MkdirAll(filepath.Join(repoDir, ".dotcorrc_dir"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(repoDir, ".ssh"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(repoDir, ".config"), 0755))
 	require.NoError(t, os.MkdirAll(filepath.Join(repoDir, "zsh"), 0755))
 	require.NoError(t, os.MkdirAll(homeDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(repoDir, ".ssh", "config"), []byte("cfg"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(repoDir, ".config", "init.lua"), []byte("cfg"), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(repoDir, "zsh", ".zshrc"), []byte("cfg"), 0644))
 
 	// Act
@@ -147,8 +153,11 @@ func TestDiscoverPackages_ExcludesDotfileDirs(t *testing.T) {
 
 	// Assert
 	require.NoError(t, err)
-	require.Len(t, packages, 1)
-	assert.Equal(t, "zsh", packages[0].Name)
+	require.Len(t, packages, 3)
+	names := []string{packages[0].Name, packages[1].Name, packages[2].Name}
+	assert.Contains(t, names, ".ssh")
+	assert.Contains(t, names, ".config")
+	assert.Contains(t, names, "zsh")
 }
 
 func TestDiscoverPackages_NestedFiles(t *testing.T) {

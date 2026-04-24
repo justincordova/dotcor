@@ -8,7 +8,19 @@ import (
 )
 
 func Unlink(repoDir, homeDir, packageName string) (*UnlinkResult, error) {
+	// Resolve repoDir/pkgDir through EvalSymlinks once. macOS aliases
+	// /var → /private/var (and similar Library/Applications shims) cause
+	// the resolved-target comparison below to fail when one side has the
+	// alias and the other has the resolved form. classify.go already does
+	// this for the same compare; mirror the pattern here so unlink doesn't
+	// silently leave repo-owned symlinks in place.
+	if resolved, err := filepath.EvalSymlinks(repoDir); err == nil {
+		repoDir = resolved
+	}
 	pkgDir := filepath.Join(repoDir, packageName)
+	if resolved, err := filepath.EvalSymlinks(pkgDir); err == nil {
+		pkgDir = resolved
+	}
 
 	info, err := os.Stat(pkgDir)
 	if err != nil {
@@ -64,7 +76,20 @@ func Unlink(repoDir, homeDir, packageName string) (*UnlinkResult, error) {
 			resolved = filepath.Clean(filepath.Join(filepath.Dir(targetPath), existingTarget))
 		}
 
-		if resolved != filepath.Clean(path) {
+		// Compare both sides after EvalSymlinks so a /var → /private/var
+		// alias on either side still matches. EvalSymlinks fails if the
+		// path doesn't exist; in that rare case fall back to filepath.Clean
+		// (the same behaviour as before) — we only need the extra resolve
+		// step to handle the macOS alias problem.
+		left := resolved
+		if r, err := filepath.EvalSymlinks(resolved); err == nil {
+			left = r
+		}
+		right := filepath.Clean(path)
+		if r, err := filepath.EvalSymlinks(right); err == nil {
+			right = r
+		}
+		if left != right {
 			return nil
 		}
 
@@ -92,8 +117,21 @@ func Unlink(repoDir, homeDir, packageName string) (*UnlinkResult, error) {
 }
 
 func cleanDirChain(dir, homeDir string, seen map[string]bool, result *UnlinkResult) {
+	// Resolve homeDir once so the stop comparison handles cases where
+	// homeDir itself is a symlink (some SSO setups) or contains a /var
+	// style alias. Same family as #8.
+	resolvedHome := homeDir
+	if r, err := filepath.EvalSymlinks(homeDir); err == nil {
+		resolvedHome = r
+	}
+
 	for {
-		if dir == "" || dir == homeDir || dir == filepath.Dir(dir) {
+		resolvedDir := dir
+		if r, err := filepath.EvalSymlinks(dir); err == nil {
+			resolvedDir = r
+		}
+
+		if dir == "" || resolvedDir == resolvedHome || dir == filepath.Dir(dir) {
 			return
 		}
 		if seen[dir] {

@@ -50,22 +50,23 @@ func Link(repoDir, homeDir, packageName string) (*LinkResult, error) {
 		return nil, err
 	}
 
-	packages, discoverErr := DiscoverPackages(repoDir, homeDir)
-	if discoverErr != nil {
+	// Previously this re-ran a full DiscoverPackages to find auto-detected
+	// files inside the managed $HOME tree for this one package. That
+	// walked every other package in the repo AND every package's managed
+	// $HOME root — wasteful when we only care about one package.
+	//
+	// Instead, rebuild just this package's file list (discoverFiles +
+	// appendAutoDetected) and iterate its non-InRepo entries.
+	pkgFiles, err := discoverFiles(pkgDir, homeDir)
+	if err != nil {
 		return result, nil
 	}
-
-	for _, pkg := range packages {
-		if pkg.Name != packageName {
+	pkgFiles = appendAutoDetected(pkgFiles, pkgDir, homeDir)
+	for _, f := range pkgFiles {
+		if f.InRepo {
 			continue
 		}
-		for _, f := range pkg.Files {
-			if f.InRepo {
-				continue
-			}
-			linkAutoDetectedFile(result, pkgDir, homeDir, f)
-		}
-		break
+		linkAutoDetectedFile(result, pkgDir, homeDir, f)
 	}
 
 	return result, nil
@@ -105,7 +106,10 @@ func linkAutoDetectedFile(result *LinkResult, pkgDir, homeDir string, f FileEntr
 		return
 	}
 
-	srcData, readErr := os.ReadFile(f.TargetPath)
+	// Cap the read so a multi-GB file in $HOME (font cache, media file)
+	// doesn't OOM the TUI. Skips with a conflict marker so the user sees
+	// the file and can deal with it manually.
+	srcData, _, readErr := safeReadFile(f.TargetPath)
 	if readErr != nil {
 		result.Conflicts = append(result.Conflicts, f.RelPath)
 		result.Skipped++
@@ -208,6 +212,20 @@ func (r *LinkResult) linkFile(path, relPath, targetPath, relSymlink string) {
 	r.Skipped++
 }
 
+// LinkWithBackup resolves conflicts from a prior Link() by backing up the
+// existing $HOME file and replacing it with a symlink into the repo.
+//
+// Per-conflict atomicity is provided by fileTxn — if any step fails for a
+// given file, every prior step for that file is unwound. Successful files
+// remain in their new state; the loop continues to the next conflict.
+//
+// Issue #45 fix: when the symlink swap fails AND the restore to the
+// original file also fails, the file is recorded in result.RestoreFailures.
+// Previously the restore error was silently dropped (`_ = os.WriteFile`),
+// so a user could end up with a missing $HOME file and no warning.
+//
+// Issue #22 fix: result.Resolved is bumped (not just Linked) so the UI
+// can distinguish "linked cleanly" from "linked after backup".
 func LinkWithBackup(repoDir, homeDir, packageName, backupDir string) (*LinkResult, error) {
 	result, err := Link(repoDir, homeDir, packageName)
 	if err != nil {
@@ -241,44 +259,72 @@ func LinkWithBackup(repoDir, homeDir, packageName, backupDir string) (*LinkResul
 			continue
 		}
 
-		srcData, readErr := os.ReadFile(targetPath)
+		// Cap the read at maxFileSizeBytes so a giant conflict file doesn't
+		// OOM the TUI mid-resolution.
+		srcData, _, readErr := safeReadFile(targetPath)
 		if readErr != nil {
 			remaining = append(remaining, relPath)
 			continue
 		}
-
 		srcPerm := srcInfo.Mode().Perm()
-
-		backupPath := filepath.Join(backupDir, ts, relPath)
-		if mkdirErr := os.MkdirAll(filepath.Dir(backupPath), 0755); mkdirErr != nil {
-			remaining = append(remaining, relPath)
-			continue
-		}
-		if writeErr := os.WriteFile(backupPath, srcData, srcPerm); writeErr != nil {
-			remaining = append(remaining, relPath)
-			continue
-		}
-
-		if removeErr := os.Remove(targetPath); removeErr != nil {
-			remaining = append(remaining, relPath)
-			continue
-		}
 
 		relSymlink, symErr := filepath.Rel(filepath.Dir(targetPath), repoPath)
 		if symErr != nil {
 			remaining = append(remaining, relPath)
 			continue
 		}
-		if symErr = os.Symlink(relSymlink, targetPath); symErr != nil {
-			_ = os.WriteFile(targetPath, srcData, srcPerm)
+
+		backupPath := filepath.Join(backupDir, ts, relPath)
+
+		if err := resolveOneConflict(result, targetPath, backupPath, relSymlink, srcData, srcPerm); err != nil {
 			remaining = append(remaining, relPath)
 			continue
 		}
 
 		result.Linked++
+		result.Resolved++
 		result.Skipped--
 	}
 
 	result.Conflicts = remaining
 	return result, nil
+}
+
+// resolveOneConflict performs one conflict resolution as a per-file
+// transaction: backup → replace with symlink. On step-2 failure the
+// backup is preserved (it's the user's only recovery copy) but the
+// rollback restores the original file. If the restore itself fails, the
+// file is appended to result.RestoreFailures so the caller can warn.
+func resolveOneConflict(result *LinkResult, targetPath, backupPath, relSymlink string, srcData []byte, srcPerm os.FileMode) error {
+	// Step 1: write backup. We DO NOT roll this back on later failure —
+	// the backup is the user's only safety net if anything else goes
+	// wrong, and removing it on failure would leave them stranded.
+	if err := os.MkdirAll(filepath.Dir(backupPath), 0755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(backupPath, srcData, srcPerm); err != nil {
+		return err
+	}
+
+	// Step 2: replace target with symlink. If this fails, write the
+	// original bytes back to targetPath. If THAT fails, the file is
+	// missing — record in RestoreFailures so the user is told.
+	step := stepReplaceFileWithSymlink(targetPath, relSymlink, srcData, srcPerm)
+	if err := step.do(); err != nil {
+		// The do() in stepReplaceFileWithSymlink does tmp + rename, which
+		// leaves the original file intact on failure (rename is atomic).
+		// But to be defensive, attempt restore and surface any failure.
+		if _, statErr := os.Lstat(targetPath); statErr != nil && os.IsNotExist(statErr) {
+			if writeErr := os.WriteFile(targetPath, srcData, srcPerm); writeErr != nil {
+				rel, _ := filepath.Rel(filepath.Dir(filepath.Dir(backupPath)), targetPath)
+				if rel == "" {
+					rel = targetPath
+				}
+				result.RestoreFailures = append(result.RestoreFailures, fmt.Sprintf("%s (backup at %s)", rel, backupPath))
+			}
+		}
+		return err
+	}
+
+	return nil
 }
