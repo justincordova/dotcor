@@ -23,6 +23,64 @@ const (
 	gitNetworkTimeout = 5 * time.Minute
 )
 
+// ValidateRemoteURL rejects URLs that would let git execute arbitrary code
+// or read local files via shell-style transports. It accepts the common
+// safe transports: https, ssh, git, http (intranet only), and the
+// scp-style user@host:path form widely used by GitHub/GitLab.
+//
+// Rejected explicitly:
+//   - ext::          arbitrary subprocess transport (RCE)
+//   - file://        local fs reads, not appropriate for a sync remote
+//   - any value starting with `-`  (would be parsed as a git flag)
+//
+// Empty URL is allowed — callers use that to mean "no remote".
+func ValidateRemoteURL(remoteURL string) error {
+	if remoteURL == "" {
+		return nil
+	}
+	if strings.HasPrefix(remoteURL, "-") {
+		return fmt.Errorf("URL cannot start with '-' (looks like a flag): %q", remoteURL)
+	}
+
+	// Hard rejections — these transports can read local files or run code.
+	dangerousPrefixes := []string{
+		"ext::",
+		"file://",
+		"file:",
+	}
+	lower := strings.ToLower(remoteURL)
+	for _, p := range dangerousPrefixes {
+		if strings.HasPrefix(lower, p) {
+			return fmt.Errorf("transport %q is not allowed", strings.TrimSuffix(p, "://"))
+		}
+	}
+
+	// Allowlist: explicit scheme (https/http/ssh/git) or scp-style.
+	allowedSchemes := []string{"https://", "http://", "ssh://", "git://"}
+	for _, s := range allowedSchemes {
+		if strings.HasPrefix(lower, s) {
+			return nil
+		}
+	}
+
+	// scp-style: user@host:path. Must contain '@' before ':' and ':' before
+	// any '/'. Reject if the host part is empty or starts with '-'.
+	if at := strings.Index(remoteURL, "@"); at > 0 {
+		rest := remoteURL[at+1:]
+		colon := strings.Index(rest, ":")
+		slash := strings.Index(rest, "/")
+		if colon > 0 && (slash == -1 || colon < slash) {
+			host := rest[:colon]
+			if host == "" || strings.HasPrefix(host, "-") {
+				return fmt.Errorf("invalid host in scp-style URL: %q", remoteURL)
+			}
+			return nil
+		}
+	}
+
+	return fmt.Errorf("URL must use https://, ssh://, git://, or user@host:path form: %q", remoteURL)
+}
+
 // runGitCommand executes a git command with the default local timeout.
 // Caller must defer the returned cancel to release the context.
 func runGitCommand(dir string, name string, args ...string) (*exec.Cmd, context.CancelFunc) {
@@ -50,6 +108,9 @@ type StatusInfo struct {
 	BehindBy       int
 	Branch         string
 	RemoteExists   bool
+	// Detached is true when HEAD is detached (rebase, bisect, or explicit
+	// checkout of a commit). Branch holds the short SHA in that case.
+	Detached bool
 }
 
 // CommitInfo represents a single Git commit
@@ -66,7 +127,13 @@ func IsGitInstalled() bool {
 	return err == nil
 }
 
-// InitRepo initializes git repository in directory
+// InitRepo initializes git repository in directory.
+//
+// A minimal .gitignore is written so transient artifacts from interrupted
+// operations (`*.dotcor-tmp`, `*.dotcor-restore`) and local-only state
+// (`logs/`, `backups/`) never reach the remote. The ignore is appended
+// idempotently — if the user already has a .gitignore, missing patterns
+// are added and existing ones are left alone.
 func InitRepo(repoPath string) error {
 	cmd, cancel := runGitCommand(repoPath, "init")
 	defer cancel()
@@ -75,7 +142,58 @@ func InitRepo(repoPath string) error {
 	if err != nil {
 		return fmt.Errorf("git init failed: %s: %w", string(output), err)
 	}
+
+	if err := ensureDotcorGitignore(repoPath); err != nil {
+		// Non-fatal — the init succeeded. Returning the error would
+		// rollback an already-created repo, which is worse than leaving
+		// the gitignore behind.
+		_ = err
+	}
 	return nil
+}
+
+// ensureDotcorGitignore appends dotcor-specific patterns to .gitignore.
+// Patterns that already appear (line-wise match) are not duplicated.
+func ensureDotcorGitignore(repoPath string) error {
+	required := []string{
+		"# dotcor",
+		"*.dotcor-tmp",
+		"*.dotcor-restore",
+		"logs/",
+		"backups/",
+	}
+
+	path := filepath.Join(repoPath, ".gitignore")
+	existing, _ := os.ReadFile(path) // missing file is fine
+
+	have := make(map[string]bool)
+	for _, line := range strings.Split(string(existing), "\n") {
+		have[strings.TrimSpace(line)] = true
+	}
+
+	var toAdd []string
+	for _, pat := range required {
+		if !have[pat] {
+			toAdd = append(toAdd, pat)
+		}
+	}
+	if len(toAdd) == 0 {
+		return nil
+	}
+
+	var buf strings.Builder
+	buf.Write(existing)
+	if len(existing) > 0 && !strings.HasSuffix(string(existing), "\n") {
+		buf.WriteString("\n")
+	}
+	if len(existing) > 0 {
+		buf.WriteString("\n")
+	}
+	for _, pat := range toAdd {
+		buf.WriteString(pat)
+		buf.WriteString("\n")
+	}
+	return os.WriteFile(path, []byte(buf.String()), 0644)
 }
 
 // IsRepo checks if directory is a git repository
@@ -291,6 +409,15 @@ func PushWithProgress(repoPath string) error {
 	defer cancelPush()
 	pushCmd.Stdout = nil
 	pushCmd.Stderr = nil
+	// Defeat interactive credential prompts so the TUI never wedges
+	// waiting on stdin under the alt-screen. GIT_TERMINAL_PROMPT=0 makes
+	// git fail fast on missing credentials; GIT_ASKPASS=echo neutralises
+	// any helper that would otherwise try to prompt.
+	pushCmd.Env = append(os.Environ(),
+		"GIT_TERMINAL_PROMPT=0",
+		"GIT_ASKPASS=echo",
+		"SSH_ASKPASS=echo",
+	)
 	return pushCmd.Run()
 }
 
@@ -305,8 +432,17 @@ func HasChanges(repoPath string) (bool, error) {
 	return len(strings.TrimSpace(string(output))) > 0, nil
 }
 
-// SetRemote configures git remote
+// SetRemote configures git remote.
+//
+// remoteURL is validated against an allowlist of safe transports
+// (https, ssh, git, scp-style user@host:path). Git accepts the
+// `ext::sh -c '...'` transport which executes arbitrary commands on
+// fetch/push — refusing it here prevents a poisoned `.dotcorrc`
+// (which is itself often synced) from becoming RCE on next sync.
 func SetRemote(repoPath, remoteName, remoteURL string) error {
+	if err := ValidateRemoteURL(remoteURL); err != nil {
+		return fmt.Errorf("invalid remote URL: %w", err)
+	}
 	// Check if remote already exists
 	existingURL, _ := GetRemoteURL(repoPath)
 	if existingURL != "" {
@@ -338,16 +474,48 @@ func GetRemoteURL(repoPath string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
+// RemoveRemote removes the named remote from the repo. A missing remote is
+// not an error — the post-condition (no remote configured) holds either way.
+func RemoveRemote(repoPath, remoteName string) error {
+	cmd, cancel := runGitCommand(repoPath, "remote", "remove", remoteName)
+	defer cancel()
+	if output, err := cmd.CombinedOutput(); err != nil {
+		// `git remote remove <name>` returns 2 when the remote doesn't
+		// exist. That's the desired end state — treat as success.
+		if strings.Contains(string(output), "No such remote") {
+			return nil
+		}
+		return fmt.Errorf("git remote remove failed: %s: %w", string(output), err)
+	}
+	return nil
+}
+
 // GetStatus returns git status information
 func GetStatus(repoPath string) (StatusInfo, error) {
 	status := StatusInfo{}
 
-	// Get current branch
+	// Get current branch. `git branch --show-current` returns empty on
+	// detached HEAD, mid-rebase, mid-bisect, or on a fresh repo with no
+	// commits yet. Fall back to `git rev-parse --short HEAD` and mark the
+	// status detached so the dashboard can render an appropriate pill
+	// instead of falling through to the "no git repository" branch.
 	branchCmd, cancelBranch := runGitCommand(repoPath, "branch", "--show-current")
 	branchOutput, err := branchCmd.Output()
 	cancelBranch()
 	if err == nil {
 		status.Branch = strings.TrimSpace(string(branchOutput))
+	}
+	if status.Branch == "" {
+		shaCmd, cancelSHA := runGitCommand(repoPath, "rev-parse", "--short", "HEAD")
+		shaOutput, shaErr := shaCmd.Output()
+		cancelSHA()
+		if shaErr == nil {
+			sha := strings.TrimSpace(string(shaOutput))
+			if sha != "" {
+				status.Branch = sha
+				status.Detached = true
+			}
+		}
 	}
 
 	// Check for uncommitted changes
@@ -515,12 +683,23 @@ func CloneWithProgress(url, destPath string) error {
 	if !IsGitInstalled() {
 		return fmt.Errorf("git is not installed")
 	}
+	if err := ValidateRemoteURL(url); err != nil {
+		return fmt.Errorf("invalid clone URL: %w", err)
+	}
 
 	// Clone with progress
 	cmd, cancel := runGitNetworkCommand("", "clone", "--progress", url, destPath)
 	defer cancel()
 	cmd.Stdout = nil
 	cmd.Stderr = nil
+	// Same auth-prompt suppression as PushWithProgress: a clone of a
+	// private repo without credentials would otherwise sit forever
+	// waiting on stdin under the TUI's alt-screen.
+	cmd.Env = append(os.Environ(),
+		"GIT_TERMINAL_PROMPT=0",
+		"GIT_ASKPASS=echo",
+		"SSH_ASKPASS=echo",
+	)
 	return cmd.Run()
 }
 

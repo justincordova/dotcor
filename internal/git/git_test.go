@@ -72,6 +72,11 @@ func TestHasChanges(t *testing.T) {
 	err = InitRepo(tempDir)
 	require.NoError(t, err, "InitRepo() should not error")
 
+	// InitRepo writes a starter .gitignore (covering *.dotcor-tmp,
+	// logs/, backups/, etc.) so a fresh repo has one untracked file.
+	// Stage and commit it so the rest of the test sees a clean repo.
+	stageInitialCommit(t, tempDir)
+
 	hasChanges, err := HasChanges(tempDir)
 	assert.NoError(t, err, "HasChanges() should not error")
 	assert.False(t, hasChanges, "HasChanges() should return false for clean repo")
@@ -83,6 +88,26 @@ func TestHasChanges(t *testing.T) {
 	hasChanges, err = HasChanges(tempDir)
 	assert.NoError(t, err, "HasChanges() should not error")
 	assert.True(t, hasChanges, "HasChanges() should return true after adding file")
+}
+
+// stageInitialCommit adds and commits any files written by InitRepo
+// (currently the starter .gitignore) so tests that assert "clean repo
+// after init" continue to hold.
+func stageInitialCommit(t *testing.T, repoPath string) {
+	t.Helper()
+	configCmds := [][]string{
+		{"config", "user.email", "test@example.com"},
+		{"config", "user.name", "test"},
+		{"add", "."},
+		{"commit", "-m", "init"},
+	}
+	for _, args := range configCmds {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = repoPath
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Logf("git %v: %s: %v", args, string(out), err)
+		}
+	}
 }
 
 func TestAutoCommit(t *testing.T) {
@@ -131,6 +156,9 @@ func TestGetStatus(t *testing.T) {
 	require.NoError(t, err, "InitRepo() should not error")
 
 	configureGitUser(t, tempDir)
+	// Commit the starter .gitignore InitRepo writes so the rest of the
+	// test can assert "clean repo" semantics.
+	stageInitialCommit(t, tempDir)
 
 	status, err := GetStatus(tempDir)
 	require.NoError(t, err, "GetStatus() should not error")
@@ -335,6 +363,8 @@ func TestGetChangedFiles(t *testing.T) {
 
 	err = InitRepo(tempDir)
 	require.NoError(t, err, "InitRepo() should not error")
+	// Commit the starter .gitignore so the empty-changed-files assertion holds.
+	stageInitialCommit(t, tempDir)
 
 	files, err := GetChangedFiles(tempDir)
 	assert.NoError(t, err, "GetChangedFiles() should not error")
@@ -1181,4 +1211,52 @@ func TestRunGitNetworkCommand_UsesLongerTimeout(t *testing.T) {
 	// CommandContext was used.
 	assert.NotNil(t, localCmd.Cancel)
 	assert.NotNil(t, netCmd.Cancel)
+}
+
+func TestValidateRemoteURL_AcceptsSafeTransports(t *testing.T) {
+	cases := []string{
+		"",
+		"https://github.com/user/repo.git",
+		"http://gitlab.local/repo",
+		"ssh://git@github.com/user/repo.git",
+		"git://example.com/repo.git",
+		"git@github.com:user/repo.git",
+		"deploy@gitlab.com:org/sub/repo.git",
+	}
+	for _, url := range cases {
+		t.Run(url, func(t *testing.T) {
+			assert.NoError(t, ValidateRemoteURL(url))
+		})
+	}
+}
+
+func TestValidateRemoteURL_RejectsDangerousTransports(t *testing.T) {
+	// These would let an attacker who can poison .dotcorrc execute arbitrary
+	// commands or read local files on the next sync.
+	cases := []string{
+		"ext::sh -c 'rm -rf /'",
+		"file:///etc/passwd",
+		"file:secret",
+		"-upload-pack=evil https://github.com/user/repo",
+		"--exec=rm",
+	}
+	for _, url := range cases {
+		t.Run(url, func(t *testing.T) {
+			assert.Error(t, ValidateRemoteURL(url))
+		})
+	}
+}
+
+func TestValidateRemoteURL_RejectsMalformedURLs(t *testing.T) {
+	cases := []string{
+		"not-a-url",
+		"@host:path",   // empty user before @
+		"user@:path",   // empty host
+		"user@-bad:path", // host starts with -
+	}
+	for _, url := range cases {
+		t.Run(url, func(t *testing.T) {
+			assert.Error(t, ValidateRemoteURL(url))
+		})
+	}
 }
