@@ -103,8 +103,9 @@ func (m Model) updateHistory(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch {
 			case key.Matches(msg, m.keys.Enter):
 				ref := m.confirmRestoreRef
+				path := m.confirmFilePath
 				m.clearConfirm()
-				return m, m.restoreFromCommit(ref)
+				return m, m.restoreFromCommit(ref, path)
 			default:
 				m.clearConfirm()
 				return m, nil
@@ -133,9 +134,11 @@ func (m Model) updateHistory(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.confirmOpen = true
 				m.confirmAction = "restore"
 				m.confirmRestoreRef = c.Hash
-				filePath := historyFilePath(m)
+				// Capture the file path NOW so a packagesMsg arriving
+				// before Enter can't shift indices and target the wrong file.
+				m.confirmFilePath = historyFilePath(m)
 				shortHash := shortRef(c.Hash)
-				m.confirmTitle = fmt.Sprintf("Restore %s?", filePath)
+				m.confirmTitle = fmt.Sprintf("Restore %s?", m.confirmFilePath)
 				m.confirmBody = fmt.Sprintf("from %s · %s\n\nThis replaces the current version.", shortHash, formatRelativeTime(c.Date))
 				m.confirmHint = "enter confirm · esc cancel"
 				m.confirmDanger = true
@@ -147,7 +150,9 @@ func (m Model) updateHistory(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// user sees the transition immediately. The diffMsg handler
 				// populates the viewport without changing views.
 				m.activeView = DiffView
-				return m, m.diffFromCommit(m.commits[m.selectedCommit].Hash)
+				// Capture file path at key-press to avoid the same TOCTOU
+				// shape as the restore Enter handler above.
+				return m, m.diffFromCommit(m.commits[m.selectedCommit].Hash, historyFilePath(m))
 			}
 		}
 	}
@@ -196,19 +201,12 @@ func getFileHistory(m Model) tea.Cmd {
 	}
 }
 
-func (m Model) restoreFromCommit(ref string) tea.Cmd {
+// restoreFromCommit takes filePath as a parameter (captured at dialog-open
+// time) so that a background packagesMsg arriving between dialog-open and
+// Enter can't shift indices and cause RestoreFile to operate on the wrong
+// file. See ISSUES.md #7.
+func (m Model) restoreFromCommit(ref, filePath string) tea.Cmd {
 	repoDir := m.repoDir
-
-	var filePath string
-	if m.selectedPkg < len(m.packages) {
-		pkg := m.packages[m.selectedPkg]
-		if m.expanded[m.selectedPkg] && m.selectedFile < len(pkg.Files) {
-			filePath = pkg.Files[m.selectedFile].RelPath
-		} else {
-			filePath = pkg.Name
-		}
-	}
-
 	return func() tea.Msg {
 		if err := git.RestoreFile(repoDir, filePath, ref); err != nil {
 			return errMsg{err: err}
@@ -217,17 +215,10 @@ func (m Model) restoreFromCommit(ref string) tea.Cmd {
 	}
 }
 
-func (m Model) diffFromCommit(ref string) tea.Cmd {
+// diffFromCommit takes filePath as a parameter for the same TOCTOU reason
+// as restoreFromCommit.
+func (m Model) diffFromCommit(ref, filePath string) tea.Cmd {
 	repoDir := m.repoDir
-
-	var filePath string
-	if m.selectedPkg < len(m.packages) {
-		pkg := m.packages[m.selectedPkg]
-		if m.expanded[m.selectedPkg] && m.selectedFile < len(pkg.Files) {
-			filePath = pkg.Files[m.selectedFile].RelPath
-		}
-	}
-
 	return func() tea.Msg {
 		content, err := git.GetFileDiffFromRef(repoDir, filePath, ref)
 		if err != nil {

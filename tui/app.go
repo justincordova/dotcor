@@ -1,7 +1,9 @@
 package tui
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -54,6 +56,19 @@ type errMsg struct {
 func (e errMsg) Error() string { return e.err.Error() }
 
 type tickMsg time.Time
+
+// autoCommittedMsg fires after autoCommitCmd completes (success or
+// silent-fail). Carrying it through the message bus lets refreshAll be
+// chained AFTER the commit so the dashboard's git status reflects the
+// post-commit state, instead of racing the commit and reporting the
+// pre-commit dirty state.
+type autoCommittedMsg struct{}
+
+// repoSizeMsg carries the asynchronously computed repo size (in MB).
+// Filed after packagesMsg so the dashboard renders immediately and the
+// size pill updates a moment later — large repos no longer block the
+// post-stow refresh.
+type repoSizeMsg float64
 
 type stowResultMsg struct {
 	msg       string
@@ -122,6 +137,12 @@ type Model struct {
 	previewCursor  int
 	previewScroll  int
 
+	// Confirm step (step 2) scroll offset. The confirm view renders the
+	// full list of files to be executed — for a large selection (e.g. an
+	// entire `.config/` tree) this easily exceeds the viewport, so the
+	// body paginates just like the preview step.
+	confirmScroll int
+
 	classifyResult *stow.ClassificationResult
 
 	browserEntries   map[string][]os.DirEntry
@@ -157,6 +178,13 @@ type Model struct {
 	confirmHint       string
 	confirmDanger     bool
 	confirmRestoreRef string
+	// confirmFilePath captures the file path at the moment a restore/diff
+	// dialog is opened. Without this, `restoreFromCommit` and `diffFromCommit`
+	// recompute the path from m.selectedPkg/m.selectedFile/m.expanded at
+	// confirm-time, which TOCTOU-races against background packagesMsg
+	// arrivals that can shift indices and the expansion map (which is
+	// keyed by index, not name). See ISSUES.md #7.
+	confirmFilePath string
 }
 
 func NewModel(cfg *config.Config, version string) Model {
@@ -223,11 +251,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		m.help.Width = msg.Width
-		m.viewport.Width = msg.Width - 4
-		m.viewport.Height = msg.Height - 6
+		// Clamp to non-negative; a tiny terminal must not produce negative
+		// viewport dimensions or panel widths downstream. Lipgloss treats
+		// negative widths as "no clamp", which then overflows the screen.
+		w := msg.Width
+		h := msg.Height
+		if w < 0 {
+			w = 0
+		}
+		if h < 0 {
+			h = 0
+		}
+		m.width = w
+		m.height = h
+		m.help.Width = w
+		vpW := w - 4
+		vpH := h - 6
+		if vpW < 0 {
+			vpW = 0
+		}
+		if vpH < 0 {
+			vpH = 0
+		}
+		m.viewport.Width = vpW
+		m.viewport.Height = vpH
 		return m, nil
 
 	case spinner.TickMsg:
@@ -246,10 +293,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.packages = msg.packages
-		m.repoSizeCached = repoSizeMB(m.repoDir)
+		// Repo size walk is expensive on large repos and runs after every
+		// stow/unstow/sync. Compute it asynchronously so the package list
+		// renders immediately; the pill updates a moment later via repoSizeMsg.
 		if m.selectedPkg >= len(m.packages) {
 			m.selectedPkg = 0
 		}
+		return m, computeRepoSize(m.repoDir)
+
+	case repoSizeMsg:
+		m.repoSizeCached = float64(msg)
 		return m, nil
 
 	case gitStatusMsg:
@@ -262,11 +315,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusMsg = string(msg)
 		m.err = nil
 		cmds = append(cmds, clearStatusAfter(3*time.Second))
+		cmds = append(cmds, m.refreshAll())
 		return m, tea.Batch(cmds...)
 
 	case errMsg:
 		m.err = msg.err
-		return m, nil
+		cmds = append(cmds, m.refreshAll())
+		return m, tea.Batch(cmds...)
 
 	case stowResultMsg:
 		if msg.err != nil {
@@ -300,6 +355,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = nil
 			cmds = append(cmds, clearStatusAfter(3*time.Second))
 		}
+		cmds = append(cmds, fetchGitStatus(m.repoDir), fetchRecentCommits(m.repoDir))
+		return m, tea.Batch(cmds...)
+
+	case autoCommittedMsg:
+		// Auto-commit just finished. Re-fetch git status and recent commits
+		// so the dashboard reflects the post-commit state. We avoid a full
+		// refreshAll here because the message that triggered the commit
+		// already kicked one off — this just catches up the git-side view.
 		cmds = append(cmds, fetchGitStatus(m.repoDir), fetchRecentCommits(m.repoDir))
 		return m, tea.Batch(cmds...)
 
@@ -337,6 +400,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(parts) > 0 {
 				m.statusMsg = "Added: " + strings.Join(parts, ", ")
 				cmds = append(cmds, clearStatusAfter(3*time.Second))
+			} else if r.Managed > 0 {
+				// Zero-feedback case: every selection was already managed.
+				// Without this branch the user completes the wizard and
+				// lands on the dashboard with no signal anything happened.
+				m.statusMsg = fmt.Sprintf("%d already managed — nothing to do", r.Managed)
+				cmds = append(cmds, clearStatusAfter(3*time.Second))
 			}
 		}
 		cmds = append(cmds, m.refreshAll())
@@ -356,6 +425,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = nil
 			cmds = append(cmds, clearStatusAfter(3*time.Second))
 		}
+		cmds = append(cmds, m.refreshAll())
 		return m, tea.Batch(cmds...)
 
 	case backupsMsg:
@@ -415,6 +485,7 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 			action := m.confirmAction
 			target := m.confirmTarget
 			restoreRef := m.confirmRestoreRef
+			restorePath := m.confirmFilePath
 			m.clearConfirm()
 			switch action {
 			case "stow":
@@ -432,7 +503,7 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "adopt":
 				return m, m.adoptPackage()
 			case "restore":
-				return m, m.restoreFromCommit(restoreRef)
+				return m, m.restoreFromCommit(restoreRef, restorePath)
 			}
 		default:
 			m.clearConfirm()
@@ -849,6 +920,7 @@ func (m *Model) clearConfirm() {
 	m.confirmHint = ""
 	m.confirmDanger = false
 	m.confirmRestoreRef = ""
+	m.confirmFilePath = ""
 }
 
 func classifyResultParts(r *stow.ClassificationResult) []string {
@@ -931,6 +1003,7 @@ func (m *Model) resetAddState() {
 	m.previewToggles = nil
 	m.previewCursor = 0
 	m.previewScroll = 0
+	m.confirmScroll = 0
 	m.classifyResult = nil
 }
 
@@ -946,12 +1019,12 @@ func (m Model) autoCommitCmd(message string) tea.Cmd {
 	}
 	return func() tea.Msg {
 		if !git.IsRepo(repoDir) {
-			return nil
+			return autoCommittedMsg{}
 		}
 		if err := git.AutoCommit(repoDir, message, logger); err != nil && logger != nil {
 			logger.Warn("auto-commit failed", "error", err)
 		}
-		return nil
+		return autoCommittedMsg{}
 	}
 }
 
@@ -961,6 +1034,12 @@ func discoverPackages(repoDir, homeDir string) tea.Cmd {
 	return func() tea.Msg {
 		packages, err := stow.DiscoverPackages(repoDir, homeDir)
 		return packagesMsg{packages: packages, err: err}
+	}
+}
+
+func computeRepoSize(repoDir string) tea.Cmd {
+	return func() tea.Msg {
+		return repoSizeMsg(repoSizeMB(repoDir))
 	}
 }
 
@@ -1157,22 +1236,54 @@ func (m Model) deletePackage() tea.Cmd {
 		return stowResultMsg{msg: fmt.Sprintf("Deleted %s (%d unlinked, backup: %s)", pkg.Name, result.Unlinked, backupPath)}
 	}
 }
+// copyDir walks src and recreates its tree under dst. Symlinks are
+// preserved as symlinks (not followed) so a package containing internal
+// references like `nvim/after/ftplugin -> ../ftplugin` round-trips
+// faithfully through backup/restore.
+//
+// Per-file errors (broken symlinks, unreadable files) are logged and the
+// walk continues — a single bad entry must not abort the whole backup.
+// Directory errors still abort because there's no useful continuation.
 func copyDir(src, dst string) error {
 	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return err
+			// Broken-symlink Lstat usually surfaces here. Log and skip;
+			// the corresponding file simply won't appear in the backup.
+			return nil
 		}
 		rel, relErr := filepath.Rel(src, path)
 		if relErr != nil {
-			return relErr
+			return nil
 		}
 		target := filepath.Join(dst, rel)
+
+		// Branch on symlink FIRST. info from Walk is from Lstat so the
+		// ModeSymlink bit is set when path is a symlink — Mode().IsDir()
+		// would still be false in that case, so the IsDir branch wouldn't
+		// catch dir-targeting symlinks either way. We explicitly preserve
+		// the link itself, regardless of what it points at.
+		if info.Mode()&os.ModeSymlink != 0 {
+			linkTarget, readErr := os.Readlink(path)
+			if readErr != nil {
+				return nil // broken — skip
+			}
+			if mkErr := os.MkdirAll(filepath.Dir(target), 0755); mkErr != nil {
+				return nil
+			}
+			_ = os.Remove(target) // in case a previous run left something
+			if linkErr := os.Symlink(linkTarget, target); linkErr != nil {
+				return nil
+			}
+			return nil
+		}
+
 		if info.IsDir() {
 			return os.MkdirAll(target, info.Mode().Perm())
 		}
+
 		data, readErr := os.ReadFile(path)
 		if readErr != nil {
-			return readErr
+			return nil // skip unreadable file rather than abort
 		}
 		return os.WriteFile(target, data, info.Mode().Perm())
 	})
@@ -1196,25 +1307,49 @@ func (m Model) removeFileFromPackage() tea.Cmd {
 		repoFilePath := filepath.Join(pkgDir, file.RelPath)
 
 		if file.IsLinked {
+			// Atomic restore: write to a temp file in the same directory,
+			// then rename over the symlink. POSIX rename is atomic on the
+			// same filesystem, so the user never sees a missing $HOME file
+			// even if disk is full mid-write — the symlink stays intact
+			// until the tmp file is fully written.
 			data, err := os.ReadFile(repoFilePath)
 			if err != nil {
 				return stowResultMsg{err: fmt.Errorf("reading repo file: %w", err)}
-			}
-			if err := os.Remove(file.TargetPath); err != nil {
-				return stowResultMsg{err: fmt.Errorf("removing symlink: %w", err)}
 			}
 			repoInfo, statErr := os.Stat(repoFilePath)
 			perm := os.FileMode(0644)
 			if statErr == nil {
 				perm = repoInfo.Mode().Perm()
 			}
-			if err := os.WriteFile(file.TargetPath, data, perm); err != nil {
-				return stowResultMsg{err: fmt.Errorf("restoring file: %w", err)}
+
+			tmp := file.TargetPath + ".dotcor-restore"
+			_ = os.Remove(tmp)
+			if err := os.WriteFile(tmp, data, perm); err != nil {
+				return stowResultMsg{err: fmt.Errorf("staging restore file: %w", err)}
+			}
+			if err := os.Rename(tmp, file.TargetPath); err != nil {
+				_ = os.Remove(tmp)
+				return stowResultMsg{err: fmt.Errorf("placing restored file: %w", err)}
 			}
 		}
 
 		if err := os.Remove(repoFilePath); err != nil {
 			return stowResultMsg{err: fmt.Errorf("removing from repo: %w", err)}
+		}
+
+		// Walk up and remove now-empty parent directories so the repo
+		// doesn't accumulate hollow `.config/.../` chains after removing
+		// the last file in a deeply nested package. Stop at pkgDir.
+		dir := filepath.Dir(repoFilePath)
+		for dir != pkgDir && dir != "/" && dir != "." {
+			entries, err := os.ReadDir(dir)
+			if err != nil || len(entries) > 0 {
+				break
+			}
+			if rmErr := os.Remove(dir); rmErr != nil {
+				break
+			}
+			dir = filepath.Dir(dir)
 		}
 
 		if logger != nil {
@@ -1284,33 +1419,71 @@ func (m Model) pullRepo() tea.Cmd {
 
 // ─── Logs ────────────────────────────────────────────────────────────────────
 
+// logsTailBytes caps how much of the end of the log file loadLogs reads.
+// The log rotates at ~10 MB (see logger package), so 2 MB of tail is
+// enough to show several thousand entries without loading the whole file
+// into memory on slow disks.
+const logsTailBytes int64 = 2 * 1024 * 1024
+
 func loadLogs(level string) tea.Cmd {
 	return func() tea.Msg {
 		configDir, _ := config.GetConfigDir()
 		logPath := filepath.Join(configDir, "logs", "dotcor.log")
-		data, err := os.ReadFile(logPath)
+
+		f, err := os.Open(logPath)
 		if err != nil {
 			return logsLoadedMsg{lines: []string{"no logs found — run some commands first"}}
 		}
+		defer func() { _ = f.Close() }()
 
-		var filtered []string
-		for _, line := range strings.Split(string(data), "\n") {
-			if line == "" {
-				continue
-			}
-			if matchesLevel(line, level) {
-				filtered = append(filtered, line)
+		// Seek to the last logsTailBytes so we stream only the tail.
+		// Reading the whole file each time the user opens the log view
+		// is wasteful on a 10 MB+ log, and the older lines are rarely
+		// what the user wants anyway.
+		info, statErr := f.Stat()
+		if statErr == nil && info.Size() > logsTailBytes {
+			if _, seekErr := f.Seek(-logsTailBytes, io.SeekEnd); seekErr != nil {
+				// Fall back to full read on seek failure (e.g. pipe).
+				_, _ = f.Seek(0, io.SeekStart)
+			} else {
+				// Discard the partial first line since a mid-line seek
+				// almost certainly landed in the middle of a record.
+				br := bufio.NewReader(f)
+				if _, err := br.ReadString('\n'); err == nil {
+					return logsLoadedMsg{lines: readFilteredLogs(br, level)}
+				}
 			}
 		}
 
-		if len(filtered) == 0 {
-			filtered = []string{"no log entries at level: " + level}
-		}
-		if len(filtered) > 1000 {
-			filtered = filtered[len(filtered)-1000:]
-		}
-		return logsLoadedMsg{lines: filtered}
+		return logsLoadedMsg{lines: readFilteredLogs(bufio.NewReader(f), level)}
 	}
+}
+
+// readFilteredLogs reads lines from r, keeps the ones matching level,
+// and returns at most the last 1000 entries. Uses bufio.Scanner with a
+// larger buffer so unusually long log lines don't truncate.
+func readFilteredLogs(r io.Reader, level string) []string {
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
+	var filtered []string
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			continue
+		}
+		if matchesLevel(line, level) {
+			filtered = append(filtered, line)
+		}
+	}
+
+	if len(filtered) == 0 {
+		return []string{"no log entries at level: " + level}
+	}
+	if len(filtered) > 1000 {
+		filtered = filtered[len(filtered)-1000:]
+	}
+	return filtered
 }
 
 func matchesLevel(line, level string) bool {

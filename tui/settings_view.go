@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/justincordova/dotcor/internal/core"
+	"github.com/justincordova/dotcor/internal/git"
 )
 
 type settingsMsg struct {
@@ -206,6 +207,15 @@ func updateSettingsMain(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.cfg.IgnorePatterns[:m.settingsIgnoreIdx],
 					m.cfg.IgnorePatterns[m.settingsIgnoreIdx+1:]...,
 				)
+				// Clamp the cursor: deleting the last item leaves
+				// settingsIgnoreIdx == len() which then renders out of
+				// range and breaks subsequent up/down navigation.
+				if m.settingsIgnoreIdx >= len(m.cfg.IgnorePatterns) {
+					m.settingsIgnoreIdx = len(m.cfg.IgnorePatterns) - 1
+				}
+				if m.settingsIgnoreIdx < 0 {
+					m.settingsIgnoreIdx = 0
+				}
 				_ = m.cfg.SaveConfig()
 				return m, nil
 			}
@@ -236,9 +246,30 @@ func updateSettingsEditRemote(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case key.Matches(keyMsg, m.keys.Enter):
-			m.cfg.GitRemote = m.settingsInput.Value()
+			newURL := strings.TrimSpace(m.settingsInput.Value())
 			m.settingsInput.Blur()
 			m.settingsStep = 0
+
+			// Apply to .git/config FIRST. If git rejects the URL (or the
+			// allowlist in ValidateRemoteURL does), abort before persisting
+			// to .dotcorrc — otherwise the config file claims one URL while
+			// push/pull use a different (or none) and the divergence is
+			// silent until the user notices a sync failing.
+			if newURL == "" {
+				if existing, _ := git.GetRemoteURL(m.repoDir); existing != "" {
+					if err := git.RemoveRemote(m.repoDir, "origin"); err != nil {
+						m.err = fmt.Errorf("removing remote: %w", err)
+						return m, nil
+					}
+				}
+			} else {
+				if err := git.SetRemote(m.repoDir, "origin", newURL); err != nil {
+					m.err = err
+					return m, nil
+				}
+			}
+
+			m.cfg.GitRemote = newURL
 			if err := m.cfg.SaveConfig(); err != nil {
 				m.err = err
 				return m, nil

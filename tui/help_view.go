@@ -93,10 +93,21 @@ func viewHelp(m Model) string {
 
 	body := lipgloss.JoinVertical(lipgloss.Left, title, "", content, "", footer)
 
+	maxH := m.height - 4
+	if maxH < 8 {
+		maxH = 8
+	}
+	maxW := m.width - 8
+	if maxW < 30 {
+		maxW = 30
+	}
+
 	dialog := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(colMauve)).
 		Padding(1, 3).
+		MaxWidth(maxW).
+		MaxHeight(maxH).
 		Render(body)
 
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, dialog,

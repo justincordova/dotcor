@@ -34,7 +34,23 @@ func viewDiff(m Model) string {
 		kbd("esc", "back"),
 	)
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
+	parts := []string{header, body}
+	if status := diffStatusRow(m); status != "" {
+		parts = append(parts, status)
+	}
+	parts = append(parts, footer)
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
+}
+
+func diffStatusRow(m Model) string {
+	switch {
+	case m.err != nil:
+		return errorStyle.Render(" ✗ " + m.err.Error())
+	case m.statusMsg != "":
+		return successStyle.Render(" ✓ " + m.statusMsg)
+	default:
+		return ""
+	}
 }
 
 func (m Model) updateDiff(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -75,6 +91,13 @@ func getDiff(m Model) tea.Cmd {
 		if !m.expanded[m.selectedPkg] || m.selectedFile >= len(pkg.Files) {
 			content, err := git.GetDiff(m.repoDir)
 			if err != nil {
+				// Fresh repo with no commits → `git diff HEAD` errors with
+				// "fatal: bad revision 'HEAD'". Surface a friendly hint
+				// rather than the raw git output.
+				if strings.Contains(err.Error(), "bad revision 'HEAD'") ||
+					strings.Contains(err.Error(), "unknown revision") {
+					return diffMsg{content: "No commits yet — press s in the package view to stow, or save a file and sync."}
+				}
 				return diffMsg{err: err}
 			}
 			if content == "" {
@@ -147,6 +170,12 @@ func colorizeDiff(content string) string {
 
 func formatRelativeTime(t time.Time) string {
 	d := time.Since(t)
+	if d < 0 {
+		// Clock skew between systems (e.g. a commit pulled from another
+		// machine with a faster clock) can produce a negative duration;
+		// treat as "just now" rather than rendering "-3m ago".
+		return "just now"
+	}
 	switch {
 	case d < time.Minute:
 		return "just now"

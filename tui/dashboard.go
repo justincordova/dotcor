@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/justincordova/dotcor/internal/git"
 	"github.com/justincordova/dotcor/internal/stow"
 )
 
@@ -184,11 +185,28 @@ func statInline(label, value, valueColor string) string {
 // ─── Main (packages + detail) ────────────────────────────────────────────────
 
 func renderMainWithHeight(m Model, mainHeight int) string {
+	// Hard-floor on terminal width: under ~46 cols neither panel can
+	// render anything meaningful. Show a placeholder rather than emit
+	// negative widths that overflow the screen.
+	const minTotal = 46
+	if m.width < minTotal {
+		return dimStyle.Render(fmt.Sprintf(" terminal too narrow (need ≥ %d cols, have %d)", minTotal, m.width))
+	}
+
 	leftWidth := m.width * 2 / 5
 	if leftWidth < 36 {
 		leftWidth = 36
 	}
 	rightWidth := m.width - leftWidth
+	// Guarantee a usable right panel; if the left clamp leaves <10 cols
+	// for the right, shrink the left.
+	if rightWidth < 10 {
+		rightWidth = 10
+		leftWidth = m.width - rightWidth
+		if leftWidth < 0 {
+			leftWidth = 0
+		}
+	}
 
 	left := renderPackagePanel(m, leftWidth, mainHeight)
 	right := renderDetailPanel(m, rightWidth, mainHeight)
@@ -350,16 +368,31 @@ func renderPackageCard(m Model, i, width int) string {
 		}
 	}
 
-	name := textStyle.Bold(true).Render(pkg.Name)
 	tag := categoryTag(pkg.Name)
-
 	if conflicts > 0 {
 		tag = pill(fmt.Sprintf("⚠%d", conflicts), colBase, colRed) + " " + tag
 	}
+	tagW := lipgloss.Width(tag)
+
+	// Truncate long names so the card doesn't overflow the panel.
+	// Reserve 3 cols of breathing room between name and tag.
+	maxNameRunes := contentWidth - tagW - 3
+	if maxNameRunes < 4 {
+		maxNameRunes = 4
+	}
+	displayName := pkg.Name
+	runes := []rune(displayName)
+	if len(runes) > maxNameRunes {
+		if maxNameRunes <= 1 {
+			displayName = string(runes[:1])
+		} else {
+			displayName = string(runes[:maxNameRunes-1]) + "…"
+		}
+	}
+	name := textStyle.Bold(true).Render(displayName)
 
 	leftW := lipgloss.Width(name)
-	rightW := lipgloss.Width(tag)
-	gap := contentWidth - leftW - rightW
+	gap := contentWidth - leftW - tagW
 	if gap < 1 {
 		gap = 1
 	}
@@ -557,7 +590,14 @@ func renderGitBar(m Model) string {
 	var parts []string
 
 	if m.gitStatus.Branch != "" {
-		parts = append(parts, pill("⎇ "+m.gitStatus.Branch, colBase, colLavender))
+		// Detached HEAD (rebase, bisect, fresh repo with no commits, or
+		// explicit checkout of a SHA) is rendered as a yellow pill so the
+		// user can tell apart "on a branch" from "floating".
+		if m.gitStatus.Detached {
+			parts = append(parts, pill("⎇ detached: "+m.gitStatus.Branch, colBase, colYellow))
+		} else {
+			parts = append(parts, pill("⎇ "+m.gitStatus.Branch, colBase, colLavender))
+		}
 	}
 
 	if m.gitStatus.HasUncommitted {
@@ -576,7 +616,14 @@ func renderGitBar(m Model) string {
 	}
 
 	if len(parts) == 0 {
-		parts = append(parts, dimStyle.Render("no git repository"))
+		// "no git repository" only when the directory genuinely isn't a
+		// repo. A repo with detached HEAD or unusual state shouldn't fall
+		// through to this branch — IsRepo confirms it.
+		if git.IsRepo(m.repoDir) {
+			parts = append(parts, dimStyle.Render("git: initializing"))
+		} else {
+			parts = append(parts, dimStyle.Render("no git repository"))
+		}
 	}
 
 	left := "  " + strings.Join(parts, " ")
@@ -701,15 +748,17 @@ func fuzzyMatch(query, target string) bool {
 	if query == "" {
 		return true
 	}
-	q := strings.ToLower(query)
-	t := strings.ToLower(target)
+	// Iterate both sides as runes so multi-byte queries (Cyrillic, CJK,
+	// emoji-tagged names) match correctly. The original byte-wise compare
+	// chopped any rune > 0x7F into its first byte and never matched.
+	qRunes := []rune(strings.ToLower(query))
 	qi := 0
-	for _, c := range t {
-		if qi < len(q) && byte(c) == q[qi] {
+	for _, c := range strings.ToLower(target) {
+		if qi < len(qRunes) && c == qRunes[qi] {
 			qi++
 		}
 	}
-	return qi == len(q)
+	return qi == len(qRunes)
 }
 
 func containsAny(s string, subs ...string) bool {
