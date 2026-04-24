@@ -1,12 +1,14 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/justincordova/dotcor/internal/config"
+	"github.com/justincordova/dotcor/internal/core"
 	"github.com/justincordova/dotcor/internal/git"
 	"github.com/justincordova/dotcor/internal/logger"
 	"github.com/justincordova/dotcor/internal/stow"
@@ -48,7 +50,13 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	cfg.Logger = logger.New(logLevel, "")
+	// NewWithCloser returns the underlying log file so we can flush and
+	// close it at exit. Without this the handle leaks until the OS
+	// reclaims it — harmless for short-lived runs but it also blocks any
+	// future in-process log rotation.
+	logr, logCloser := logger.NewWithCloser(logLevel, "")
+	cfg.Logger = logr
+	defer func() { _ = logCloser.Close() }()
 
 	configDir, err := config.GetConfigDir()
 	if err != nil {
@@ -93,6 +101,27 @@ func main() {
 			fmt.Println("Migration complete")
 		}
 	}
+
+	// Acquire a session-wide lock so two dotcor instances against the same
+	// ~/.dotcor can't race on backup-path timestamps and on .dotcor-tmp
+	// renames. Stale locks (process dead or > 5min old) are auto-cleaned
+	// inside AcquireLock; a live conflict surfaces the holding PID/host.
+	if err := core.AcquireLock(cfg); err != nil {
+		// Surface the conflict explicitly so the user can act on it
+		// (kill the other process, or run `dotcor doctor --fix` if the
+		// lock is stuck). Not retried — interactive sessions shouldn't
+		// silently block.
+		if errors.Is(err, core.ErrLockHeld) {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "warning: lock acquisition failed: %v\n", err)
+	}
+	defer func() {
+		if err := core.ReleaseLock(cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: lock release failed: %v\n", err)
+		}
+	}()
 
 	model := tui.NewModel(cfg, version)
 	p := tea.NewProgram(
