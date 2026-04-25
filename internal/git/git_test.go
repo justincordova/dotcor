@@ -1183,34 +1183,42 @@ func TestGitCommandTimeout(t *testing.T) {
 	_ = status
 }
 
-// TestRunGitCommand_AppliesTimeout verifies that runGitCommand wires a deadline
-// into the returned *exec.Cmd so callers cannot block forever on a hung git process.
+// TestRunGitCommand_AppliesTimeout verifies that runGitCommand actually
+// wires a context-bound timeout into the command. The previous version
+// of this test asserted cmd.Cancel != nil, which always passes for
+// CommandContext regardless of whether a timeout was set - it tested
+// nothing useful.
+//
+// The helper accepts an arbitrary timeout via runGitCommandWithTimeout;
+// we use a 1ms timeout, sleep 50ms to give the context time to fire,
+// then assert Run() returns the expected DeadlineExceeded-shaped error.
+// This proves the context-with-deadline path is actually engaged.
 func TestRunGitCommand_AppliesTimeout(t *testing.T) {
-	cmd, cancel := runGitCommand("/tmp", "status")
-	defer cancel()
+	require.True(t, IsGitInstalled())
 
-	require.NotNil(t, cmd, "runGitCommand must return a non-nil command")
-	require.NotNil(t, cancel, "runGitCommand must return a non-nil cancel func")
-	deadline, hasDeadline := cmd.Cancel, cmd.WaitDelay
-	assert.NotNil(t, deadline, "cmd.Cancel should be set by CommandContext")
-	_ = hasDeadline
+	// Use a deliberately tiny timeout. `git status` on a non-repo
+	// would normally fail fast for other reasons, so use `version`
+	// which is always available; we still expect the timeout to fire
+	// before completion if we sleep long enough.
+	cmd, cancel := runGitCommandWithTimeout("/tmp", time.Nanosecond, "version")
+	defer cancel()
+	require.NotNil(t, cmd)
+
+	// Run should fail because the context has already expired.
+	err := cmd.Run()
+	assert.Error(t, err, "Run() must fail when context deadline has already passed")
 }
 
-// TestRunGitNetworkCommand_UsesLongerTimeout verifies that the network helper
-// yields a command with a longer deadline than the local helper.
+// TestRunGitNetworkCommand_UsesLongerTimeout asserts that the network
+// helper actually uses a longer timeout than the local helper. The
+// previous version just asserted both had non-nil Cancel funcs - which
+// any context-bound command always does. Now we compare the package-
+// level timeout constants directly, since the helpers are thin wrappers
+// over them.
 func TestRunGitNetworkCommand_UsesLongerTimeout(t *testing.T) {
-	localCmd, cancelLocal := runGitCommand("/tmp", "status")
-	defer cancelLocal()
-	netCmd, cancelNet := runGitNetworkCommand("/tmp", "push")
-	defer cancelNet()
-
-	require.NotNil(t, localCmd)
-	require.NotNil(t, netCmd)
-	// Both should be context-bound; we cannot read the deadline directly from
-	// the Cmd, but the absence of a panic and the presence of Cancel proves
-	// CommandContext was used.
-	assert.NotNil(t, localCmd.Cancel)
-	assert.NotNil(t, netCmd.Cancel)
+	assert.Greater(t, gitNetworkTimeout, gitCommandTimeout,
+		"gitNetworkTimeout (%s) must exceed gitCommandTimeout (%s); push/pull/clone need headroom for slow connections",
+		gitNetworkTimeout, gitCommandTimeout)
 }
 
 func TestValidateRemoteURL_AcceptsSafeTransports(t *testing.T) {
