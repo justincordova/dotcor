@@ -1,6 +1,9 @@
 # DotCor
 
-![Version](https://img.shields.io/github/release/justincordova/dotcor.svg)
+![Version](https://img.shields.io/github/v/release/justincordova/dotcor?label=version)
+![License](https://img.shields.io/github/license/justincordova/dotcor?label=license)
+![Platform](https://img.shields.io/badge/platform-macos-intel%20%7C%20arm64-lightgrey)
+![Go](https://img.shields.io/github/go-mod/go-version/justincordova/dotcor?label=go)
 
 A symlink-based dotfile manager with TUI and automatic Git commits.
 
