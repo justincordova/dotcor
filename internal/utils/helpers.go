@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -65,7 +66,17 @@ func pluralize(n int) string {
 	return "s"
 }
 
-// ParseDuration parses a human-friendly duration string
+// ParseDuration parses a human-friendly duration string with extra
+// suffixes that time.ParseDuration doesn't support: `d` for days, `w`
+// for weeks, and `mo` for months (approximated as 30 days).
+//
+// `m` is intentionally NOT remapped to months: time.ParseDuration uses
+// `m` for minutes, and silently turning a user's `5m` into 150 days
+// (the previous behaviour) was a 4-order-of-magnitude surprise. Use
+// `mo` for months.
+//
+// Anything that isn't `Nd`/`Nw`/`Nmo` falls through to time.ParseDuration,
+// which keeps stdlib semantics for s/m/h/ms/us/ns.
 func ParseDuration(s string) (time.Duration, error) {
 	s = strings.TrimSpace(strings.ToLower(s))
 
@@ -73,50 +84,32 @@ func ParseDuration(s string) (time.Duration, error) {
 		return 30 * 24 * time.Hour, nil // Default: 30 days
 	}
 
-	// Handle common formats
-	var multiplier time.Duration
-	var value int
-
-	if strings.HasSuffix(s, "d") {
-		multiplier = 24 * time.Hour
-		_, err := fmt.Sscanf(s, "%dd", &value)
+	// Order matters: check `mo` before `m` (which we no longer remap)
+	// so `5mo` doesn't get parsed by time.ParseDuration as nonsense.
+	type rule struct {
+		suffix     string
+		multiplier time.Duration
+	}
+	rules := []rule{
+		{"mo", 30 * 24 * time.Hour}, // approximate month
+		{"d", 24 * time.Hour},
+		{"w", 7 * 24 * time.Hour},
+	}
+	for _, r := range rules {
+		if !strings.HasSuffix(s, r.suffix) {
+			continue
+		}
+		num := strings.TrimSuffix(s, r.suffix)
+		value, err := strconv.Atoi(num)
 		if err != nil {
 			return 0, fmt.Errorf("invalid format: %s", s)
 		}
 		if value <= 0 {
 			return 0, fmt.Errorf("duration must be positive")
 		}
-	} else if strings.HasSuffix(s, "w") {
-		multiplier = 7 * 24 * time.Hour
-		_, err := fmt.Sscanf(s, "%dw", &value)
-		if err != nil {
-			return 0, fmt.Errorf("invalid format: %s", s)
-		}
-		if value <= 0 {
-			return 0, fmt.Errorf("duration must be positive")
-		}
-	} else if strings.HasSuffix(s, "m") {
-		multiplier = 30 * 24 * time.Hour // Approximate month
-		_, err := fmt.Sscanf(s, "%dm", &value)
-		if err != nil {
-			return 0, fmt.Errorf("invalid format: %s", s)
-		}
-		if value <= 0 {
-			return 0, fmt.Errorf("duration must be positive")
-		}
-	} else if strings.HasSuffix(s, "h") {
-		multiplier = time.Hour
-		_, err := fmt.Sscanf(s, "%dh", &value)
-		if err != nil {
-			return 0, fmt.Errorf("invalid format: %s", s)
-		}
-		if value <= 0 {
-			return 0, fmt.Errorf("duration must be positive")
-		}
-	} else {
-		// Try standard Go duration
-		return time.ParseDuration(s)
+		return time.Duration(value) * r.multiplier, nil
 	}
 
-	return time.Duration(value) * multiplier, nil
+	// Fall through to stdlib: handles s/m/h/ms/us/ns.
+	return time.ParseDuration(s)
 }
