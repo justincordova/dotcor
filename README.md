@@ -49,17 +49,17 @@ A simple `y/N` prompt, then the TUI launches. If a v1.x layout is detected, a on
 
 ## Screenshots
 
-<img src="assets/dotcor1.png" alt="Dashboard" width="700">
+<img src="assets/dotcor1.png" alt="Dashboard" width="600">
 
-*Dashboard: package list with file detail panel*
+*Dashboard: package list*
 
-<img src="assets/dotcor2.png" alt="Add wizard" width="700">
+<img src="assets/dotcor2.png" alt="Package files" width="600">
+
+*Dashboard: package files (expanded)*
+
+<img src="assets/dotcor3.png" alt="Add wizard" width="600">
 
 *Add wizard: browse and select dotfiles*
-
-<img src="assets/dotcor3.png" alt="History" width="700">
-
-*History: git commit history*
 
 ---
 
