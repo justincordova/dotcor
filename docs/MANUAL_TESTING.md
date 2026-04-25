@@ -1,4 +1,4 @@
-# Manual Testing Guide for DotCor
+# Manual Testing Guide for dotcor
 
 ## Quick Start
 

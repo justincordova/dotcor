@@ -286,3 +286,10 @@ sandbox2: (binary)
     set -euo pipefail
     just sandbox2-setup
     DOTCOR_DIR="/tmp/dotcor-test2" DOTCOR_HOME="/tmp/dotcor-home2" ./bin/dotcor
+
+# sandbox with real $HOME — uses the actual ~/ for performance testing
+sandbox-realhome: (binary)
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf "{{dotcor_dir}}"
+    DOTCOR_DIR="{{dotcor_dir}}" ./bin/dotcor

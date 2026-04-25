@@ -43,7 +43,7 @@ func viewHistoryBase(m Model) string {
 	footer := subviewFooter(m.width,
 		kbd("enter", "restore"),
 		kbd("D", "diff"),
-		kbd("↑↓", "nav"),
+		kbd("↑↓", "nav"), kbd("pgup/pgdn", "page"), kbd("g/G", "top/bot"),
 		kbd("esc", "back"),
 	)
 
@@ -126,6 +126,26 @@ func (m Model) updateHistory(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Down):
 			if m.selectedCommit < len(m.commits)-1 {
 				m.selectedCommit++
+			}
+
+		case msg.String() == "pgup" || msg.String() == "ctrl+b":
+			m.selectedCommit -= 5
+			if m.selectedCommit < 0 {
+				m.selectedCommit = 0
+			}
+
+		case msg.String() == "pgdown" || msg.String() == "ctrl+f":
+			m.selectedCommit += 5
+			if m.selectedCommit > len(m.commits)-1 {
+				m.selectedCommit = len(m.commits) - 1
+			}
+
+		case msg.String() == "g" || msg.String() == "home":
+			m.selectedCommit = 0
+
+		case msg.String() == "G" || msg.String() == "end":
+			if len(m.commits) > 0 {
+				m.selectedCommit = len(m.commits) - 1
 			}
 
 		case key.Matches(msg, m.keys.Enter):

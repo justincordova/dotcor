@@ -1,4 +1,4 @@
-# DotCor Development Standards
+# dotcor Development Standards
 
 **Spec:** See [docs/SPEC.md](docs/SPEC.md) for architecture, layout, TUI design, and data flow.
 **Testing:** See [docs/TESTING.md](docs/TESTING.md) for conventions and patterns.

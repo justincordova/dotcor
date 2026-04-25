@@ -1,10 +1,10 @@
 # Release Process
 
-This document outlines the automated release process for DotCor using GoReleaser and Homebrew.
+This document outlines the automated release process for dotcor using GoReleaser and Homebrew.
 
 ## Platform
 
-**DotCor is distributed exclusively via Homebrew for macOS.**
+**dotcor is distributed exclusively via Homebrew for macOS.**
 
 - **Supported platforms:** macOS (Intel amd64, Apple Silicon arm64)
 - **Package manager:** Homebrew tap at `justincordova/homebrew-dotcor`

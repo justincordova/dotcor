@@ -2,6 +2,7 @@ package stow
 
 import (
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -125,14 +126,13 @@ func fileID(pkgName, relPath string) string {
 	return pkgName + "/" + relPath
 }
 
-// classifySkipDirs mirrors the TUI browser's skip list so walkAndClassify avoids
-// the same heavy directories.
-var classifySkipDirs = map[string]bool{
+// walkSkipDirs is a minimal skip list used when walking user-selected
+// directories the user might legitimately want to manage (like .config, .ssh, .aws).
+var walkSkipDirs = map[string]bool{
 	".git":         true,
 	"node_modules": true,
 	".cache":       true,
 	"__pycache__":  true,
-	"Library":      true,
 	".Trash":       true,
 	".dotcor":      true,
 }
@@ -160,7 +160,7 @@ func ClassifyFiles(selections []string, repoDir, homeDir string, ignorePatterns 
 	// knows adopt detection is degraded — without this, files that should
 	// classify as Adopt silently become Add (which moves the source file
 	// and breaks any external tool owning the original target).
-	homeIndex, err := buildHomeSymlinkIndex(homeDir, repoDir)
+	homeIndex, err := buildHomeSymlinkIndex(homeDir, repoDir, selections)
 	if err != nil {
 		homeIndex = make(map[string]string)
 		plan.Warnings = append(plan.Warnings,
@@ -244,48 +244,60 @@ func ClassifyFiles(selections []string, repoDir, homeDir string, ignorePatterns 
 	return plan, nil
 }
 
-// buildHomeSymlinkIndex scans $HOME once and returns a map of
-// resolvedTarget → symlinkPath for every symlink that does NOT already point
-// into repoDir. Heavy directories (Library, node_modules, etc.) are skipped.
-func buildHomeSymlinkIndex(homeDir, repoDir string) (map[string]string, error) {
+// buildHomeSymlinkIndex builds an index of symlinks in $HOME that point
+// outside repoDir. Instead of walking the entire $HOME tree (which is
+// extremely slow on real machines), it only scans the depth-1 entries
+// under $HOME plus depth-1 entries under each selection's parent. This
+// catches the common Adopt case ($HOME symlink → external file) without
+// scanning .npm, .nvm, .local, etc.
+func buildHomeSymlinkIndex(homeDir, repoDir string, selections []string) (map[string]string, error) {
 	index := make(map[string]string)
-	err := filepath.Walk(homeDir, func(path string, info os.FileInfo, werr error) error {
-		if werr != nil {
-			return nil
+
+	dirs := map[string]bool{homeDir: true}
+	for _, sel := range selections {
+		sel = filepath.Clean(sel)
+		rel, err := filepath.Rel(homeDir, sel)
+		if err != nil || strings.HasPrefix(rel, "..") {
+			continue
 		}
-		if info.IsDir() {
-			if classifySkipDirs[info.Name()] {
-				return filepath.SkipDir
+		parts := strings.Split(rel, string(filepath.Separator))
+		if len(parts) >= 1 && parts[0] != "." {
+			dirs[filepath.Join(homeDir, parts[0])] = true
+		}
+	}
+
+	for dir := range dirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			path := filepath.Join(dir, e.Name())
+			lfi, lerr := os.Lstat(path)
+			if lerr != nil || lfi.Mode()&os.ModeSymlink == 0 {
+				continue
 			}
-			return nil
+			target, rerr := os.Readlink(path)
+			if rerr != nil {
+				continue
+			}
+			if !filepath.IsAbs(target) {
+				target = filepath.Join(filepath.Dir(path), target)
+			}
+			target = filepath.Clean(target)
+			if resolved, rerr := filepath.EvalSymlinks(target); rerr == nil {
+				target = resolved
+			}
+			if strings.HasPrefix(target, repoDir+string(filepath.Separator)) || target == repoDir {
+				continue
+			}
+			if _, exists := index[target]; !exists {
+				index[target] = path
+			}
 		}
-		lfi, lerr := os.Lstat(path)
-		if lerr != nil || lfi.Mode()&os.ModeSymlink == 0 {
-			return nil
-		}
-		target, rerr := os.Readlink(path)
-		if rerr != nil {
-			return nil
-		}
-		if !filepath.IsAbs(target) {
-			target = filepath.Join(filepath.Dir(path), target)
-		}
-		target = filepath.Clean(target)
-		// Resolve for macOS /var → /private/var.
-		if resolved, rerr := filepath.EvalSymlinks(target); rerr == nil {
-			target = resolved
-		}
-		// Skip symlinks already pointing into repo.
-		if strings.HasPrefix(target, repoDir+string(filepath.Separator)) || target == repoDir {
-			return nil
-		}
-		// First found wins (multiple $HOME symlinks to same file is unusual).
-		if _, exists := index[target]; !exists {
-			index[target] = path
-		}
-		return nil
-	})
-	return index, err
+	}
+
+	return index, nil
 }
 
 // isStowParent returns true when every non-excluded direct child of dir is
@@ -363,39 +375,34 @@ func derivePkgNameForFile(absPath, homeDir string) string {
 // Files matching any pattern in ignorePatterns are recorded in plan.Filtered
 // and skipped.
 func walkAndClassify(plan *ClassificationPlan, pkgIndex map[string]int, selDir, pkgName, repoDir, homeDir string, homeIndex map[string]string, ignorePatterns []string) error {
-	return filepath.Walk(selDir, func(path string, info os.FileInfo, walkErr error) error {
+	return filepath.WalkDir(selDir, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
-			return nil // skip unreadable entries
-		}
-
-		// Use Lstat so we detect symlinks without following them.
-		lfi, err := os.Lstat(path)
-		if err != nil {
 			return nil
 		}
 
-		if lfi.IsDir() {
-			if classifySkipDirs[lfi.Name()] {
+		if d.IsDir() {
+			if walkSkipDirs[d.Name()] {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 
-		// If this entry is a symlink pointing at a directory, skip it (don't follow).
+		lfi, err := os.Lstat(path)
+		if err != nil {
+			return nil
+		}
+
 		if lfi.Mode()&os.ModeSymlink != 0 {
 			if target, rerr := os.Readlink(path); rerr == nil {
 				if !filepath.IsAbs(target) {
 					target = filepath.Join(filepath.Dir(path), target)
 				}
 				if tfi, sterr := os.Stat(target); sterr == nil && tfi.IsDir() {
-					// Don't descend — but also don't SkipDir which would skip siblings.
 					return nil
 				}
 			}
 		}
 
-		// Respect user ignore patterns (e.g. *.key, .env, id_rsa*) so secrets
-		// never reach the repo — matches both filename and full path.
 		if matched, pattern := matchIgnore(path, ignorePatterns); matched {
 			plan.Filtered = append(plan.Filtered, FilteredFile{AbsPath: path, Pattern: pattern})
 			return nil
@@ -403,7 +410,7 @@ func walkAndClassify(plan *ClassificationPlan, pkgIndex map[string]int, selDir, 
 
 		cf, err := classifyFileInDir(path, selDir, pkgName, repoDir, homeDir, homeIndex)
 		if err != nil {
-			return nil // skip files we can't classify
+			return nil
 		}
 
 		mergeFile(plan, pkgIndex, cf)

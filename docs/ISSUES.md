@@ -1,4 +1,4 @@
-# DotCor v2.0 — Known Issues
+# dotcor v2.0 — Known Issues
 
 Pre-release review findings. Verified against code on 2026-04-22, organized by theme.
 Severity legend: **C** = Critical · **H** = High · **M** = Medium · **L** = Low.

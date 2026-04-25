@@ -87,7 +87,7 @@ func viewHelp(m Model) string {
 	title := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(colMauve)).
 		Bold(true).
-		Render("◆ DotCor — Keybindings")
+		Render("◆ dotcor — Keybindings")
 
 	footer := dimStyle.Render("press ? or esc to close")
 

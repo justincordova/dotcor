@@ -1,6 +1,6 @@
-# DotCor Testing Guide
+# dotcor Testing Guide
 
-Testing practices and conventions for DotCor v2.0.
+Testing practices and conventions for dotcor v2.0.
 
 ## Overview
 

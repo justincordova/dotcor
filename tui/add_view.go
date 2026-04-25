@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -40,9 +41,9 @@ func viewAdd(m Model) string {
 	var footer string
 
 	if m.addStep == addStepSelect {
-		body := renderAddStep0(m) + errLine
 		footerHints := []string{
 			kbd("↑/k", "up"), kbd("↓/j", "down"),
+			kbd("pgup/pgdn", "page"), kbd("g/G", "top/bot"),
 			kbd("space", "select"), kbd("enter", "expand/confirm"),
 			kbd("h", "collapse"), kbd("/", "jump to path"),
 			kbd("esc", "cancel"),
@@ -51,12 +52,14 @@ func viewAdd(m Model) string {
 			footerHints = append(footerHints, sc)
 		}
 		footer = plainFooter(innerW, footerHints...)
+		body := renderAddStep0(m, footer, errLine) + errLine
 		content := lipgloss.JoinVertical(lipgloss.Left,
 			renderAddStepper(innerW, m.addStep),
 			lipgloss.NewStyle().Padding(1, 0).Render(body),
 			footer,
 		)
 		dialog := boxStyle.Width(cw - 2).Render(content)
+		dialog = clampDialogHeight(dialog, m.height)
 		return lipgloss.Place(m.width, m.height,
 			lipgloss.Center, lipgloss.Center,
 			dialog,
@@ -68,17 +71,17 @@ func viewAdd(m Model) string {
 	var body string
 	switch m.addStep {
 	case addStepPreview:
-		body = renderPreviewStep(m) + errLine
+		body = renderPreviewStep(m, innerW, cw) + errLine
 		footer = plainFooter(innerW,
 			kbd("↑/k", "up"), kbd("↓/j", "down"),
 			kbd("pgup/pgdn", "page"), kbd("g/G", "top/bot"),
 			kbd("enter", "confirm"), kbd("esc", "back"),
 		)
 	case addStepConfirm:
-		body = renderConfirmStep(m) + errLine
+		body = renderConfirmStep(m, innerW, cw) + errLine
 		footer = plainFooter(innerW,
 			kbd("↑/k", "up"), kbd("↓/j", "down"),
-			kbd("pgup/pgdn", "page"),
+			kbd("pgup/pgdn", "page"), kbd("g/G", "top/bot"),
 			kbd("enter", "execute"), kbd("esc", "back"),
 		)
 	default:
@@ -92,12 +95,34 @@ func viewAdd(m Model) string {
 		footer,
 	)
 	dialog := boxStyle.Width(cw - 2).Render(content)
+	dialog = clampDialogHeight(dialog, m.height)
 	return lipgloss.Place(m.width, m.height,
 		lipgloss.Center, lipgloss.Center,
 		dialog,
 		lipgloss.WithWhitespaceChars(" "),
 		lipgloss.WithWhitespaceForeground(lipgloss.Color(colBase)),
 	)
+}
+
+// clampDialogHeight ensures the dialog fits within maxLines by removing
+// lines from the middle of the content area (between header and footer).
+func clampDialogHeight(dialog string, maxLines int) string {
+	lines := strings.Split(dialog, "\n")
+	if len(lines) <= maxLines {
+		return dialog
+	}
+	// Keep top border + stepper + padding + header, and footer + border.
+	// Remove lines from the middle until we fit.
+	excess := len(lines) - maxLines
+	top := 5
+	bottom := 2
+	for len(lines)-excess < top+bottom {
+		excess--
+	}
+	clamped := make([]string, 0, len(lines)-excess)
+	clamped = append(clamped, lines[:top]...)
+	clamped = append(clamped, lines[top+excess:]...)
+	return strings.Join(clamped, "\n")
 }
 
 func renderAddStepper(width, step int) string {
@@ -137,7 +162,7 @@ func renderAddStepper(width, step int) string {
 
 // ─── Step 0: File browser ─────────────────────────────────────────────────────
 
-func renderAddStep0(m Model) string {
+func renderAddStep0(m Model, footer string, errLine string) string {
 	var b strings.Builder
 
 	displayPath := collapseHome(m.homeDir, m.homeDir)
@@ -165,13 +190,27 @@ func renderAddStep0(m Model) string {
 		return b.String()
 	}
 
-	contentHeight := m.height - 6
-	if contentHeight < 1 {
-		contentHeight = 1
+	cw := contentWidth(m.width)
+	innerW := cw - 4
+	stepper := renderAddStepper(innerW, m.addStep)
+	fixedContent := lipgloss.JoinVertical(lipgloss.Left,
+		stepper,
+		"", "",
+		footer,
+	)
+	fixedDialog := boxStyle.Width(cw - 2).Render(fixedContent)
+	fixedLines := strings.Count(fixedDialog, "\n") + 1
+	if errLine != "" {
+		fixedLines += 2
+	}
+
+	ch := m.height - fixedLines - 1
+	if ch < 1 {
+		ch = 1
 	}
 
 	start := m.browserScroll
-	end := start + contentHeight
+	end := start + ch
 	if end > len(items) {
 		end = len(items)
 	}
@@ -308,7 +347,7 @@ func buildPreviewRows(plan *stow.ClassificationPlan) []previewRow {
 	return rows
 }
 
-func renderPreviewStep(m Model) string {
+func renderPreviewStep(m Model, innerW, cw int) string {
 	if m.previewPlan == nil {
 		return dimStyle.Render("  Classifying files…")
 	}
@@ -318,7 +357,30 @@ func renderPreviewStep(m Model) string {
 	rows := m.previewRows
 	bw := bodyWidth(m.width)
 
-	contentHeight := previewContentHeight(m.height, m.err != nil)
+	stepper := renderAddStepper(innerW, m.addStep)
+	counts := renderPreviewCounts(m.previewPlan, m.previewToggles)
+	footer := plainFooter(innerW,
+		kbd("↑/k", "up"), kbd("↓/j", "down"),
+		kbd("pgup/pgdn", "page"), kbd("g/G", "top/bot"),
+		kbd("enter", "confirm"), kbd("esc", "back"),
+	)
+	fixedContent := lipgloss.JoinVertical(lipgloss.Left,
+		stepper,
+		"", "",
+		"", counts,
+		footer,
+	)
+	fixedDialog := boxStyle.Width(cw - 2).Render(fixedContent)
+	fixedLines := strings.Count(fixedDialog, "\n") + 1
+	if m.err != nil {
+		fixedLines += 2
+	}
+	fixedLines += 1 // scroll indicator or counts separator
+
+	contentHeight := m.height - fixedLines
+	if contentHeight < 4 {
+		contentHeight = 4
+	}
 
 	// Clamp scroll to [0, max(0, len-contentHeight)]. This handles
 	// window resizes shrinking the viewport underneath an existing
@@ -510,17 +572,35 @@ func renderPreviewCounts(plan *stow.ClassificationPlan, toggles map[string]bool)
 
 // ─── Step 2: Confirm ───────────────────────────────────────────────────────────
 
-func renderConfirmStep(m Model) string {
+func renderConfirmStep(m Model, innerW, cw int) string {
 	if m.previewPlan == nil {
 		return dimStyle.Render("  No plan to confirm.")
 	}
 
 	lines := buildConfirmLines(m.previewPlan, m.previewToggles, bodyWidth(m.width))
 
-	// Reserve vertical chrome: stepper + padding + footer + borders + two
-	// sticky lines at the bottom (progress indicator + execute hint).
-	// Leaves at least 3 body rows even on tiny terminals.
-	contentHeight := confirmContentHeight(m.height)
+	stepper := renderAddStepper(innerW, m.addStep)
+	footer := plainFooter(innerW,
+		kbd("↑/k", "up"), kbd("↓/j", "down"),
+		kbd("pgup/pgdn", "page"), kbd("g/G", "top/bot"),
+		kbd("enter", "execute"), kbd("esc", "back"),
+	)
+	fixedContent := lipgloss.JoinVertical(lipgloss.Left,
+		stepper,
+		"", "",
+		"enter to execute · esc to go back",
+		footer,
+	)
+	fixedDialog := boxStyle.Width(cw - 2).Render(fixedContent)
+	fixedLines := strings.Count(fixedDialog, "\n") + 1
+	if m.err != nil {
+		fixedLines += 2
+	}
+
+	contentHeight := m.height - fixedLines
+	if contentHeight < 3 {
+		contentHeight = 3
+	}
 
 	// Clamp scroll to [0, max(0, len-contentHeight)]. This also handles
 	// window resizes shrinking the viewport underneath an existing scroll.
@@ -563,7 +643,7 @@ func renderConfirmStep(m Model) string {
 // sticky bottom rows = 8. A hard floor of 3 keeps the view usable on
 // tiny terminals.
 func confirmContentHeight(terminalHeight int) int {
-	h := terminalHeight - 10
+	h := terminalHeight - 14
 	if h < 3 {
 		h = 3
 	}
@@ -678,6 +758,16 @@ func buildConfirmLines(plan *stow.ClassificationPlan, toggles map[string]bool, b
 var browserSkipDirs = map[string]bool{
 	".git": true, "node_modules": true, ".cache": true, "__pycache__": true,
 	"Library": true, ".Trash": true, ".dotcor": true,
+	".npm": true, ".nvm": true, ".local": true,
+	".cargo": true, ".rustup": true, ".vscode": true, ".vscode-server": true,
+	".gradle": true, ".m2": true, ".maven": true, ".docker": true,
+	".pyenv": true, ".rbenv": true, ".oh-my-zsh": true, ".oh-my-bash": true,
+	".zprezto": true, ".iterm2": true, ".kube": true, ".aws": true,
+	".config": true, ".bun": true, ".ollama": true, ".android": true,
+	".dotnet": true, ".nuget": true, ".swift": true, ".swiftpm": true,
+	".DS_Store": true,
+	"Applications": true, "Desktop": true, "Documents": true,
+	"Downloads": true, "Movies": true, "Music": true, "Pictures": true,
 }
 
 func loadBrowserDir(path string) []os.DirEntry {
@@ -752,17 +842,43 @@ func (m *Model) walkBrowserDir(dir string, indent int, items *[]browserItem) {
 }
 
 func (m *Model) browserAdjustScroll() {
-	contentHeight := m.height - 6
-	if contentHeight < 1 {
-		contentHeight = 1
+	ch := browserContentHeight(*m)
+	if ch < 1 {
+		ch = 1
 	}
 
 	if m.browserCursor < m.browserScroll {
 		m.browserScroll = m.browserCursor
 	}
-	if m.browserCursor >= m.browserScroll+contentHeight {
-		m.browserScroll = m.browserCursor - contentHeight + 1
+	if m.browserCursor >= m.browserScroll+ch {
+		m.browserScroll = m.browserCursor - ch + 1
 	}
+}
+
+func browserContentHeight(m Model) int {
+	cw := contentWidth(m.width)
+	innerW := cw - 4
+	hints := []string{
+		kbd("↑/k", "up"), kbd("↓/j", "down"),
+		kbd("pgup/pgdn", "page"), kbd("g/G", "top/bot"),
+		kbd("space", "select"), kbd("enter", "expand/confirm"),
+		kbd("h", "collapse"), kbd("/", "jump to path"),
+		kbd("esc", "cancel"),
+	}
+	if sc := selectionCount(m.browserSelected); sc != "" {
+		hints = append(hints, sc)
+	}
+	fl := footerLines(innerW, hints...)
+	ch := m.height - 11 - fl
+	if ch < 1 {
+		ch = 1
+	}
+	return ch
+}
+
+func footerLines(width int, hints ...string) int {
+	rendered := plainFooter(width, hints...)
+	return strings.Count(rendered, "\n") + 1
 }
 
 // previewContentHeight returns the number of rows available for the
@@ -774,7 +890,7 @@ func (m *Model) browserAdjustScroll() {
 //
 // A hard floor of 4 keeps navigation usable on very small terminals.
 func previewContentHeight(terminalHeight int, hasErr bool) int {
-	h := terminalHeight - 10
+	h := terminalHeight - 14
 	if hasErr {
 		h -= 2
 	}
@@ -889,6 +1005,16 @@ func (m Model) confirmHandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.confirmScroll > maxScroll {
 			m.confirmScroll = maxScroll
 		}
+	case "ctrl+u":
+		m.confirmScroll -= contentHeight / 2
+		if m.confirmScroll < 0 {
+			m.confirmScroll = 0
+		}
+	case "ctrl+d":
+		m.confirmScroll += contentHeight / 2
+		if m.confirmScroll > maxScroll {
+			m.confirmScroll = maxScroll
+		}
 	case "g", "home":
 		m.confirmScroll = 0
 	case "G", "end":
@@ -970,6 +1096,48 @@ func (m Model) browserHandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.browserCursor < len(items)-1 {
 			m.browserCursor++
 		}
+		m.browserAdjustScroll()
+		return m, nil
+
+	case "pgup", "ctrl+b":
+		m.browserCursor -= browserContentHeight(m)
+		if m.browserCursor < 0 {
+			m.browserCursor = 0
+		}
+		m.browserAdjustScroll()
+		return m, nil
+
+	case "pgdown", "ctrl+f":
+		m.browserCursor += browserContentHeight(m)
+		if m.browserCursor > len(items)-1 {
+			m.browserCursor = len(items) - 1
+		}
+		m.browserAdjustScroll()
+		return m, nil
+
+	case "ctrl+u":
+		m.browserCursor -= browserContentHeight(m) / 2
+		if m.browserCursor < 0 {
+			m.browserCursor = 0
+		}
+		m.browserAdjustScroll()
+		return m, nil
+
+	case "ctrl+d":
+		m.browserCursor += browserContentHeight(m) / 2
+		if m.browserCursor > len(items)-1 {
+			m.browserCursor = len(items) - 1
+		}
+		m.browserAdjustScroll()
+		return m, nil
+
+	case "g", "home":
+		m.browserCursor = 0
+		m.browserAdjustScroll()
+		return m, nil
+
+	case "G", "end":
+		m.browserCursor = len(items) - 1
 		m.browserAdjustScroll()
 		return m, nil
 
@@ -1208,38 +1376,36 @@ func managedSymlink(path, repoDir string) (bool, error) {
 // symlink that points into repoDir. A single unmanaged or non-symlink file
 // makes it return false. An empty directory returns false.
 func allFilesManaged(dir, repoDir string) bool {
-	total := 0
-	managed := 0
-	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return nil
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) == 0 {
+		return false
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			return false
 		}
-		total++
-		if isSymlink(path) {
-			if ok, _ := managedSymlink(path, repoDir); ok {
-				managed++
-			}
+		path := filepath.Join(dir, e.Name())
+		lfi, err := os.Lstat(path)
+		if err != nil || lfi.Mode()&os.ModeSymlink == 0 {
+			return false
 		}
-		return nil
-	})
-	return total > 0 && managed == total
+		if ok, _ := managedSymlink(path, repoDir); !ok {
+			return false
+		}
+	}
+	return true
 }
 
-// countFilesRecursive counts every entry a user could reasonably select
-// under dir — regular files AND symlinks, because symlinks are valid
-// selections (they classify as Adopt or Foreign, not as "nothing").
-// Skipping them here made the preview count understate what the user
-// actually had toggled ON.
 func countFilesRecursive(dir string) int {
 	count := 0
-	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
-		// Only directories are excluded. Walk gives us Lstat-based info,
-		// so a symlink to a directory still has IsDir() == false and is
-		// counted as the single entry the user sees it as.
-		if info.IsDir() {
+		if d.IsDir() {
+			if browserSkipDirs[d.Name()] {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		count++

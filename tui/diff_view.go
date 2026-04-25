@@ -30,7 +30,7 @@ func viewDiff(m Model) string {
 	body := m.viewport.View()
 	footer := subviewFooter(m.width,
 		kbd("c", "commit"),
-		kbd("↑↓", "scroll"),
+		kbd("↑↓/jk", "scroll"), kbd("pgup/pgdn", "page"), kbd("g/G", "top/bot"),
 		kbd("esc", "back"),
 	)
 

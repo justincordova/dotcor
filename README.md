@@ -1,13 +1,15 @@
-# DotCor
+# dotcor
 
 ![Version](https://img.shields.io/github/v/release/justincordova/dotcor?label=version)
 ![License](https://img.shields.io/github/license/justincordova/dotcor?label=license)
 ![Platform](https://img.shields.io/badge/platform-macos-blue)
 ![Go](https://img.shields.io/github/go-mod/go-version/justincordova/dotcor?label=go)
 
+<img src="assets/dotcor.png" alt="dotcor logo" width="200">
+
 A symlink-based dotfile manager with TUI and automatic Git commits.
 
-DotCor provides a lazygit-style terminal dashboard for managing your dotfiles with GNU Stow-style packages. Edit your dotfiles directly — changes instantly appear in your repository with automatic Git commits.
+dotcor provides a lazygit-style terminal dashboard for managing your dotfiles with GNU Stow-style packages. Edit your dotfiles directly — changes instantly appear in your repository with automatic Git commits.
 
 ---
 
@@ -27,7 +29,7 @@ brew install dotcor
 dotcor
 ```
 
-That's it. On first run, DotCor asks to create `~/.dotcor/` and launches the TUI dashboard.
+That's it. On first run, dotcor asks to create `~/.dotcor/` and launches the TUI dashboard.
 
 ---
 
@@ -43,9 +45,21 @@ A simple `y/N` prompt, then the TUI launches. If a v1.x layout is detected, a on
 
 ---
 
+## Screenshots
+
+<p float="left">
+  <img src="assets/dotcor1.png" alt="Dashboard" width="32%">
+  <img src="assets/dotcor2.png" alt="Add wizard" width="32%">
+  <img src="assets/dotcor3.png" alt="History" width="32%">
+</p>
+
+*Dashboard · Add wizard · History*
+
+---
+
 ## How It Works
 
-DotCor uses **Stow-style packages** — each dotfile group is a directory in `~/.dotcor/` that mirrors `$HOME`:
+dotcor uses **Stow-style packages** — each dotfile group is a directory in `~/.dotcor/` that mirrors `$HOME`:
 
 ```
 ~/.zshrc (symlink) ──> ~/.dotcor/zsh/.zshrc (actual file)
@@ -92,7 +106,7 @@ Each top-level directory is a **package**. Excluded: `.git`, `logs`, `backups`, 
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  DotCor v2.0.0                                                     1 package │
+│  dotcor v2.0.0                                                     1 package │
 ├──────────────────────────────────────┬──────────────────────────────────────┤
 │  Packages (5)                   [1]  │  zsh                                    │
 │ ┌──────────────────────────────────┐ │ ┌────────────────────────────────────┐ │
@@ -192,7 +206,7 @@ Minimal — processed before TUI launch:
 
 ## Comparison
 
-| Feature | DotCor | GNU Stow | Chezmoi | yadm |
+| Feature | dotcor | GNU Stow | Chezmoi | yadm |
 |---------|--------|----------|---------|------|
 | Approach | Symlinks + auto Git | Symlinks only | Templates + copy | Entire home as repo |
 | TUI | Yes (Bubble Tea) | No | No | No |

@@ -145,14 +145,14 @@ type Model struct {
 
 	classifyResult *stow.ClassificationResult
 
-	browserEntries   map[string][]os.DirEntry
-	browserExpanded  map[string]bool
-	browserCursor    int
-	browserScroll    int
-	browserItems     []browserItem
-	browserSelected  map[string]bool
-	browserJumping   bool
-	browserJumpInput textinput.Model
+	browserEntries      map[string][]os.DirEntry
+	browserExpanded     map[string]bool
+	browserCursor       int
+	browserScroll       int
+	browserItems        []browserItem
+	browserSelected     map[string]bool
+	browserJumping      bool
+	browserJumpInput    textinput.Model
 
 	commits        []git.CommitInfo
 	selectedCommit int
@@ -537,6 +537,80 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.selectedFile = 0
 		}
 
+	case keyMsg.String() == "pgup" || keyMsg.String() == "ctrl+b":
+		if m.expanded[m.selectedPkg] && len(m.currentFiles()) > 0 {
+			m.selectedFile -= 5
+			if m.selectedFile < 0 {
+				m.selectedFile = 0
+			}
+		} else {
+			for i := 0; i < 5; i++ {
+				m.selectedPkg = m.prevSortedPkg()
+			}
+			m.selectedFile = 0
+		}
+
+	case keyMsg.String() == "pgdown" || keyMsg.String() == "ctrl+f":
+		if m.expanded[m.selectedPkg] && len(m.currentFiles()) > 0 {
+			m.selectedFile += 5
+			if m.selectedFile > len(m.currentFiles())-1 {
+				m.selectedFile = len(m.currentFiles()) - 1
+			}
+		} else {
+			for i := 0; i < 5; i++ {
+				m.selectedPkg = m.nextSortedPkg()
+			}
+			m.selectedFile = 0
+		}
+
+	case keyMsg.String() == "ctrl+u":
+		if m.expanded[m.selectedPkg] && len(m.currentFiles()) > 0 {
+			m.selectedFile -= 3
+			if m.selectedFile < 0 {
+				m.selectedFile = 0
+			}
+		} else {
+			for i := 0; i < 3; i++ {
+				m.selectedPkg = m.prevSortedPkg()
+			}
+			m.selectedFile = 0
+		}
+
+	case keyMsg.String() == "ctrl+d":
+		if m.expanded[m.selectedPkg] && len(m.currentFiles()) > 0 {
+			m.selectedFile += 3
+			if m.selectedFile > len(m.currentFiles())-1 {
+				m.selectedFile = len(m.currentFiles()) - 1
+			}
+		} else {
+			for i := 0; i < 3; i++ {
+				m.selectedPkg = m.nextSortedPkg()
+			}
+			m.selectedFile = 0
+		}
+
+	case keyMsg.String() == "g" || keyMsg.String() == "home":
+		if m.expanded[m.selectedPkg] && len(m.currentFiles()) > 0 {
+			m.selectedFile = 0
+		} else {
+			indices := sortedPackages(m)
+			if len(indices) > 0 {
+				m.selectedPkg = indices[0]
+			}
+			m.selectedFile = 0
+		}
+
+	case keyMsg.String() == "G" || keyMsg.String() == "end":
+		if m.expanded[m.selectedPkg] && len(m.currentFiles()) > 0 {
+			m.selectedFile = len(m.currentFiles()) - 1
+		} else {
+			indices := sortedPackages(m)
+			if len(indices) > 0 {
+				m.selectedPkg = indices[len(indices)-1]
+			}
+			m.selectedFile = 0
+		}
+
 	case key.Matches(keyMsg, m.keys.Enter):
 		m.expanded[m.selectedPkg] = !m.expanded[m.selectedPkg]
 		m.selectedFile = 0
@@ -707,13 +781,13 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.clearErr()
 		m.activeView = AddView
 		m.addStep = addStepSelect
-		m.browserExpanded = make(map[string]bool)
-		m.browserCursor = 0
-		m.browserScroll = 0
-		m.browserEntries = make(map[string][]os.DirEntry)
-		m.browserItems = nil
-		m.browserSelected = make(map[string]bool)
-		return m, nil
+	m.browserExpanded = make(map[string]bool)
+	m.browserCursor = 0
+	m.browserScroll = 0
+	m.browserEntries = make(map[string][]os.DirEntry)
+	m.browserItems = nil
+	m.browserSelected = make(map[string]bool)
+	return m, nil
 
 	case key.Matches(keyMsg, m.keys.Diff):
 		m.clearErr()

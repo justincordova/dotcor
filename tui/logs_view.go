@@ -15,7 +15,7 @@ func viewLogs(m Model) string {
 		kbd("2", "info"),
 		kbd("3", "warn"),
 		kbd("4", "error"),
-		kbd("↑↓", "scroll"),
+		kbd("↑↓/jk", "scroll"), kbd("pgup/pgdn", "page"), kbd("g/G", "top/bot"),
 		kbd("esc", "back"),
 		dimStyle.Render(fmt.Sprintf("%d lines", len(m.logs))),
 	)

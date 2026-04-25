@@ -1,8 +1,8 @@
-# DotCor Logging Guide
+# dotcor Logging Guide
 
 ## Overview
 
-DotCor uses `charmbracelet/log` for structured file-based logging. Since the TUI owns the terminal, all log output goes to a file — never stderr.
+dotcor uses `charmbracelet/log` for structured file-based logging. Since the TUI owns the terminal, all log output goes to a file — never stderr.
 
 ## Default Log File
 

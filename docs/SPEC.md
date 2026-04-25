@@ -1,4 +1,4 @@
-# DotCor v2.0 Specification
+# dotcor v2.0 Specification
 
 A symlink-based dotfile manager with a Bubble Tea TUI and GNU Stow-style package layout, backed by automatic Git commits.
 
@@ -124,7 +124,7 @@ No `managed_files` list. No `version` field. State is discovered from the filesy
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  DotCor v2.0.0                                                     1 package │
+│  dotcor v2.0.0                                                     1 package │
 ├──────────────────────────────────────┬──────────────────────────────────────┤
 │  Packages (5)                   [1]  │  zsh                                    │
 │ ┌──────────────────────────────────┐ │ ┌────────────────────────────────────┐ │

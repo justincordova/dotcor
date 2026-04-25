@@ -80,9 +80,9 @@ func renderHeader(m Model) string {
 		Render(row)
 }
 
-// renderLogo paints "DotCor" with a mauve → pink per-char gradient.
+// renderLogo paints "dotcor" with a mauve → pink per-char gradient.
 func renderLogo() string {
-	text := "◆ DotCor"
+	text := "◆ dotcor"
 	gradient := []string{colMauve, colMauve, colLavender, colPink, colPink, colFlamingo, colFlamingo, colPink}
 	var b strings.Builder
 	for i, r := range text {
@@ -646,7 +646,7 @@ func renderFooter(m Model) string {
 	}
 
 	allHints := []string{
-		kbd("↑↓/jk", "nav"),
+		kbd("↑↓/jk", "nav"), kbd("ctrl+u/d", "page"), kbd("g/G", "top/bot"),
 		kbd("tab", "sort"),
 		kbd("s", "stow"),
 		kbd("u", "unstow"),

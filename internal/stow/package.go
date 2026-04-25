@@ -2,6 +2,7 @@ package stow
 
 import (
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -217,8 +218,14 @@ func appendAutoDetected(files []FileEntry, pkgDir, homeDir string) []FileEntry {
 	}
 
 	homeRoot := filepath.Join(homeDir, managedRoot)
-	_ = filepath.Walk(homeRoot, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
+	_ = filepath.WalkDir(homeRoot, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if walkSkipDirs[d.Name()] {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		relPath, relErr := filepath.Rel(homeDir, path)
