@@ -5,7 +5,9 @@
 ![Platform](https://img.shields.io/badge/platform-macos-blue)
 ![Go](https://img.shields.io/github/go-mod/go-version/justincordova/dotcor?label=go)
 
-<img src="assets/dotcor.png" alt="dotcor logo" width="200">
+<p align="center">
+  <img src="assets/dotcor.png" alt="dotcor logo" width="200">
+</p>
 
 A symlink-based dotfile manager with TUI and automatic Git commits.
 
