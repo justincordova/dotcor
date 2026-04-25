@@ -96,6 +96,22 @@ func ExecuteMigration(repoDir string, steps []MigrationStep) error {
 				step.Dst, err, len(completed))
 		}
 
+		// Refuse to overwrite an existing destination. os.Rename on
+		// Linux/macOS replaces the destination atomically and silently,
+		// which is the wrong behaviour during migration: a re-run after
+		// a previous interrupted migration would clobber whatever the
+		// user already migrated (or hand-fixed) at Dst. Surface it as
+		// an error and roll back so the user can investigate.
+		if _, err := os.Lstat(step.Dst); err == nil {
+			rollbackMigration(completed)
+			return fmt.Errorf("destination already exists, refusing to overwrite: %s (rolled back %d step(s))",
+				step.Dst, len(completed))
+		} else if !os.IsNotExist(err) {
+			rollbackMigration(completed)
+			return fmt.Errorf("checking destination %s: %w (rolled back %d step(s))",
+				step.Dst, err, len(completed))
+		}
+
 		if err := os.Rename(step.Src, step.Dst); err != nil {
 			rollbackMigration(completed)
 			return fmt.Errorf("moving %s to %s: %w (rolled back %d step(s))",
