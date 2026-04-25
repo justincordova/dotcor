@@ -9,6 +9,7 @@ import (
 
 	"github.com/justincordova/dotcor/internal/config"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // createTestConfig creates a test config with logger
@@ -148,8 +149,36 @@ func TestDetectSecrets(t *testing.T) {
 	}
 }
 
+// TestValidateNotAlreadyManaged exercises both branches of the function
+// rather than just the trivial "everything is unmanaged" path. The
+// previous version of this test used two near-identical rows both
+// asserting wantErr:false against random ~/. paths that don't exist —
+// it never created a symlink into the dotcor repo, so the function's
+// "this is already managed" branch was untouched.
+//
+// Now we set DOTCOR_DIR to a tempdir, create a real symlink pointing
+// into that dir, and assert the function rejects it.
 func TestValidateNotAlreadyManaged(t *testing.T) {
-	cfg := &config.Config{}
+	cfg := createTestConfig(t)
+
+	tmpDir := t.TempDir()
+	repoDir := filepath.Join(tmpDir, "dotcor")
+	require.NoError(t, os.MkdirAll(repoDir, 0755))
+	t.Setenv("DOTCOR_DIR", repoDir)
+
+	repoFile := filepath.Join(repoDir, "zshrc")
+	require.NoError(t, os.WriteFile(repoFile, []byte("cfg"), 0644))
+
+	managedLink := filepath.Join(tmpDir, "managed-link")
+	require.NoError(t, os.Symlink(repoFile, managedLink))
+
+	regularFile := filepath.Join(tmpDir, "regular")
+	require.NoError(t, os.WriteFile(regularFile, []byte("regular"), 0644))
+
+	externalFile := filepath.Join(tmpDir, "external")
+	require.NoError(t, os.WriteFile(externalFile, []byte("ext"), 0644))
+	foreignLink := filepath.Join(tmpDir, "foreign-link")
+	require.NoError(t, os.Symlink(externalFile, foreignLink))
 
 	tests := []struct {
 		name       string
@@ -157,27 +186,31 @@ func TestValidateNotAlreadyManaged(t *testing.T) {
 		wantErr    bool
 	}{
 		{
-			name:       "unmanaged file",
-			sourcePath: "~/.bashrc",
+			name:       "regular file is not managed",
+			sourcePath: regularFile,
 			wantErr:    false,
 		},
 		{
-			name:       "any file passes",
-			sourcePath: "~/.zshrc",
+			name:       "symlink pointing outside repo is not managed",
+			sourcePath: foreignLink,
 			wantErr:    false,
+		},
+		{
+			name:       "symlink pointing into repo IS managed",
+			sourcePath: managedLink,
+			wantErr:    true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sourcePath := tt.sourcePath
-
-			err := ValidateNotAlreadyManaged(cfg, sourcePath)
-
+			err := ValidateNotAlreadyManaged(cfg, tt.sourcePath)
 			if tt.wantErr {
-				assert.Error(t, err, "should return error for already managed file: %s", sourcePath)
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "already managed",
+					"error should mention 'already managed'")
 			} else {
-				assert.NoError(t, err, "should not return error for unmanaged file: %s", sourcePath)
+				assert.NoError(t, err)
 			}
 		})
 	}
