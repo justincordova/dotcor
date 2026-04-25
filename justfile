@@ -28,7 +28,7 @@ build:
 
 # build and run
 run:
-    go run cmd/dotcor/main.go
+    go run -ldflags="-X main.version=$(git describe --tags --always 2>/dev/null || echo dev)" cmd/dotcor/main.go
 
 # clean build artifacts
 clean:
@@ -54,11 +54,11 @@ deps:
 
 # build the binary
 binary:
-    go build -o bin/dotcor cmd/dotcor/main.go
+    go build -ldflags="-X main.version=$(git describe --tags --always 2>/dev/null || echo dev)" -o bin/dotcor cmd/dotcor/main.go
 
 # install to GOPATH/bin
 install:
-    go install ./cmd/dotcor
+    go install -ldflags="-X main.version=$(git describe --tags --always 2>/dev/null || echo dev)" ./cmd/dotcor
 
 # manual testing
 test-manual:
