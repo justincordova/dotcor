@@ -83,25 +83,25 @@ func Adopt(repoDir, homeDir, packageName string) (*AdoptResult, error) {
 			continue
 		}
 
-		if err := os.Remove(f.TargetPath); err != nil {
-			_ = os.Remove(repoPath)
-			result.Failures = append(result.Failures, f.RelPath)
-			result.Skipped++
-			continue
-		}
-
 		relSymlink, err := filepath.Rel(filepath.Dir(f.TargetPath), repoPath)
 		if err != nil {
-			_ = os.WriteFile(f.TargetPath, srcData, srcPerm)
 			_ = os.Remove(repoPath)
 			result.Failures = append(result.Failures, f.RelPath)
 			result.Skipped++
 			continue
 		}
 
+		// Atomic swap: stage the new symlink alongside the existing one,
+		// then rename on top. The original Remove(f.TargetPath) before
+		// Symlink+Rename opened a window where TargetPath had nothing
+		// at all — a crash there left the user with no symlink AND no
+		// file, recoverable only from the repo copy. POSIX rename
+		// replaces the existing entry atomically in one syscall, so the
+		// link is either the old foreign one or the new repo one,
+		// never absent.
 		tmpLink := f.TargetPath + ".dotcor-tmp"
+		_ = os.Remove(tmpLink) // clean any leftover from a prior crashed run
 		if err := os.Symlink(relSymlink, tmpLink); err != nil {
-			_ = os.WriteFile(f.TargetPath, srcData, srcPerm)
 			_ = os.Remove(repoPath)
 			result.Failures = append(result.Failures, f.RelPath)
 			result.Skipped++
@@ -110,7 +110,6 @@ func Adopt(repoDir, homeDir, packageName string) (*AdoptResult, error) {
 
 		if err := os.Rename(tmpLink, f.TargetPath); err != nil {
 			_ = os.Remove(tmpLink)
-			_ = os.WriteFile(f.TargetPath, srcData, srcPerm)
 			_ = os.Remove(repoPath)
 			result.Failures = append(result.Failures, f.RelPath)
 			result.Skipped++

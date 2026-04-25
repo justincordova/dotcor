@@ -135,23 +135,25 @@ func linkAutoDetectedFile(result *LinkResult, pkgDir, homeDir string, f FileEntr
 		return
 	}
 
-	if symErr = os.Symlink(relSymlink, f.TargetPath+".dotcor-tmp"); symErr != nil {
+	// Atomic swap: write the new symlink to a temp path in the same
+	// directory, then rename it on top of the existing target. POSIX
+	// rename replaces the destination in a single syscall — there is no
+	// window where TargetPath is missing, so a crash mid-swap leaves
+	// the user's $HOME with either the original file (if rename hadn't
+	// happened) or the new symlink (if it had). Removing the target
+	// first, as the previous implementation did, opened a window where
+	// $HOME had no file at all; a crash there left the file gone with
+	// the bytes only present in the just-written repo copy.
+	tmpLink := f.TargetPath + ".dotcor-tmp"
+	_ = os.Remove(tmpLink) // clean any leftover from a prior crashed run
+	if symErr = os.Symlink(relSymlink, tmpLink); symErr != nil {
 		result.Skipped++
 		return
 	}
 
-	if removeErr := os.Remove(f.TargetPath); removeErr != nil {
-		_ = os.Remove(f.TargetPath + ".dotcor-tmp")
+	if renameErr := os.Rename(tmpLink, f.TargetPath); renameErr != nil {
+		_ = os.Remove(tmpLink)
 		result.Conflicts = append(result.Conflicts, f.RelPath)
-		result.Skipped++
-		return
-	}
-
-	if renameErr := os.Rename(f.TargetPath+".dotcor-tmp", f.TargetPath); renameErr != nil {
-		_ = os.Remove(f.TargetPath + ".dotcor-tmp")
-		if writeErr := os.WriteFile(f.TargetPath, srcData, srcPerm); writeErr != nil {
-			result.Conflicts = append(result.Conflicts, f.RelPath)
-		}
 		result.Skipped++
 		return
 	}
