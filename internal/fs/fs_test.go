@@ -455,26 +455,19 @@ func TestIsWritableTempCleanup(t *testing.T) {
 	}
 }
 
+// TestMoveFileCleanupOnError verifies the failure path: when MoveFile
+// can't proceed (here: src doesn't exist), it must surface an error and
+// must not leave a phantom dst file behind. The previous version of
+// this test wrote a real source file and asserted the success path
+// while claiming to test cleanup-on-error - the name lied about what
+// it covered.
 func TestMoveFileCleanupOnError(t *testing.T) {
 	tmpDir := t.TempDir()
-	src := filepath.Join(tmpDir, "src.txt")
+	src := filepath.Join(tmpDir, "does-not-exist.txt")
 	dst := filepath.Join(tmpDir, "dst.txt")
 
-	err := os.WriteFile(src, []byte("content"), 0644)
-	if err != nil {
-		t.Fatalf("setup failed: %v", err)
-	}
+	err := MoveFile(src, dst, testConfig())
 
-	cfg := testConfig()
-
-	// Test that move operation completes successfully
-	err = MoveFile(src, dst, cfg)
-	if err != nil {
-		t.Fatalf("MoveFile failed: %v", err)
-	}
-
-	// After successful move, source should not exist
-	if PathExists(src) {
-		t.Error("source file should not exist after move")
-	}
+	require.Error(t, err, "MoveFile should fail when src doesn't exist")
+	assert.False(t, PathExists(dst), "dst must not be created when MoveFile fails")
 }
