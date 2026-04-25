@@ -71,12 +71,14 @@ func viewAdd(m Model) string {
 		body = renderPreviewStep(m) + errLine
 		footer = plainFooter(innerW,
 			kbd("↑/k", "up"), kbd("↓/j", "down"),
-			kbd("space", "toggle"), kbd("enter", "confirm"),
-			kbd("esc", "back"),
+			kbd("pgup/pgdn", "page"), kbd("g/G", "top/bot"),
+			kbd("enter", "confirm"), kbd("esc", "back"),
 		)
 	case addStepConfirm:
 		body = renderConfirmStep(m) + errLine
 		footer = plainFooter(innerW,
+			kbd("↑/k", "up"), kbd("↓/j", "down"),
+			kbd("pgup/pgdn", "page"),
 			kbd("enter", "execute"), kbd("esc", "back"),
 		)
 	default:
@@ -268,11 +270,18 @@ func buildPreviewRows(plan *stow.ClassificationPlan) []previewRow {
 			byClass[cf.Class] = append(byClass[cf.Class], cf)
 		}
 
-		// Package header row (non-navigable, used for display only).
+		// Package header title + separator rows (non-navigable). Each
+		// header row represents exactly one visual terminal line so the
+		// viewport's row-based pagination math stays honest.
 		rows = append(rows, previewRow{
 			pkgName:     pkg.Name,
 			isHeader:    true,
 			headerLabel: "pkg:" + pkg.Name,
+		})
+		rows = append(rows, previewRow{
+			pkgName:     pkg.Name,
+			isHeader:    true,
+			headerLabel: "pkgsep",
 		})
 
 		for _, class := range classOrder {
@@ -299,28 +308,6 @@ func buildPreviewRows(plan *stow.ClassificationPlan) []previewRow {
 	return rows
 }
 
-// firstFileRow returns the index of the first non-header row at or after start,
-// searching forward. Returns start if no file row is found.
-func firstFileRow(rows []previewRow, start int) int {
-	for i := start; i < len(rows); i++ {
-		if !rows[i].isHeader {
-			return i
-		}
-	}
-	return start
-}
-
-// lastFileRow returns the index of the last non-header row at or before start,
-// searching backward. Returns start if no file row is found.
-func lastFileRow(rows []previewRow, start int) int {
-	for i := start; i >= 0; i-- {
-		if !rows[i].isHeader {
-			return i
-		}
-	}
-	return start
-}
-
 func renderPreviewStep(m Model) string {
 	if m.previewPlan == nil {
 		return dimStyle.Render("  Classifying files…")
@@ -331,12 +318,23 @@ func renderPreviewStep(m Model) string {
 	rows := m.previewRows
 	bw := bodyWidth(m.width)
 
-	contentHeight := m.height - 10
-	if contentHeight < 4 {
-		contentHeight = 4
-	}
+	contentHeight := previewContentHeight(m.height, m.err != nil)
 
+	// Clamp scroll to [0, max(0, len-contentHeight)]. This handles
+	// window resizes shrinking the viewport underneath an existing
+	// scroll, and guarantees the user can always reach the very first
+	// row (scroll = 0) — including header rows like "Package: foo".
+	maxScroll := len(rows) - contentHeight
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
 	start := m.previewScroll
+	if start > maxScroll {
+		start = maxScroll
+	}
+	if start < 0 {
+		start = 0
+	}
 	end := start + contentHeight
 	if end > len(rows) {
 		end = len(rows)
@@ -357,15 +355,17 @@ func renderPreviewStep(m Model) string {
 		}
 		id := stow.FileID(row.pkgName, row.relPath)
 		toggled := m.previewToggles[id]
-		selected := i == m.previewCursor
 
-		line := renderPreviewFileRow(*cf, toggled, row.pkgName, selected, bw)
+		line := renderPreviewFileRow(*cf, toggled, row.pkgName, bw)
 		b.WriteString(line)
 		b.WriteString("\n")
 	}
 
-	if end < len(rows) {
-		b.WriteString(dimStyle.Render(fmt.Sprintf("  … %d more", len(rows)-end)))
+	// Scroll position indicator — only shown when the list overflows
+	// the viewport. Mirrors the confirm step so the scrollability is
+	// discoverable without the user having to press keys to find out.
+	if len(rows) > contentHeight {
+		b.WriteString(dimStyle.Render(fmt.Sprintf("  %d-%d of %d  ↑/↓ to scroll · pgup/pgdn page · g/G top/bottom", start+1, end, len(rows))))
 		b.WriteString("\n")
 	}
 
@@ -379,8 +379,10 @@ func renderPreviewStep(m Model) string {
 func renderPreviewHeader(row previewRow, bw int) string {
 	if strings.HasPrefix(row.headerLabel, "pkg:") {
 		pkgName := strings.TrimPrefix(row.headerLabel, "pkg:")
-		return accentStyle.Render("  Package: "+pkgName) + "\n" +
-			subtleStyle.Render("  "+strings.Repeat("─", max(bw-2, 4)))
+		return accentStyle.Render("  Package: " + pkgName)
+	}
+	if row.headerLabel == "pkgsep" {
+		return subtleStyle.Render("  " + strings.Repeat("─", max(bw-2, 4)))
 	}
 
 	// Class section header.
@@ -404,7 +406,7 @@ func renderPreviewHeader(row previewRow, bw int) string {
 	return "  " + pill(" "+label+" ", colBase, color)
 }
 
-func renderPreviewFileRow(cf stow.ClassifiedFile, toggled bool, pkgName string, selected bool, bw int) string {
+func renderPreviewFileRow(cf stow.ClassifiedFile, toggled bool, pkgName string, bw int) string {
 	isManaged := cf.Class == stow.ClassManaged
 
 	var checkbox string
@@ -427,23 +429,16 @@ func renderPreviewFileRow(cf stow.ClassifiedFile, toggled bool, pkgName string, 
 		detail = dimStyle.Render(fmt.Sprintf("repo/%s/%s (no $HOME link)", pkgName, cf.RelPath))
 	case stow.ClassForeign:
 		target := truncate(cf.ForeignTarget, 30)
-		detail = warningStyle.Render(fmt.Sprintf("→ %s (toggle to adopt)", target))
+		detail = warningStyle.Render(fmt.Sprintf("→ %s", target))
 	case stow.ClassManaged:
 		detail = dimStyle.Render(fmt.Sprintf("already in repo/%s/", pkgName))
 	}
 
 	var styledName string
-	if isManaged {
+	if isManaged || !toggled {
 		styledName = dimStyle.Render(name)
-	} else if toggled {
-		styledName = textStyle.Render(name)
 	} else {
-		styledName = dimStyle.Render(name)
-	}
-
-	prefix := "  "
-	if selected && !isManaged {
-		prefix = accentStyle.Render("▌ ")
+		styledName = textStyle.Render(name)
 	}
 
 	nameW := lipgloss.Width(styledName)
@@ -451,7 +446,7 @@ func renderPreviewFileRow(cf stow.ClassifiedFile, toggled bool, pkgName string, 
 	if nameW < 24 {
 		namePad = strings.Repeat(" ", 24-nameW)
 	}
-	line := fmt.Sprintf("%s%s%s%s  %s", prefix, checkbox, styledName, namePad, detail)
+	line := fmt.Sprintf("  %s%s%s  %s", checkbox, styledName, namePad, detail)
 
 	return lipgloss.NewStyle().Width(bw).Render(line)
 }
@@ -502,6 +497,9 @@ func renderPreviewCounts(plan *stow.ClassificationPlan, toggles map[string]bool)
 	if n := len(plan.Filtered); n > 0 {
 		parts = append(parts, pill(fmt.Sprintf(" filtered %d ", n), colBase, colRed))
 	}
+	if n := len(plan.Warnings); n > 0 {
+		parts = append(parts, pill(fmt.Sprintf(" warn %d ", n), colBase, colYellow))
+	}
 
 	active := dimStyle.Render(fmt.Sprintf("  %d active", activeCount))
 	if len(parts) == 0 {
@@ -517,16 +515,71 @@ func renderConfirmStep(m Model) string {
 		return dimStyle.Render("  No plan to confirm.")
 	}
 
-	plan := m.previewPlan
-	toggles := m.previewToggles
-	bw := bodyWidth(m.width)
+	lines := buildConfirmLines(m.previewPlan, m.previewToggles, bodyWidth(m.width))
+
+	// Reserve vertical chrome: stepper + padding + footer + borders + two
+	// sticky lines at the bottom (progress indicator + execute hint).
+	// Leaves at least 3 body rows even on tiny terminals.
+	contentHeight := confirmContentHeight(m.height)
+
+	// Clamp scroll to [0, max(0, len-contentHeight)]. This also handles
+	// window resizes shrinking the viewport underneath an existing scroll.
+	maxScroll := len(lines) - contentHeight
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	scroll := m.confirmScroll
+	if scroll > maxScroll {
+		scroll = maxScroll
+	}
+	if scroll < 0 {
+		scroll = 0
+	}
+
+	end := scroll + contentHeight
+	if end > len(lines) {
+		end = len(lines)
+	}
 
 	var b strings.Builder
+	for i := scroll; i < end; i++ {
+		b.WriteString(lines[i])
+		b.WriteString("\n")
+	}
 
-	b.WriteString(accentStyle.Render("  Confirm changes"))
-	b.WriteString("\n")
-	b.WriteString(subtleStyle.Render("  " + strings.Repeat("─", max(bw-2, 4))))
-	b.WriteString("\n")
+	// Sticky footer: scroll position + execute hint.
+	if len(lines) > contentHeight {
+		b.WriteString(dimStyle.Render(fmt.Sprintf("  %d-%d of %d  ↑/↓ to scroll", scroll+1, end, len(lines))))
+		b.WriteString("\n")
+	}
+	b.WriteString(dimStyle.Render("  enter to execute · esc to go back"))
+
+	return b.String()
+}
+
+// confirmContentHeight returns the number of body rows available for the
+// confirm step. Mirrors the chrome accounting done by viewAdd: stepper
+// (1) + padding top/bottom (2) + footer (1) + box border (2) + two
+// sticky bottom rows = 8. A hard floor of 3 keeps the view usable on
+// tiny terminals.
+func confirmContentHeight(terminalHeight int) int {
+	h := terminalHeight - 10
+	if h < 3 {
+		h = 3
+	}
+	return h
+}
+
+// buildConfirmLines produces the flat list of rendered rows for the
+// confirm step — one slice element per visual terminal row. Keeping the
+// output as []string lets the view paginate without re-doing the layout
+// on every scroll tick.
+func buildConfirmLines(plan *stow.ClassificationPlan, toggles map[string]bool, bw int) []string {
+	var lines []string
+
+	sep := subtleStyle.Render("  " + strings.Repeat("─", max(bw-2, 4)))
+	lines = append(lines, accentStyle.Render("  Confirm changes"))
+	lines = append(lines, sep)
 
 	classOrder := []stow.Class{stow.ClassAdopt, stow.ClassAdd, stow.ClassTrack, stow.ClassForeign}
 	for _, pkg := range plan.Packages {
@@ -551,11 +604,9 @@ func renderConfirmStep(m Model) string {
 			continue
 		}
 
-		b.WriteString("\n")
-		b.WriteString(accentStyle.Render("  Package: " + pkg.Name))
-		b.WriteString("\n")
-		b.WriteString(subtleStyle.Render("  " + strings.Repeat("─", max(bw-2, 4))))
-		b.WriteString("\n")
+		lines = append(lines, "")
+		lines = append(lines, accentStyle.Render("  Package: "+pkg.Name))
+		lines = append(lines, sep)
 
 		for _, class := range classOrder {
 			files := byClass[class]
@@ -584,8 +635,7 @@ func renderConfirmStep(m Model) string {
 				label, color = "FOREIGN", colYellow
 			}
 
-			b.WriteString("  " + pill(fmt.Sprintf(" %s %d ", label, len(active)), colBase, color))
-			b.WriteString("\n")
+			lines = append(lines, "  "+pill(fmt.Sprintf(" %s %d ", label, len(active)), colBase, color))
 			for _, cf := range active {
 				var detail string
 				switch class {
@@ -602,8 +652,7 @@ func renderConfirmStep(m Model) string {
 				if lipgloss.Width(line) > bw {
 					line = truncate(line, bw-2)
 				}
-				b.WriteString(dimStyle.Render(line))
-				b.WriteString("\n")
+				lines = append(lines, dimStyle.Render(line))
 			}
 		}
 	}
@@ -617,15 +666,11 @@ func renderConfirmStep(m Model) string {
 		}
 	}
 	if managedCount > 0 {
-		b.WriteString("\n")
-		b.WriteString("  " + pill(fmt.Sprintf(" MANAGED %d (skipped) ", managedCount), colBase, colOverlay0))
-		b.WriteString("\n")
+		lines = append(lines, "")
+		lines = append(lines, "  "+pill(fmt.Sprintf(" MANAGED %d (skipped) ", managedCount), colBase, colOverlay0))
 	}
 
-	b.WriteString("\n")
-	b.WriteString(dimStyle.Render("  enter to execute · esc to go back"))
-
-	return b.String()
+	return lines
 }
 
 // ─── Browser helpers (shared with step 0) ────────────────────────────────────
@@ -720,21 +765,23 @@ func (m *Model) browserAdjustScroll() {
 	}
 }
 
-func (m *Model) previewAdjustScroll() {
-	contentHeight := m.height - 10
-	if contentHeight < 4 {
-		contentHeight = 4
+// previewContentHeight returns the number of rows available for the
+// preview file list. Chrome budget:
+//   - 2 box border + 1 stepper + 2 padding + 1 footer        = 6
+//   - "… N more" hint when overflow                          = 1
+//   - blank separator + renderPreviewCounts                  = 2
+//   - errLine (2 rows) when an error is showing              = 2
+//
+// A hard floor of 4 keeps navigation usable on very small terminals.
+func previewContentHeight(terminalHeight int, hasErr bool) int {
+	h := terminalHeight - 10
+	if hasErr {
+		h -= 2
 	}
-
-	if m.previewCursor < m.previewScroll {
-		m.previewScroll = m.previewCursor
+	if h < 4 {
+		h = 4
 	}
-	if m.previewCursor >= m.previewScroll+contentHeight {
-		m.previewScroll = m.previewCursor - contentHeight + 1
-	}
-	if m.previewScroll < 0 {
-		m.previewScroll = 0
-	}
+	return h
 }
 
 // ─── Update handlers ──────────────────────────────────────────────────────────
@@ -751,6 +798,9 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.addStep--
 			m.err = nil
+			// Stepping back from confirm to preview — reset confirm
+			// scroll so the next entry to this step starts at the top.
+			m.confirmScroll = 0
 			return m, nil
 
 		case key.Matches(keyMsg, m.keys.Enter):
@@ -776,6 +826,7 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				m.addStep = addStepConfirm
+				m.confirmScroll = 0
 				m.err = nil
 				return m, nil
 
@@ -786,22 +837,6 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, runClassification(m.previewPlan, stow.CopyToggles(m.previewToggles), m.repoDir, m.homeDir)
 			}
 
-		case keyMsg.String() == " " && m.addStep == addStepPreview:
-			// Toggle row in preview.
-			rows := m.previewRows
-			if m.previewCursor < 0 || m.previewCursor >= len(rows) {
-				return m, nil
-			}
-			row := rows[m.previewCursor]
-			if row.isHeader {
-				return m, nil
-			}
-			if row.class == stow.ClassManaged {
-				return m, nil // no-op for managed
-			}
-			id := stow.FileID(row.pkgName, row.relPath)
-			m.previewToggles[id] = !m.previewToggles[id]
-			return m, nil
 		}
 
 		if m.addStep == addStepSelect {
@@ -811,37 +846,108 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.addStep == addStepPreview {
 			return m.previewHandleKey(keyMsg)
 		}
+
+		if m.addStep == addStepConfirm {
+			return m.confirmHandleKey(keyMsg)
+		}
 	}
 
 	return m, nil
 }
 
+// confirmHandleKey processes navigation within the confirm step's
+// scrollable body. Page keys (pgup/pgdown) jump by contentHeight; g/G
+// snap to top/bottom — same bindings the user already knows from the
+// logs and history views.
+func (m Model) confirmHandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.previewPlan == nil {
+		return m, nil
+	}
+	lines := buildConfirmLines(m.previewPlan, m.previewToggles, bodyWidth(m.width))
+	contentHeight := confirmContentHeight(m.height)
+	maxScroll := len(lines) - contentHeight
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+
+	switch keyMsg.String() {
+	case "up", "k":
+		if m.confirmScroll > 0 {
+			m.confirmScroll--
+		}
+	case "down", "j":
+		if m.confirmScroll < maxScroll {
+			m.confirmScroll++
+		}
+	case "pgup", "ctrl+b":
+		m.confirmScroll -= contentHeight
+		if m.confirmScroll < 0 {
+			m.confirmScroll = 0
+		}
+	case "pgdown", " ", "ctrl+f":
+		m.confirmScroll += contentHeight
+		if m.confirmScroll > maxScroll {
+			m.confirmScroll = maxScroll
+		}
+	case "g", "home":
+		m.confirmScroll = 0
+	case "G", "end":
+		m.confirmScroll = maxScroll
+	}
+	return m, nil
+}
+
+// previewHandleKey processes scroll keys for the preview step. The
+// preview is a pure review screen — no per-row cursor, no toggling.
+// Bindings mirror the confirm step (j/k, pgup/pgdown, g/G) and the
+// half-page jumps (ctrl+d/ctrl+u) common in vim/lazygit.
 func (m Model) previewHandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.previewPlan == nil {
 		return m, nil
 	}
-	rows := m.previewRows
+	contentHeight := previewContentHeight(m.height, m.err != nil)
+	maxScroll := len(m.previewRows) - contentHeight
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	halfPage := contentHeight / 2
+	if halfPage < 1 {
+		halfPage = 1
+	}
 
 	switch keyMsg.String() {
 	case "up", "k":
-		if m.previewCursor > 0 {
-			next := lastFileRow(rows, m.previewCursor-1)
-			if !rows[next].isHeader {
-				m.previewCursor = next
-			}
+		if m.previewScroll > 0 {
+			m.previewScroll--
 		}
-		m.previewAdjustScroll()
-		return m, nil
-
 	case "down", "j":
-		if m.previewCursor < len(rows)-1 {
-			next := firstFileRow(rows, m.previewCursor+1)
-			if !rows[next].isHeader {
-				m.previewCursor = next
-			}
+		if m.previewScroll < maxScroll {
+			m.previewScroll++
 		}
-		m.previewAdjustScroll()
-		return m, nil
+	case "ctrl+u":
+		m.previewScroll -= halfPage
+		if m.previewScroll < 0 {
+			m.previewScroll = 0
+		}
+	case "ctrl+d":
+		m.previewScroll += halfPage
+		if m.previewScroll > maxScroll {
+			m.previewScroll = maxScroll
+		}
+	case "pgup", "ctrl+b":
+		m.previewScroll -= contentHeight
+		if m.previewScroll < 0 {
+			m.previewScroll = 0
+		}
+	case "pgdown", " ", "ctrl+f":
+		m.previewScroll += contentHeight
+		if m.previewScroll > maxScroll {
+			m.previewScroll = maxScroll
+		}
+	case "g", "home":
+		m.previewScroll = 0
+	case "G", "end":
+		m.previewScroll = maxScroll
 	}
 	return m, nil
 }
@@ -941,7 +1047,11 @@ func (m Model) browserHandleJumpKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.browserJumping = false
 		m.browserJumpInput.Blur()
 
-		targetPath := expandBrowserPath(raw, m.homeDir)
+		targetPath, expandErr := expandBrowserPath(raw, m.homeDir)
+		if expandErr != nil {
+			m.err = expandErr
+			return m, nil
+		}
 		info, err := os.Stat(targetPath)
 		if err != nil || !info.IsDir() {
 			m.err = fmt.Errorf("directory not found: %s", raw)
@@ -960,6 +1070,11 @@ func (m Model) browserHandleJumpKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.browserItems = nil
 		m.browserEntries = make(map[string][]os.DirEntry)
+		// Reset cursor and scroll so the user lands at the top of the
+		// jumped-to directory rather than at whatever index they were on
+		// in the previous view.
+		m.browserCursor = 0
+		m.browserScroll = 0
 		m.err = nil
 		return m, nil
 
@@ -974,14 +1089,45 @@ func (m Model) browserHandleJumpKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func expandBrowserPath(raw, homeDir string) string {
-	if strings.HasPrefix(raw, "~/") {
-		return filepath.Join(homeDir, raw[2:])
+// expandBrowserPath resolves a user-typed jump target relative to homeDir.
+//
+// Security: dotcor's add browser is intentionally constrained to $HOME.
+// Without bounds checking, a path like "../../etc" or even an absolute
+// /etc/sudoers would resolve to a real directory outside $HOME and let
+// the user select system files into a public dotfiles repo.
+//
+// Resolution applies filepath.Clean (which normalises ".." segments)
+// and then verifies the result is under homeDir. Anything outside is
+// rejected with an explicit error so the UI can show "outside home".
+func expandBrowserPath(raw, homeDir string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("empty path")
 	}
-	if !filepath.IsAbs(raw) {
-		return filepath.Join(homeDir, raw)
+
+	var resolved string
+	switch {
+	case raw == "~":
+		resolved = homeDir
+	case strings.HasPrefix(raw, "~/"):
+		resolved = filepath.Join(homeDir, raw[2:])
+	case !filepath.IsAbs(raw):
+		resolved = filepath.Join(homeDir, raw)
+	default:
+		resolved = raw
 	}
-	return raw
+
+	resolved = filepath.Clean(resolved)
+
+	// Bound check: resolved must be homeDir itself or a descendant.
+	homeClean := filepath.Clean(homeDir)
+	if resolved == homeClean {
+		return resolved, nil
+	}
+	if !strings.HasPrefix(resolved, homeClean+string(filepath.Separator)) {
+		return "", fmt.Errorf("outside home: %s", raw)
+	}
+	return resolved, nil
 }
 
 // confirmBrowserSelectionAndClassify gathers selected paths and kicks off
@@ -1079,10 +1225,21 @@ func allFilesManaged(dir, repoDir string) bool {
 	return total > 0 && managed == total
 }
 
+// countFilesRecursive counts every entry a user could reasonably select
+// under dir — regular files AND symlinks, because symlinks are valid
+// selections (they classify as Adopt or Foreign, not as "nothing").
+// Skipping them here made the preview count understate what the user
+// actually had toggled ON.
 func countFilesRecursive(dir string) int {
 	count := 0
 	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() || isSymlink(path) {
+		if err != nil {
+			return nil
+		}
+		// Only directories are excluded. Walk gives us Lstat-based info,
+		// so a symlink to a directory still has IsDir() == false and is
+		// counted as the single entry the user sees it as.
+		if info.IsDir() {
 			return nil
 		}
 		count++

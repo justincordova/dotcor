@@ -130,11 +130,11 @@ type Model struct {
 
 	addStep int
 
-	// Preview step (step 1) state.
+	// Preview step (step 1) state. The preview is a scroll-only review
+	// screen — no per-row cursor — so we only track the viewport offset.
 	previewPlan    *stow.ClassificationPlan
 	previewRows    []previewRow // cached flat row list; rebuilt when plan changes
 	previewToggles map[string]bool
-	previewCursor  int
 	previewScroll  int
 
 	// Confirm step (step 2) scroll offset. The confirm view renders the
@@ -375,8 +375,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.previewRows = buildPreviewRows(msg.plan) // cache once
 			m.previewToggles = stow.BuildDefaultToggles(msg.plan)
 			m.previewScroll = 0
-			// Advance cursor past the first header row(s) to first file row.
-			m.previewCursor = firstFileRow(m.previewRows, 0)
 			m.addStep = addStepPreview
 			m.err = nil
 		}
@@ -1001,7 +999,6 @@ func (m *Model) resetAddState() {
 	m.previewPlan = nil
 	m.previewRows = nil
 	m.previewToggles = nil
-	m.previewCursor = 0
 	m.previewScroll = 0
 	m.confirmScroll = 0
 	m.classifyResult = nil
