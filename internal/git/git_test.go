@@ -1096,6 +1096,21 @@ func TestAutoCommitWithNoChanges(t *testing.T) {
 	assert.False(t, hasChanges, "AutoCommit() should not create changes when there are none")
 }
 
+// TestAutoCommitFilesWithNoChanges runs against a freshly-initialised
+// repo where InitRepo has already written the starter .gitignore.
+// AutoCommitFiles is called with nil files (so it does `git add -A`)
+// and an empty changes baseline shouldn't be empty - the .gitignore
+// IS an untracked change. We commit it via stageInitialCommit first so
+// the subsequent AutoCommitFiles call genuinely sees a clean repo and
+// hits the "nothing to commit" branch.
+//
+// The previous version of this test was non-deterministic: it didn't
+// commit the starter .gitignore, so the AutoCommitFiles call DID find
+// changes (the .gitignore) and tried to commit them. Without git user
+// config, the commit failed with a "Please tell me who you are" error
+// instead of the expected "nothing to commit". The test happened to
+// pass when the leftover git user from another test's process state
+// was still configured, but failed in isolation.
 func TestAutoCommitFilesWithNoChanges(t *testing.T) {
 	require.True(t, IsGitInstalled(), "git must be installed for this test")
 
@@ -1105,6 +1120,9 @@ func TestAutoCommitFilesWithNoChanges(t *testing.T) {
 	require.NoError(t, err, "InitRepo() should not error")
 
 	configureGitUser(t, repo)
+	// Commit InitRepo's starter .gitignore so the next call really
+	// sees a clean tree.
+	stageInitialCommit(t, repo)
 
 	err = AutoCommitFiles(repo, nil, "test commit")
 
