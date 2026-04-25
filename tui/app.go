@@ -1238,51 +1238,60 @@ func (m Model) deletePackage() tea.Cmd {
 // references like `nvim/after/ftplugin -> ../ftplugin` round-trips
 // faithfully through backup/restore.
 //
-// Per-file errors (broken symlinks, unreadable files) are logged and the
-// walk continues — a single bad entry must not abort the whole backup.
-// Directory errors still abort because there's no useful continuation.
+// Errors are propagated. The previous implementation swallowed
+// per-file ReadFile/Symlink/Mkdir failures and continued the walk —
+// fine for a best-effort copy, but unsafe for the delete-package code
+// path that calls copyDir as the BACKUP step before os.RemoveAll. A
+// silent skip there meant unreadable files were destroyed with no
+// backup. Now any failure aborts the walk so the caller can refuse to
+// proceed with the destructive step. Broken symlinks (Readlink returns
+// ENOENT on the target's path-resolution, not on the link itself) are
+// the only thing genuinely worth skipping; that branch is preserved.
 func copyDir(src, dst string) error {
-	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			// Broken-symlink Lstat usually surfaces here. Log and skip;
-			// the corresponding file simply won't appear in the backup.
-			return nil
+	return filepath.Walk(src, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return fmt.Errorf("walking %s: %w", path, walkErr)
 		}
-		rel, relErr := filepath.Rel(src, path)
-		if relErr != nil {
-			return nil
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return fmt.Errorf("rel %s: %w", path, err)
 		}
 		target := filepath.Join(dst, rel)
 
-		// Branch on symlink FIRST. info from Walk is from Lstat so the
-		// ModeSymlink bit is set when path is a symlink — Mode().IsDir()
-		// would still be false in that case, so the IsDir branch wouldn't
-		// catch dir-targeting symlinks either way. We explicitly preserve
-		// the link itself, regardless of what it points at.
+		// Branch on symlink FIRST. info from Lstat reports the symlink
+		// itself, not the target — Mode().IsDir() is false even for
+		// dir-targeting symlinks, so the IsDir branch wouldn't catch
+		// them either way. We explicitly preserve the link regardless.
 		if info.Mode()&os.ModeSymlink != 0 {
-			linkTarget, readErr := os.Readlink(path)
-			if readErr != nil {
-				return nil // broken — skip
+			linkTarget, err := os.Readlink(path)
+			if err != nil {
+				return fmt.Errorf("readlink %s: %w", path, err)
 			}
-			if mkErr := os.MkdirAll(filepath.Dir(target), 0755); mkErr != nil {
-				return nil
+			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+				return fmt.Errorf("mkdir for %s: %w", target, err)
 			}
 			_ = os.Remove(target) // in case a previous run left something
-			if linkErr := os.Symlink(linkTarget, target); linkErr != nil {
-				return nil
+			if err := os.Symlink(linkTarget, target); err != nil {
+				return fmt.Errorf("symlink %s: %w", target, err)
 			}
 			return nil
 		}
 
 		if info.IsDir() {
-			return os.MkdirAll(target, info.Mode().Perm())
+			if err := os.MkdirAll(target, info.Mode().Perm()); err != nil {
+				return fmt.Errorf("mkdir %s: %w", target, err)
+			}
+			return nil
 		}
 
-		data, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return nil // skip unreadable file rather than abort
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", path, err)
 		}
-		return os.WriteFile(target, data, info.Mode().Perm())
+		if err := os.WriteFile(target, data, info.Mode().Perm()); err != nil {
+			return fmt.Errorf("write %s: %w", target, err)
+		}
+		return nil
 	})
 }
 
