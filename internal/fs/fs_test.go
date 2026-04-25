@@ -17,58 +17,12 @@ func testConfig() *config.Config {
 	}
 }
 
-func TestFileExists(t *testing.T) {
-	// Arrange
-	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
-	require.NoError(t, err, "failed to create temp dir")
-	defer func() {
-		if err := os.RemoveAll(tempDir); err != nil {
-			t.Logf("failed to clean up temp dir: %v", err)
-		}
-	}()
-
-	testFile := filepath.Join(tempDir, "testfile")
-	err = os.WriteFile(testFile, []byte("test"), 0644)
-	require.NoError(t, err, "failed to create test file")
-
-	tests := []struct {
-		name string
-		path string
-		want bool
-	}{
-		{
-			name: "existing file",
-			path: testFile,
-			want: true,
-		},
-		{
-			name: "non-existing file",
-			path: filepath.Join(tempDir, "nonexistent"),
-			want: false,
-		},
-		{
-			name: "directory returns false",
-			path: tempDir,
-			want: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
-			want := tt.want
-			if tt.path == testFile || tt.path == tempDir {
-				want = true
-			}
-
-			// Act
-			got := PathExists(tt.path)
-
-			// Assert
-			assert.Equal(t, want, got, "PathExists()")
-		})
-	}
-}
+// PathExists is exercised by TestPathExists below. The previous
+// TestFileExists in this slot was misleading: it shared a name with no
+// real function, declared a table-driven test, then overrode the
+// expected value to `true` for both the file and tempDir cases right
+// before the assertion — making the third row ("directory returns
+// false", `want: false`) pass for the wrong reason. Deleted.
 
 func TestPathExists(t *testing.T) {
 	// Arrange
