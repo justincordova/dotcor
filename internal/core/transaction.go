@@ -58,6 +58,20 @@ func (t *Transaction) Execute(op Operation) error {
 	return nil
 }
 
+// Rollback walks every executed operation in reverse and calls Undo on
+// each one. Failures are recorded but do NOT abort the walk — every
+// remaining operation is still attempted. The previous behaviour halted
+// on the first undo error and left earlier ops in their post-Do state,
+// silently breaking the documented "rolls back to a clean pre-state"
+// contract: if op 5 of 10 failed to undo, ops 1–4 stayed mutated with
+// no further attempt to revert them.
+//
+// A panic in any Undo is caught, converted to an error, and the walk
+// continues — same shape as internal/stow/txn.go's fileTxn.rollback,
+// which is the pattern this mirrors.
+//
+// The first error encountered (whether from undo failure or panic) is
+// returned so the caller still sees that something went wrong.
 func (t *Transaction) Rollback() error {
 	t.config.Logger.Warn("rolling back transaction", "operations", len(t.executed))
 
@@ -66,7 +80,7 @@ func (t *Transaction) Rollback() error {
 		return fmt.Errorf("cannot rollback committed transaction")
 	}
 
-	var rollbackErr error
+	var firstErr error
 	for i := len(t.executed) - 1; i >= 0; i-- {
 		op := t.executed[i]
 		t.config.Logger.Debug("rolling back operation", "op", op.Describe(), "index", i)
@@ -75,29 +89,30 @@ func (t *Transaction) Rollback() error {
 			defer func() {
 				if r := recover(); r != nil {
 					t.config.Logger.Error("panic in rollback", "op", op.Describe(), "error", r)
-					rollbackErr = fmt.Errorf("panic during rollback: %v", r)
+					if firstErr == nil {
+						firstErr = fmt.Errorf("panic during rollback of %s: %v", op.Describe(), r)
+					}
 				}
 			}()
 
 			if err := op.Undo(); err != nil {
-				t.config.Logger.Error("rollback failed",
+				t.config.Logger.Error("rollback step failed",
 					"op", op.Describe(),
 					"error", err,
 					"index", i,
 				)
-				rollbackErr = fmt.Errorf("rolling back %s: %w", op.Describe(), err)
+				if firstErr == nil {
+					firstErr = fmt.Errorf("rolling back %s: %w", op.Describe(), err)
+				}
 			}
 		}()
-
-		if rollbackErr != nil {
-			t.config.Logger.Error("stopping rollback due to error", "error", rollbackErr)
-			t.executed = nil
-			return rollbackErr
-		}
 	}
 
-	t.config.Logger.Info("transaction rolled back")
 	t.executed = nil
+	if firstErr != nil {
+		return firstErr
+	}
+	t.config.Logger.Info("transaction rolled back")
 	return nil
 }
 

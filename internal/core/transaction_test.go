@@ -239,6 +239,12 @@ func TestTransactionRollback_UndoAll(t *testing.T) {
 	assert.Equal(t, 1, op3.undoCalls, "op3.Undo() should be called once")
 }
 
+// TestTransactionRollback_PartialFailure pins the contract that Rollback
+// walks every executed operation in reverse and attempts Undo on each one,
+// even after a previous undo fails. The old implementation halted on the
+// first undo error and silently left earlier operations in their post-Do
+// state — so the user got "rollback failed" but operations they expected
+// to be reverted were not. The fix records the first error and continues.
 func TestTransactionRollback_PartialFailure(t *testing.T) {
 	cfg := &config.Config{Logger: slog.Default()}
 	tx := NewTransaction(cfg)
@@ -259,10 +265,12 @@ func TestTransactionRollback_PartialFailure(t *testing.T) {
 
 	err := tx.Rollback()
 
-	assert.Error(t, err, "Rollback should return error when undo fails")
-	assert.Equal(t, 0, op1.undoCalls, "op1.Undo() should not be called (stops at op2 failure)")
+	// The first undo error is surfaced...
+	assert.Error(t, err, "Rollback should return error when any undo fails")
+	// ...but every operation still had Undo called, in reverse order.
+	assert.Equal(t, 1, op3.undoCalls, "op3.Undo() should be called first (LIFO)")
 	assert.Equal(t, 1, op2.undoCalls, "op2.Undo() should be called and fail")
-	assert.Equal(t, 1, op3.undoCalls, "op3.Undo() should be called first")
+	assert.Equal(t, 1, op1.undoCalls, "op1.Undo() must still run after op2 failed")
 }
 
 type testPanicOp struct {
