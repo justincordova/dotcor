@@ -176,6 +176,33 @@ func TestCreateDirOpUndoNonEmpty(t *testing.T) {
 	assert.DirExists(t, newDir, "CreateDirOp.Undo should not remove non-empty directory")
 }
 
+// TestCreateDirOpUndoPreservesPreExistingDir guards against the
+// regression where Undo unconditionally removed an empty directory,
+// even when that directory pre-existed before Do() ran. EnsureDir is
+// idempotent — a directory the user prepared (e.g. an empty
+// ~/.config/<app> waiting for its first file) should remain when the
+// transaction rolls back.
+func TestCreateDirOpUndoPreservesPreExistingDir(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{Logger: slog.Default()}
+	preExisting := filepath.Join(tempDir, "already-here")
+	if err := os.MkdirAll(preExisting, 0755); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	op := &CreateDirOp{Path: preExisting, Config: cfg}
+	if err := op.Do(); err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+
+	if err := op.Undo(); err != nil {
+		t.Fatalf("Undo: %v", err)
+	}
+
+	assert.DirExists(t, preExisting,
+		"CreateDirOp.Undo must not remove a directory that pre-existed before Do ran")
+}
+
 func TestOperationDescribe(t *testing.T) {
 	tests := []struct {
 		name string

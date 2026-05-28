@@ -249,15 +249,27 @@ func (op *RemoveFileOp) Describe() string {
 }
 
 type CreateDirOp struct {
-	Path   string
-	Config *config.Config
+	Path       string
+	Config     *config.Config
+	preExisted bool
 }
 
 func (op *CreateDirOp) Do() error {
+	// Capture whether the directory already existed BEFORE EnsureDir
+	// runs, so Undo can leave a pre-existing directory in place. The
+	// previous implementation unconditionally removed an empty
+	// directory on rollback — which is correct when we created it, but
+	// destructive when the directory pre-existed and just happened to
+	// be empty (e.g. a user-prepared ~/.config/<app> waiting for its
+	// first file).
+	op.preExisted = fs.PathExists(op.Path)
 	return fs.EnsureDir(op.Path, op.Config)
 }
 
 func (op *CreateDirOp) Undo() error {
+	if op.preExisted {
+		return nil
+	}
 	entries, err := os.ReadDir(op.Path)
 	if err != nil {
 		return err
