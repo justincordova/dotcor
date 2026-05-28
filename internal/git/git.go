@@ -196,15 +196,14 @@ func ensureDotcorGitignore(repoPath string) error {
 	return os.WriteFile(path, []byte(buf.String()), 0644)
 }
 
-// IsRepo checks if directory is a git repository
-// Checks for .git directory directly to avoid walking up to parent repos
+// IsRepo checks if directory is a git repository.
+// Checks for a .git entry directly under repoPath so we don't walk up
+// into a parent repository. The entry is normally a directory but is a
+// regular file in linked worktrees (`gitdir: …`) — both forms count.
 func IsRepo(repoPath string) bool {
-	gitDir := repoPath + "/.git"
-	info, err := os.Stat(gitDir)
-	if err != nil {
-		return false
-	}
-	return info.IsDir()
+	gitPath := filepath.Join(repoPath, ".git")
+	_, err := os.Stat(gitPath)
+	return err == nil
 }
 
 // isNothingToCommitError checks if git output indicates no changes
