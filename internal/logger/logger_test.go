@@ -115,3 +115,41 @@ func TestNew_ReturnsSlogLogger(t *testing.T) {
 
 	var _ *slog.Logger = l //nolint:staticcheck
 }
+
+// TestRotateLogIfNeeded_PreservesAllBackups exercises the bug where the
+// rotation loop deleted the wrong slot (maxBackups-1 instead of
+// maxBackups), silently losing a backup on every rotation. With three
+// existing backups, every numbered slot must be present after one
+// rotation and the contents must have shifted by exactly one position.
+func TestRotateLogIfNeeded_PreservesAllBackups(t *testing.T) {
+	tempDir := t.TempDir()
+	logPath := filepath.Join(tempDir, "rotate.log")
+
+	// Seed: current log over the rotation threshold + .1/.2/.3 backups.
+	big := make([]byte, maxLogSize+1)
+	require.NoError(t, os.WriteFile(logPath, big, 0644))
+	require.NoError(t, os.WriteFile(logPath+".1", []byte("one"), 0644))
+	require.NoError(t, os.WriteFile(logPath+".2", []byte("two"), 0644))
+	require.NoError(t, os.WriteFile(logPath+".3", []byte("three"), 0644))
+
+	rotateLogIfNeeded(logPath)
+
+	// .1 should now hold the rotated current log (size ≈ maxLogSize+1).
+	info1, err := os.Stat(logPath + ".1")
+	require.NoError(t, err, ".1 must exist after rotation")
+	assert.Greater(t, info1.Size(), int64(maxLogSize), ".1 must be the rotated current log")
+
+	// .2 should hold what was in .1 ("one").
+	got2, err := os.ReadFile(logPath + ".2")
+	require.NoError(t, err, ".2 must exist after rotation")
+	assert.Equal(t, "one", string(got2), ".2 must hold the previous .1 contents — regression: was being deleted")
+
+	// .3 should hold what was in .2 ("two").
+	got3, err := os.ReadFile(logPath + ".3")
+	require.NoError(t, err, ".3 must exist after rotation")
+	assert.Equal(t, "two", string(got3), ".3 must hold the previous .2 contents")
+
+	// .4 must never exist — rotation keeps at most maxBackups files.
+	_, err = os.Stat(logPath + ".4")
+	assert.True(t, os.IsNotExist(err), ".4 must not exist after rotation")
+}

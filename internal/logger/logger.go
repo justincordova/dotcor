@@ -87,18 +87,25 @@ type noopCloser struct{}
 
 func (noopCloser) Close() error { return nil }
 
+// rotateLogIfNeeded rotates logs in the classic "x → x+1" pattern,
+// keeping at most maxBackups historical files (.1 newest, .maxBackups
+// oldest). The previous implementation deleted the slot we were about
+// to write into (maxBackups-1) instead of the slot we were going to
+// drop (maxBackups), so a backup was silently lost on every rotation.
 func rotateLogIfNeeded(logPath string) {
 	info, err := os.Stat(logPath)
 	if err != nil || info.Size() < maxLogSize {
 		return
 	}
 
+	// Drop the oldest backup so the .maxBackups slot is free.
+	_ = os.Remove(fmt.Sprintf("%s.%d", logPath, maxBackups))
+
+	// Shift remaining backups one slot older: .(maxBackups-1) → .maxBackups,
+	// .(maxBackups-2) → .(maxBackups-1), …, .1 → .2.
 	for i := maxBackups - 1; i >= 1; i-- {
 		older := fmt.Sprintf("%s.%d", logPath, i)
 		newer := fmt.Sprintf("%s.%d", logPath, i+1)
-		if i == maxBackups-1 {
-			_ = os.Remove(older)
-		}
 		if _, err := os.Stat(older); err == nil {
 			_ = os.Rename(older, newer)
 		}
