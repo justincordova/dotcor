@@ -216,7 +216,14 @@ func updateSettingsMain(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.settingsIgnoreIdx < 0 {
 					m.settingsIgnoreIdx = 0
 				}
-				_ = m.cfg.SaveConfig()
+				// Surface SaveConfig failures. Silently swallowing them
+				// leaves the in-memory pattern list out of sync with
+				// .dotcorrc — the user thinks their edit was persisted
+				// but the next dotcor run will resurrect the deleted
+				// pattern from disk.
+				if err := m.cfg.SaveConfig(); err != nil {
+					m.err = fmt.Errorf("saving config: %w", err)
+				}
 				return m, nil
 			}
 
@@ -305,7 +312,13 @@ func updateSettingsAddPattern(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			val := m.settingsInput.Value()
 			if val != "" {
 				m.cfg.IgnorePatterns = append(m.cfg.IgnorePatterns, val)
-				_ = m.cfg.SaveConfig()
+				// Surface SaveConfig failures so the user knows when
+				// their addition didn't reach .dotcorrc (disk full,
+				// permission denied, etc.) — the previous silent swallow
+				// left the in-memory state diverged from on-disk.
+				if err := m.cfg.SaveConfig(); err != nil {
+					m.err = fmt.Errorf("saving config: %w", err)
+				}
 			}
 			m.settingsInput.Blur()
 			m.settingsStep = 0
