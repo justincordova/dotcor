@@ -35,8 +35,14 @@ var secretPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)api[_-]?key\s*[:=]\s*['"]?[a-zA-Z0-9_-]{32,}['"]?`),
 	regexp.MustCompile(`(?i)api[_-]?secret\s*[:=]\s*['"]?[a-zA-Z0-9_-]{32,}['"]?`),
 
-	// Tokens - look for specific prefixes (Bearer, token, secret)
-	regexp.MustCompile(`(?i)(?:bearer\s+)?['"]?[a-zA-Z0-9_+/=]{40,}['"]?`),
+	// Tokens - require an explicit anchor (Bearer, token=, access_token=,
+	// auth_token=) so we don't flag arbitrary 40+ char alphanumeric blobs
+	// like hashes, base64 payloads, or CSP nonces. The bearer branch
+	// keeps a small space requirement (`Bearer xxx…`) — the older form
+	// also matched plain hex strings on their own line, which produced
+	// a wall of false positives.
+	regexp.MustCompile(`(?i)bearer\s+['"]?[a-zA-Z0-9_+/=.-]{20,}['"]?`),
+	regexp.MustCompile(`(?i)(?:access_|auth_|refresh_)?token\s*[:=]\s*['"]?[a-zA-Z0-9_+/=.-]{20,}['"]?`),
 
 	// Passwords - require password= assignment with value in quotes
 	regexp.MustCompile(`(?i)password\s*[:=]\s*['"]?[^'"\s]{16,}['"]?`),

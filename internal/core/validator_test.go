@@ -126,6 +126,20 @@ func TestDetectSecrets(t *testing.T) {
 			content:     "access_token = 'mock_access_token_for_testing_1234567890'\n",
 			wantSecrets: true,
 		},
+		{
+			name:        "bearer token",
+			content:     "Authorization: Bearer abcdefghij0123456789ABCDEF\n",
+			wantSecrets: true,
+		},
+		{
+			// Regression: the previous token regex matched any 40+ char
+			// alphanumeric/base64 run with no contextual anchor, which
+			// produced a wall of false positives on hashes, CSP nonces,
+			// base64-encoded asset URIs, and similar normal content.
+			name:        "long hash without secret context is not a token",
+			content:     "# sha256: 9b8c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c\n",
+			wantSecrets: false,
+		},
 	}
 
 	for _, tt := range tests {
