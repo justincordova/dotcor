@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -106,16 +105,17 @@ func main() {
 	// ~/.dotcor can't race on backup-path timestamps and on .dotcor-tmp
 	// renames. Stale locks (process dead or > 5min old) are auto-cleaned
 	// inside AcquireLock; a live conflict surfaces the holding PID/host.
+	//
+	// Any acquisition failure is fatal — continuing without a lock would
+	// let a concurrent run corrupt shared on-disk state (the backup
+	// timestamp dir, the .dotcor-tmp renames, the per-package txn). The
+	// previous code only bailed on ErrLockHeld and otherwise logged a
+	// warning and started the TUI without a lock, which silently
+	// undermined the whole purpose of having one. The error message
+	// already includes the doctor hint for the contended case.
 	if err := core.AcquireLock(cfg); err != nil {
-		// Surface the conflict explicitly so the user can act on it
-		// (kill the other process, or run `dotcor doctor --fix` if the
-		// lock is stuck). Not retried — interactive sessions shouldn't
-		// silently block.
-		if errors.Is(err, core.ErrLockHeld) {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			os.Exit(1)
-		}
-		fmt.Fprintf(os.Stderr, "warning: lock acquisition failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
 	}
 	defer func() {
 		if err := core.ReleaseLock(cfg); err != nil {
