@@ -25,13 +25,22 @@ func MoveFile(src, dst string, cfg *config.Config) error {
 	}
 
 	cfg.Logger.Debug("rename failed, trying copy", "src", src, "dst", dst, "error", err)
+
+	// Capture whether dst pre-existed BEFORE we copy. Capturing after the
+	// copy makes the flag tautologically true and means a later
+	// src-remove failure leaves the (newly copied) dst behind even though
+	// we never had permission to overwrite it.
+	dstExisted := PathExists(dst)
+
 	if err := CopyWithPermissions(src, dst, cfg); err != nil {
 		return fmt.Errorf("copying file: %w", err)
 	}
 
-	dstExisted := PathExists(dst)
 	if err := os.Remove(src); err != nil {
 		if !dstExisted {
+			// Cross-filesystem move failed mid-way: we created dst but
+			// couldn't remove src. Roll back the copy so the caller is
+			// left in the pre-state instead of with duplicated files.
 			_ = os.Remove(dst)
 		}
 		cfg.Logger.Error("failed to remove original file", "error", err)
