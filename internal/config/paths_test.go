@@ -113,6 +113,14 @@ func TestNormalizePath(t *testing.T) {
 			input: "/etc/hosts",
 			want:  "/etc/hosts",
 		},
+		{
+			// Regression: HasPrefix without a separator boundary used to
+			// treat "/tmp/testuser-other" as living under home
+			// "/tmp/testuser" and emit a malformed "~-other" path.
+			name:  "sibling sharing home prefix stays absolute",
+			input: home + "-other/file.txt",
+			want:  home + "-other/file.txt",
+		},
 	}
 
 	for _, tt := range tests {

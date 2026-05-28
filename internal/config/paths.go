@@ -25,18 +25,17 @@ func NormalizePath(path string) (string, error) {
 	expanded = filepath.Clean(expanded)
 	home = filepath.Clean(home)
 
-	// Check if path is under home directory
-	if strings.HasPrefix(expanded, home) {
-		// Replace home directory with ~
-		relative := strings.TrimPrefix(expanded, home)
-		if relative == "" {
-			return "~", nil
-		}
-		// Ensure path starts with ~/
-		if relative[0] == filepath.Separator {
-			return "~" + relative, nil
-		}
-		return "~" + string(filepath.Separator) + relative, nil
+	// Match home exactly, or home followed by a separator. A naive
+	// HasPrefix without the separator check would treat /Users/justin
+	// as living under home /Users/justincordova and rewrite it to
+	// "~cordova/..." — clearly wrong. Requiring the separator anchors
+	// the match at a real path boundary.
+	if expanded == home {
+		return "~", nil
+	}
+	sep := string(filepath.Separator)
+	if strings.HasPrefix(expanded, home+sep) {
+		return "~" + sep + strings.TrimPrefix(expanded, home+sep), nil
 	}
 
 	// Return original path if not under home
