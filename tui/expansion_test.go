@@ -3,9 +3,34 @@ package tui
 import (
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/justincordova/dotcor/internal/stow"
 	"github.com/stretchr/testify/assert"
 )
+
+// TestAddKey_ClearsStalePreviewState guards against the Add handler
+// leaving a previous add session's preview state behind. classifyResultMsg
+// returns to the dashboard without resetting add state, so without a full
+// reset on the next Add a stale previewPlan / scroll offset would leak in.
+func TestAddKey_ClearsStalePreviewState(t *testing.T) {
+	m := defaultModel()
+	m.loading = false
+	m.activeView = DashboardView
+	// Simulate leftovers from a completed add session.
+	m.previewPlan = &stow.ClassificationPlan{}
+	m.previewScroll = 42
+	m.confirmScroll = 17
+	m.classifyResult = &stow.ClassificationResult{}
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	got := updated.(Model)
+
+	assert.Equal(t, AddView, got.activeView, "a should switch to the Add view")
+	assert.Nil(t, got.previewPlan, "stale previewPlan must be cleared")
+	assert.Equal(t, 0, got.previewScroll, "stale previewScroll must be reset")
+	assert.Equal(t, 0, got.confirmScroll, "stale confirmScroll must be reset")
+	assert.Nil(t, got.classifyResult, "stale classifyResult must be cleared")
+}
 
 // TestPackagesMsg_RemapsExpansionByName guards against the expansion map
 // (keyed by slice index) marking the wrong package as expanded after the

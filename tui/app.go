@@ -800,13 +800,12 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case key.Matches(keyMsg, m.keys.Add):
 		m.clearErr()
 		m.activeView = AddView
-		m.addStep = addStepSelect
-		m.browserExpanded = make(map[string]bool)
-		m.browserCursor = 0
-		m.browserScroll = 0
-		m.browserEntries = make(map[string][]os.DirEntry)
-		m.browserItems = nil
-		m.browserSelected = make(map[string]bool)
+		// Full reset, not a partial one. classifyResultMsg returns to the
+		// dashboard WITHOUT calling resetAddState, so a stale previewPlan,
+		// preview/confirm scroll offsets, and classifyResult can survive
+		// into the next Add session. resetAddState clears all of that
+		// (and the browser state) so each Add starts clean.
+		m.resetAddState()
 		return m, nil
 
 	case key.Matches(keyMsg, m.keys.Diff):
