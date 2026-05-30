@@ -419,6 +419,39 @@ func TestCreateSymlink_RelativePath_ComputedCorrectly(t *testing.T) {
 	assert.False(t, filepath.IsAbs(target), "CreateSymlink() should create relative symlink")
 }
 
+// TestCreateSymlink_RecoversFromStaleTempLink verifies that a leftover
+// "<link>.tmp" symlink (from a prior crash between symlink and rename)
+// does not permanently break CreateSymlink. The function must clear the
+// stale temp link and succeed.
+func TestCreateSymlink_RecoversFromStaleTempLink(t *testing.T) {
+	tempDir := t.TempDir()
+
+	repoDir := filepath.Join(tempDir, "repo")
+	require.NoError(t, os.MkdirAll(repoDir, 0755))
+	targetFile := filepath.Join(repoDir, "file.txt")
+	require.NoError(t, os.WriteFile(targetFile, []byte("test"), 0644))
+
+	homeDir := filepath.Join(tempDir, "home")
+	require.NoError(t, os.MkdirAll(homeDir, 0755))
+	linkFile := filepath.Join(homeDir, "link.txt")
+
+	// Simulate a crash that left a stale temp symlink behind.
+	require.NoError(t, os.Symlink("garbage-target", linkFile+".tmp"))
+
+	cfg := &config.Config{Logger: slog.Default()}
+
+	err := CreateSymlink(targetFile, linkFile, cfg)
+	require.NoError(t, err, "CreateSymlink should recover from a stale temp link")
+
+	isLink, err := IsSymlink(linkFile)
+	require.NoError(t, err)
+	assert.True(t, isLink, "the real symlink should be created")
+
+	// The temp link should have been consumed by the rename, not linger.
+	_, statErr := os.Lstat(linkFile + ".tmp")
+	assert.True(t, os.IsNotExist(statErr), "stale temp link should no longer exist")
+}
+
 func TestSymlinkWithFlatPaths(t *testing.T) {
 	// Arrange
 	tempDir := t.TempDir()

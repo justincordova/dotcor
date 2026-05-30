@@ -44,8 +44,13 @@ func CreateSymlink(target, link string, cfg *config.Config) error {
 		return fmt.Errorf("computing relative path: %w", err)
 	}
 
-	// Create symlink in temp location first (atomic rename pattern)
+	// Create symlink in temp location first (atomic rename pattern).
+	// Clear any stale temp symlink left by a prior crashed run; otherwise
+	// os.Symlink fails with EEXIST and CreateSymlink stays permanently
+	// broken until the leftover is removed by hand. Mirrors the defensive
+	// cleanup in stow.Adopt's atomic swap.
 	tempLink := expandedLink + ".tmp"
+	_ = os.Remove(tempLink)
 	if err := os.Symlink(relPath, tempLink); err != nil {
 		return fmt.Errorf("creating temp symlink: %w", err)
 	}
