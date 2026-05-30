@@ -71,13 +71,26 @@ func Adopt(repoDir, homeDir, packageName string) (*AdoptResult, error) {
 			continue
 		}
 
-		if _, err := os.Stat(repoPath); err == nil {
+		// Create the repo copy atomically with O_EXCL so an existing
+		// destination is refused in a single syscall. The previous
+		// stat-then-WriteFile sequence had a TOCTOU window, and
+		// os.WriteFile would silently truncate a file that appeared
+		// between the stat and the write — clobbering whatever was there.
+		dstFile, err := os.OpenFile(repoPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, srcPerm)
+		if err != nil {
 			result.Failures = append(result.Failures, f.RelPath)
 			result.Skipped++
 			continue
 		}
-
-		if err := os.WriteFile(repoPath, srcData, srcPerm); err != nil {
+		if _, err := dstFile.Write(srcData); err != nil {
+			_ = dstFile.Close()
+			_ = os.Remove(repoPath)
+			result.Failures = append(result.Failures, f.RelPath)
+			result.Skipped++
+			continue
+		}
+		if err := dstFile.Close(); err != nil {
+			_ = os.Remove(repoPath)
 			result.Failures = append(result.Failures, f.RelPath)
 			result.Skipped++
 			continue
