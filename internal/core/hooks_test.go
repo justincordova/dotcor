@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/justincordova/dotcor/internal/config"
 	"github.com/stretchr/testify/assert"
@@ -90,6 +91,31 @@ func TestRunHook_ExecutableHook(t *testing.T) {
 		err := RunHook(ctx, testConfig())
 		assert.NoError(t, err, "RunHook() should swallow exit 42 and return nil")
 	})
+}
+
+// TestRunHook_Timeout verifies that a hook which would otherwise hang
+// forever is killed and RunHook returns (without blocking) once the
+// timeout elapses. The hook sleeps far longer than hookTimeout, but we
+// temporarily shrink hookTimeout so the test stays fast.
+func TestRunHook_Timeout(t *testing.T) {
+	orig := hookTimeout
+	hookTimeout = 500 * time.Millisecond
+	defer func() { hookTimeout = orig }()
+
+	setupHookEnv(t, "test-hook", "#!/bin/bash\nsleep 30\n")
+	ctx := HookContext{HookType: "test-hook", FilePath: "/tmp/test.txt"}
+
+	done := make(chan error, 1)
+	start := time.Now()
+	go func() { done <- RunHook(ctx, testConfig()) }()
+
+	select {
+	case err := <-done:
+		assert.NoError(t, err, "RunHook() should swallow timeout and return nil")
+		assert.Less(t, time.Since(start), 10*time.Second, "RunHook should return shortly after the timeout, not wait for the hook to finish")
+	case <-time.After(10 * time.Second):
+		t.Fatal("RunHook did not return after hook timeout — the hook was not killed")
+	}
 }
 
 func TestRunHook_NonExecutableHook(t *testing.T) {

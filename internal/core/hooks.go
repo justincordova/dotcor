@@ -1,24 +1,42 @@
 package core
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/justincordova/dotcor/internal/config"
 )
 
-// GetHooksDir returns the hooks directory path (~/.dotcor/hooks)
+// hookTimeout bounds how long a single hook script may run. A hook is
+// user-authored code that runs while dotcor holds its global lock, so an
+// unbounded hook (waiting on stdin, a hung network call, an infinite
+// loop) would otherwise wedge the entire operation — and freeze the TUI,
+// which owns the terminal. The hook is killed when this deadline elapses.
+//
+// It is a var rather than a const only so tests can shrink it; it is not
+// modified at runtime.
+var hookTimeout = 60 * time.Second
+
+// GetHooksDir returns the hooks directory path (<config dir>/hooks).
+//
+// It derives from config.GetConfigDir() so that the DOTCOR_DIR override
+// is honored, matching GetBackupDir and the lock path. Previously this
+// hardcoded ~/.dotcor/hooks, so with DOTCOR_DIR set hooks silently
+// resolved to the wrong directory.
 func GetHooksDir(cfg *config.Config) (string, error) {
 	cfg.Logger.Debug("getting hooks directory")
-	home, err := os.UserHomeDir()
+	configDir, err := config.GetConfigDir()
 	if err != nil {
-		cfg.Logger.Error("failed to get home directory", "error", err)
-		return "", fmt.Errorf("getting home directory: %w", err)
+		cfg.Logger.Error("failed to get config directory", "error", err)
+		return "", fmt.Errorf("getting config directory: %w", err)
 	}
-	return filepath.Join(home, ".dotcor", "hooks"), nil
+	return filepath.Join(configDir, "hooks"), nil
 }
 
 // HookContext provides context for hook execution
@@ -56,7 +74,10 @@ func RunHook(ctx HookContext, cfg *config.Config) error {
 		return nil
 	}
 
-	cmd := exec.Command(hookPath)
+	cmdCtx, cancel := context.WithTimeout(context.Background(), hookTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(cmdCtx, hookPath)
 	cmd.Dir = hooksDir
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("DOTCOR_HOOK=%s", ctx.HookType),
@@ -65,9 +86,23 @@ func RunHook(ctx HookContext, cfg *config.Config) error {
 	if ctx.RepoPath != "" {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("DOTCOR_REPO_PATH=%s", ctx.RepoPath))
 	}
+	// Run the hook in its own process group and kill the whole group on
+	// timeout, so a hook that spawns children doesn't leak orphaned
+	// processes after we give up on it.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		if cmd.Process == nil {
+			return nil
+		}
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		if errors.Is(cmdCtx.Err(), context.DeadlineExceeded) {
+			cfg.Logger.Warn("hook timed out and was killed", "hook", ctx.HookType, "timeout", hookTimeout, "output", string(output))
+			return nil
+		}
 		exitErr, ok := err.(*exec.ExitError)
 		if ok {
 			if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
