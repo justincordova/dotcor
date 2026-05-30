@@ -1303,8 +1303,8 @@ func TestValidateRemoteURL_RejectsDangerousTransports(t *testing.T) {
 func TestValidateRemoteURL_RejectsMalformedURLs(t *testing.T) {
 	cases := []string{
 		"not-a-url",
-		"@host:path",   // empty user before @
-		"user@:path",   // empty host
+		"@host:path",     // empty user before @
+		"user@:path",     // empty host
 		"user@-bad:path", // host starts with -
 	}
 	for _, url := range cases {

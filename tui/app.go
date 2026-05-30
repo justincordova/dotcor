@@ -145,14 +145,14 @@ type Model struct {
 
 	classifyResult *stow.ClassificationResult
 
-	browserEntries      map[string][]os.DirEntry
-	browserExpanded     map[string]bool
-	browserCursor       int
-	browserScroll       int
-	browserItems        []browserItem
-	browserSelected     map[string]bool
-	browserJumping      bool
-	browserJumpInput    textinput.Model
+	browserEntries   map[string][]os.DirEntry
+	browserExpanded  map[string]bool
+	browserCursor    int
+	browserScroll    int
+	browserItems     []browserItem
+	browserSelected  map[string]bool
+	browserJumping   bool
+	browserJumpInput textinput.Model
 
 	commits        []git.CommitInfo
 	selectedCommit int
@@ -781,13 +781,13 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.clearErr()
 		m.activeView = AddView
 		m.addStep = addStepSelect
-	m.browserExpanded = make(map[string]bool)
-	m.browserCursor = 0
-	m.browserScroll = 0
-	m.browserEntries = make(map[string][]os.DirEntry)
-	m.browserItems = nil
-	m.browserSelected = make(map[string]bool)
-	return m, nil
+		m.browserExpanded = make(map[string]bool)
+		m.browserCursor = 0
+		m.browserScroll = 0
+		m.browserEntries = make(map[string][]os.DirEntry)
+		m.browserItems = nil
+		m.browserSelected = make(map[string]bool)
+		return m, nil
 
 	case key.Matches(keyMsg, m.keys.Diff):
 		m.clearErr()
@@ -1307,6 +1307,7 @@ func (m Model) deletePackage() tea.Cmd {
 		return stowResultMsg{msg: fmt.Sprintf("Deleted %s (%d unlinked, backup: %s)", pkg.Name, result.Unlinked, backupPath)}
 	}
 }
+
 // copyDir walks src and recreates its tree under dst. Symlinks are
 // preserved as symlinks (not followed) so a package containing internal
 // references like `nvim/after/ftplugin -> ../ftplugin` round-trips

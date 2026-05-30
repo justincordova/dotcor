@@ -765,7 +765,7 @@ var browserSkipDirs = map[string]bool{
 	".zprezto": true, ".iterm2": true, ".kube": true, ".aws": true,
 	".config": true, ".bun": true, ".ollama": true, ".android": true,
 	".dotnet": true, ".nuget": true, ".swift": true, ".swiftpm": true,
-	".DS_Store": true,
+	".DS_Store":    true,
 	"Applications": true, "Desktop": true, "Documents": true,
 	"Downloads": true, "Movies": true, "Music": true, "Pictures": true,
 }
