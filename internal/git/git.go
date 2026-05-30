@@ -1,6 +1,7 @@
 package git
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
@@ -862,18 +863,40 @@ func GetFileContentAtRef(repoPath, filePath, ref string) (string, error) {
 	return string(output), nil
 }
 
-// GetDiffBetweenFiles returns diff between two arbitrary files
+// GetDiffBetweenFiles returns diff between two arbitrary files.
+//
+// `git diff --no-index` exits 0 when the files are identical and 1 when
+// they differ — exit 1 is the normal "they differ" signal, not a
+// failure. It ALSO exits 1 when a file can't be accessed (e.g. it
+// doesn't exist), so the exit code alone can't tell a real diff from an
+// error.
+//
+// We distinguish them by stream: a genuine diff writes only to stdout,
+// while access/usage failures write an `error:`/`fatal:` line to stderr.
+// The previous implementation grepped combined output for `+++ b/` /
+// `--- a/` markers, which mis-classified binary diffs (`Binary files a
+// and b differ`, no such markers) as errors.
 func GetDiffBetweenFiles(file1, file2 string) (string, error) {
 	cmd, cancel := runGitCommand("", "diff", "--no-index", "--", file1, file2)
 	defer cancel()
-	output, err := cmd.CombinedOutput()
-	outputStr := string(output)
-	hasDiff := strings.Contains(outputStr, "+++ b/") && strings.Contains(outputStr, "--- a/")
 
-	if err != nil && !hasDiff {
-		return "", fmt.Errorf("git diff --no-index failed: %w", err)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err == nil {
+		// Exit 0: files are identical (empty diff).
+		return stdout.String(), nil
 	}
-	return outputStr, nil
+
+	exitErr, ok := err.(*exec.ExitError)
+	if ok && exitErr.ExitCode() == 1 && stderr.Len() == 0 {
+		// Exit 1 with nothing on stderr: the files differ. This covers
+		// both textual and binary diffs.
+		return stdout.String(), nil
+	}
+
+	return "", fmt.Errorf("git diff --no-index failed: %s: %w", strings.TrimSpace(stderr.String()), err)
 }
 
 // RefExists checks if a git reference exists in the repository

@@ -863,6 +863,33 @@ func TestGetDiffBetweenFiles_DifferentFiles(t *testing.T) {
 	assert.Contains(t, diff, "--- a/", "diff should contain --- a/ marker")
 }
 
+func TestGetDiffBetweenFiles_BinaryFiles(t *testing.T) {
+	require.True(t, IsGitInstalled(), "git must be installed for this test")
+
+	tempDir, err := os.MkdirTemp("", "dotcor-test-*")
+	require.NoError(t, err, "failed to create temp dir")
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
+
+	file1 := filepath.Join(tempDir, "a.bin")
+	file2 := filepath.Join(tempDir, "b.bin")
+
+	// NUL bytes make git treat these as binary, so the diff has no
+	// +++ b/ / --- a/ hunk markers — only a "Binary files ... differ"
+	// line. The old string-matching impl reported this as an error.
+	require.NoError(t, os.WriteFile(file1, []byte{0x00, 0x01, 0x02}, 0644), "failed to create a.bin")
+	require.NoError(t, os.WriteFile(file2, []byte{0x00, 0x01, 0x03}, 0644), "failed to create b.bin")
+
+	diff, err := GetDiffBetweenFiles(file1, file2)
+
+	require.NoError(t, err, "GetDiffBetweenFiles() should not error for differing binary files")
+	assert.NotEmpty(t, diff, "GetDiffBetweenFiles() should return a diff for differing binary files")
+	assert.Contains(t, diff, "differ", "binary diff should mention the files differ")
+}
+
 func TestGetDiffBetweenFiles_IdenticalFiles(t *testing.T) {
 	require.True(t, IsGitInstalled(), "git must be installed for this test")
 
