@@ -60,6 +60,45 @@ func TestCreateBackupNonexistent(t *testing.T) {
 	assert.Error(t, err, "CreateBackup() should error for nonexistent file")
 }
 
+// TestCreateBackup_SameSecondNoClobber verifies that two backups of the
+// same file created within the same second-granularity timestamp window
+// do not overwrite each other. Before the fix the second backup truncated
+// the first (shared path + O_TRUNC copy), so a rollback could restore the
+// wrong contents.
+func TestCreateBackup_SameSecondNoClobber(t *testing.T) {
+	// Isolate the backup directory under DOTCOR_DIR so the test doesn't
+	// touch the real ~/.dotcor.
+	t.Setenv("DOTCOR_DIR", t.TempDir())
+
+	cfg := &config.Config{Logger: slog.Default()}
+
+	home, err := os.UserHomeDir()
+	require.NoError(t, err)
+	sourceFile := filepath.Join(home, ".dotcor-backup-collision-test")
+	require.NoError(t, os.WriteFile(sourceFile, []byte("version one"), 0644))
+	defer func() { _ = os.Remove(sourceFile) }()
+
+	// First backup captures "version one".
+	backup1, err := CreateBackup(sourceFile, cfg)
+	require.NoError(t, err)
+
+	// The file changes and is backed up again, almost certainly within the
+	// same second.
+	require.NoError(t, os.WriteFile(sourceFile, []byte("version two"), 0644))
+	backup2, err := CreateBackup(sourceFile, cfg)
+	require.NoError(t, err)
+
+	require.NotEqual(t, backup1, backup2, "the two backups must use distinct paths")
+
+	content1, err := os.ReadFile(backup1)
+	require.NoError(t, err)
+	assert.Equal(t, "version one", string(content1), "first backup must still hold the original content")
+
+	content2, err := os.ReadFile(backup2)
+	require.NoError(t, err)
+	assert.Equal(t, "version two", string(content2), "second backup must hold the updated content")
+}
+
 func TestRestoreBackup(t *testing.T) {
 	// Arrange
 	tempDir := t.TempDir()

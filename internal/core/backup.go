@@ -87,6 +87,23 @@ func CreateBackup(sourcePath string, cfg *config.Config) (string, error) {
 		return "", fmt.Errorf("creating backup subdirectory: %w", err)
 	}
 
+	// The timestamp directory is only second-granular, so backing the same
+	// relative path up twice within the same second would land on the same
+	// destination. CopyWithPermissions opens with O_TRUNC, so the second
+	// write would silently clobber the first backup — and an earlier
+	// RemoveFileOp/WriteFileOp holding that path would then restore the
+	// wrong file's contents on rollback. Disambiguate with a numeric
+	// suffix so each backup gets its own file.
+	if fs.PathExists(backupPath) {
+		for i := 1; ; i++ {
+			candidate := fmt.Sprintf("%s.%d", backupPath, i)
+			if !fs.PathExists(candidate) {
+				backupPath = candidate
+				break
+			}
+		}
+	}
+
 	if err := fs.CopyWithPermissions(expanded, backupPath, cfg); err != nil {
 		cfg.Logger.Error("failed to copy to backup", "src", expanded, "dst", backupPath, "error", err)
 		return "", fmt.Errorf("copying to backup: %w", err)
