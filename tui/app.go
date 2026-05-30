@@ -292,7 +292,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.err
 			return m, nil
 		}
+		// The expansion state is keyed by slice index. When the package
+		// list is replaced — e.g. after a delete shifts every later
+		// package down one index — those indices would point at the wrong
+		// packages, marking an unrelated package as expanded. Remap the
+		// expansion set by package NAME across the old→new slices so
+		// expansion follows the package it belonged to (and is dropped for
+		// packages that no longer exist).
+		expandedNames := make(map[string]bool)
+		for idx, isExpanded := range m.expanded {
+			if isExpanded && idx < len(m.packages) {
+				expandedNames[m.packages[idx].Name] = true
+			}
+		}
 		m.packages = msg.packages
+		newExpanded := make(map[int]bool, len(expandedNames))
+		for idx, pkg := range m.packages {
+			if expandedNames[pkg.Name] {
+				newExpanded[idx] = true
+			}
+		}
+		m.expanded = newExpanded
 		// Repo size walk is expensive on large repos and runs after every
 		// stow/unstow/sync. Compute it asynchronously so the package list
 		// renders immediately; the pill updates a moment later via repoSizeMsg.
