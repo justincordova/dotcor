@@ -319,6 +319,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.selectedPkg >= len(m.packages) {
 			m.selectedPkg = 0
 		}
+		// Clamp the file cursor too: the newly-discovered package at
+		// selectedPkg may have fewer files than before, leaving
+		// selectedFile dangling past the slice. A stale selectedFile
+		// silently changes which file the remove/diff/history keys act on.
+		if m.selectedPkg < len(m.packages) && m.selectedFile >= len(m.packages[m.selectedPkg].Files) {
+			m.selectedFile = 0
+		}
 		return m, computeRepoSize(m.repoDir)
 
 	case repoSizeMsg:
@@ -507,19 +514,19 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.clearConfirm()
 			switch action {
 			case "stow":
-				return m, m.stowPackage()
+				return m, m.stowPackage(target)
 			case "unstow":
-				return m, m.unstowPackage()
+				return m, m.unstowPackage(target)
 			case "stow-all":
 				return m, m.stowAllPackages()
 			case "delete":
-				return m, m.deletePackage()
+				return m, m.deletePackage(target)
 			case "remove":
-				return m, m.removeFileFromPackage()
+				return m, m.removeFileFromPackage(target, restorePath)
 			case "resolve-conflicts":
 				return m, m.resolveConflicts(target)
 			case "adopt":
-				return m, m.adoptPackage()
+				return m, m.adoptPackage(target)
 			case "restore":
 				return m, m.restoreFromCommit(restoreRef, restorePath)
 			}
@@ -744,7 +751,12 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 			f := m.packages[m.selectedPkg].Files[m.selectedFile]
 			m.confirmOpen = true
 			m.confirmAction = "remove"
-			m.confirmTarget = fmt.Sprintf("%s from %s", f.RelPath, m.packages[m.selectedPkg].Name)
+			// Capture package name and file rel-path at dialog-open time so
+			// the confirmed action resolves the exact same target even if a
+			// background packagesMsg shifts m.selectedPkg/m.selectedFile
+			// before Enter is pressed.
+			m.confirmTarget = m.packages[m.selectedPkg].Name
+			m.confirmFilePath = f.RelPath
 			m.confirmTitle = fmt.Sprintf("Remove %s?", f.RelPath)
 			m.confirmBody = fmt.Sprintf("Removes from package %s.\nFile stays on disk.", m.packages[m.selectedPkg].Name)
 			m.confirmHint = "enter confirm · any key cancel"
@@ -1050,6 +1062,21 @@ func (m Model) currentFiles() []stow.FileEntry {
 	return m.packages[m.selectedPkg].Files
 }
 
+// packageByName resolves a package by its stable name. Destructive and
+// mutating actions resolve their target this way at execute-time rather
+// than re-reading m.selectedPkg, which can point at a different package
+// after a background packagesMsg replaces m.packages between the confirm
+// dialog opening and the user pressing Enter. Returns nil if no package
+// with that name exists (e.g. it was deleted out from under us).
+func (m Model) packageByName(name string) *stow.Package {
+	for i := range m.packages {
+		if m.packages[i].Name == name {
+			return &m.packages[i]
+		}
+	}
+	return nil
+}
+
 func (m Model) sortedPkgPos() int {
 	indices := sortedPackages(m)
 	for i, idx := range indices {
@@ -1164,11 +1191,13 @@ func fetchRecentCommits(repoDir string) tea.Cmd {
 	}
 }
 
-func (m Model) stowPackage() tea.Cmd {
-	if m.selectedPkg >= len(m.packages) {
-		return nil
+func (m Model) stowPackage(name string) tea.Cmd {
+	pkg := m.packageByName(name)
+	if pkg == nil {
+		return func() tea.Msg {
+			return stowResultMsg{err: fmt.Errorf("package %q no longer exists", name)}
+		}
 	}
-	pkg := m.packages[m.selectedPkg]
 	repoDir, homeDir := m.repoDir, m.homeDir
 	return func() tea.Msg {
 		result, err := stow.Link(repoDir, homeDir, pkg.Name)
@@ -1207,11 +1236,13 @@ func (m Model) resolveConflicts(pkgName string) tea.Cmd {
 	}
 }
 
-func (m Model) adoptPackage() tea.Cmd {
-	if m.selectedPkg >= len(m.packages) {
-		return nil
+func (m Model) adoptPackage(name string) tea.Cmd {
+	pkg := m.packageByName(name)
+	if pkg == nil {
+		return func() tea.Msg {
+			return stowResultMsg{err: fmt.Errorf("package %q no longer exists", name)}
+		}
 	}
-	pkg := m.packages[m.selectedPkg]
 	repoDir, homeDir := m.repoDir, m.homeDir
 	return func() tea.Msg {
 		result, err := stow.Adopt(repoDir, homeDir, pkg.Name)
@@ -1230,11 +1261,13 @@ func (m Model) adoptPackage() tea.Cmd {
 	}
 }
 
-func (m Model) unstowPackage() tea.Cmd {
-	if m.selectedPkg >= len(m.packages) {
-		return nil
+func (m Model) unstowPackage(name string) tea.Cmd {
+	pkg := m.packageByName(name)
+	if pkg == nil {
+		return func() tea.Msg {
+			return stowResultMsg{err: fmt.Errorf("package %q no longer exists", name)}
+		}
 	}
-	pkg := m.packages[m.selectedPkg]
 	repoDir, homeDir := m.repoDir, m.homeDir
 	return func() tea.Msg {
 		result, err := stow.Unlink(repoDir, homeDir, pkg.Name)
@@ -1289,11 +1322,13 @@ func (m Model) stowAllPackages() tea.Cmd {
 		return stowResultMsg{msg: msg}
 	}
 }
-func (m Model) deletePackage() tea.Cmd {
-	if m.selectedPkg >= len(m.packages) {
-		return nil
+func (m Model) deletePackage(name string) tea.Cmd {
+	pkg := m.packageByName(name)
+	if pkg == nil {
+		return func() tea.Msg {
+			return stowResultMsg{err: fmt.Errorf("package %q no longer exists", name)}
+		}
 	}
-	pkg := m.packages[m.selectedPkg]
 	repoDir := m.repoDir
 	homeDir := m.homeDir
 	backupDir := filepath.Join(repoDir, "backups")
@@ -1389,15 +1424,27 @@ func copyDir(src, dst string) error {
 	})
 }
 
-func (m Model) removeFileFromPackage() tea.Cmd {
-	if m.selectedPkg >= len(m.packages) {
-		return nil
+func (m Model) removeFileFromPackage(name, relPath string) tea.Cmd {
+	pkg := m.packageByName(name)
+	if pkg == nil {
+		return func() tea.Msg {
+			return stowResultMsg{err: fmt.Errorf("package %q no longer exists", name)}
+		}
 	}
-	pkg := m.packages[m.selectedPkg]
-	if !m.expanded[m.selectedPkg] || m.selectedFile >= len(pkg.Files) {
-		return nil
+	var file stow.FileEntry
+	found := false
+	for i := range pkg.Files {
+		if pkg.Files[i].RelPath == relPath {
+			file = pkg.Files[i]
+			found = true
+			break
+		}
 	}
-	file := pkg.Files[m.selectedFile]
+	if !found {
+		return func() tea.Msg {
+			return stowResultMsg{err: fmt.Errorf("%q is no longer in package %q", relPath, name)}
+		}
+	}
 	repoDir := m.repoDir
 	pkgName := pkg.Name
 	logger := m.cfg.Logger
