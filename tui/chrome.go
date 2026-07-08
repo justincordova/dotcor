@@ -45,6 +45,33 @@ func subviewFooter(width int, hints ...string) string {
 		Render(joinHints(hints...))
 }
 
+// joinSubview stacks sub-view sections top to bottom, dropping any empty
+// ones (e.g. an absent status row) so they don't introduce blank lines.
+func joinSubview(sections ...string) string {
+	kept := make([]string, 0, len(sections))
+	for _, s := range sections {
+		if s != "" {
+			kept = append(kept, s)
+		}
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, kept...)
+}
+
+// subviewStatusRow renders a one-line status/error banner shared by every
+// sub-view. Without it, errors set on the model (e.g. a failed restore or a
+// SaveConfig failure) are stored but never shown, leaving the user with no
+// feedback. Returns "" when there is nothing to report.
+func subviewStatusRow(m Model) string {
+	switch {
+	case m.err != nil:
+		return errorStyle.Render(" ✗ " + m.err.Error())
+	case m.statusMsg != "":
+		return successStyle.Render(" ✓ " + m.statusMsg)
+	default:
+		return ""
+	}
+}
+
 func contentWidth(termWidth int) int {
 	maxW := 90
 	if termWidth < maxW {

@@ -67,6 +67,22 @@ var (
 
 // ─── Reusable components ─────────────────────────────────────────────────────
 
+// selectionMarker is the canonical "this row is focused" glyph. Every list
+// surface (packages, history, settings) uses it so selection looks and reads
+// identically everywhere, instead of each list inventing its own cue.
+const selectionMarker = "▸"
+
+// selectableRow renders one list row with a consistent selection treatment:
+// a leading marker + filled background when selected, matching indentation
+// when not. width is the row's target display width for the background fill.
+func selectableRow(content string, selected bool, width int) string {
+	if selected {
+		row := accentStyle.Render(selectionMarker+" ") + content
+		return selectedRowStyle.Width(width).Render(row)
+	}
+	return "  " + content
+}
+
 // pill renders a label inside a colored background — use for tags, counts, status.
 func pill(label string, fg, bg string) string {
 	return lipgloss.NewStyle().

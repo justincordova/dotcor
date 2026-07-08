@@ -47,7 +47,12 @@ func viewHistoryBase(m Model) string {
 		kbd("esc", "back"),
 	)
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
+	parts := []string{header, body}
+	if status := subviewStatusRow(m); status != "" {
+		parts = append(parts, status)
+	}
+	parts = append(parts, footer)
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
 func renderHistoryBody(m Model) string {
@@ -73,14 +78,11 @@ func renderHistoryBody(m Model) string {
 		}
 
 		hash := lipgloss.NewStyle().Foreground(lipgloss.Color(colPeach)).Render(shortHash)
-		when := dimStyle.Render(formatRelativeTime(c.Date))
+		when := dimStyle.Render(padRight(formatRelativeTime(c.Date), 12))
 		subject := textStyle.Render(truncate(c.Message, m.width-30))
 
-		row := fmt.Sprintf("  %s  %s  %s", hash, subject, when)
-		if selected {
-			row = selectedRowStyle.Width(m.width - 4).Render(accentStyle.Render("▸ ") + hash + "  " + subject + "  " + when)
-		}
-		b.WriteString(row)
+		content := fmt.Sprintf("%s  %s  %s", hash, when, subject)
+		b.WriteString(selectableRow(content, selected, m.width-4))
 		b.WriteString("\n")
 	}
 

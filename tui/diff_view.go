@@ -43,14 +43,7 @@ func viewDiff(m Model) string {
 }
 
 func diffStatusRow(m Model) string {
-	switch {
-	case m.err != nil:
-		return errorStyle.Render(" ✗ " + m.err.Error())
-	case m.statusMsg != "":
-		return successStyle.Render(" ✓ " + m.statusMsg)
-	default:
-		return ""
-	}
+	return subviewStatusRow(m)
 }
 
 func (m Model) updateDiff(msg tea.Msg) (tea.Model, tea.Cmd) {

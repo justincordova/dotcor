@@ -8,7 +8,6 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/justincordova/dotcor/internal/core"
 	"github.com/justincordova/dotcor/internal/git"
 )
@@ -43,7 +42,7 @@ func viewSettingsMain(m Model) string {
 
 	b.WriteString(accentStyle.Render("Git"))
 	b.WriteString("\n")
-	b.WriteString(subtleStyle.Render(strings.Repeat("─", 40)))
+	b.WriteString(hRule(bodyWidth(m.width)))
 	b.WriteString("\n\n")
 
 	remote := m.cfg.GitRemote
@@ -57,17 +56,15 @@ func viewSettingsMain(m Model) string {
 	b.WriteString("\n")
 	b.WriteString(accentStyle.Render("Ignore Patterns"))
 	b.WriteString("\n")
-	b.WriteString(subtleStyle.Render(strings.Repeat("─", 40)))
+	b.WriteString(hRule(bodyWidth(m.width)))
 	b.WriteString("\n")
 	if len(m.cfg.IgnorePatterns) == 0 {
 		b.WriteString(dimStyle.Render("  (none)\n"))
 	} else {
 		for i, p := range m.cfg.IgnorePatterns {
-			if m.settingsEditingIgnore && i == m.settingsIgnoreIdx {
-				fmt.Fprintf(&b, "  %s %s\n", accentStyle.Render(">"), textStyle.Render(p))
-			} else {
-				fmt.Fprintf(&b, "  %s %s\n", dimStyle.Render("•"), textStyle.Render(p))
-			}
+			selected := m.settingsEditingIgnore && i == m.settingsIgnoreIdx
+			b.WriteString(selectableRow(textStyle.Render(p), selected, bodyWidth(m.width)))
+			b.WriteString("\n")
 		}
 	}
 
@@ -82,7 +79,7 @@ func viewSettingsMain(m Model) string {
 	}
 	footer := subviewFooter(m.width, footerKeys...)
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
+	return joinSubview(header, body, subviewStatusRow(m), footer)
 }
 
 func viewSettingsEditRemote(m Model) string {
@@ -97,7 +94,7 @@ func viewSettingsEditRemote(m Model) string {
 	}, "\n")
 
 	footer := subviewFooter(m.width, kbd("enter", "save"), kbd("esc", "cancel"))
-	return lipgloss.JoinVertical(lipgloss.Left, header, subviewContent(m.width, m.height-3, body), footer)
+	return joinSubview(header, subviewContent(m.width, m.height-3, body), subviewStatusRow(m), footer)
 }
 
 func viewSettingsBackups(m Model) string {
@@ -117,8 +114,14 @@ func viewSettingsBackups(m Model) string {
 				b.WriteString(dimStyle.Render(fmt.Sprintf("  … and %d more\n", len(m.backups)-maxDisplay)))
 				break
 			}
+			srcW := m.width - 40
+			if srcW < 10 {
+				srcW = 10
+			}
 			ts := dimStyle.Render(backup.Timestamp.Format("2006-01-02 15:04"))
-			src := textStyle.Render(truncate(backup.SourcePath, m.width-40))
+			// Pad the source path to a fixed column so the size lines up in
+			// a straight right-hand column instead of jittering per row.
+			src := textStyle.Render(padRight(truncate(backup.SourcePath, srcW), srcW))
 			size := dimStyle.Render(humanSize(backup.Size))
 			fmt.Fprintf(&b, "  %s  %s  %s\n", ts, src, size)
 		}
@@ -129,7 +132,7 @@ func viewSettingsBackups(m Model) string {
 		kbd("c", "clean >30d"),
 		kbd("esc", "back"),
 	)
-	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
+	return joinSubview(header, body, subviewStatusRow(m), footer)
 }
 
 func viewSettingsAddPattern(m Model) string {
@@ -144,7 +147,7 @@ func viewSettingsAddPattern(m Model) string {
 	}, "\n")
 
 	footer := subviewFooter(m.width, kbd("enter", "save"), kbd("esc", "cancel"))
-	return lipgloss.JoinVertical(lipgloss.Left, header, subviewContent(m.width, m.height-3, body), footer)
+	return joinSubview(header, subviewContent(m.width, m.height-3, body), subviewStatusRow(m), footer)
 }
 
 func (m Model) updateSettings(msg tea.Msg) (tea.Model, tea.Cmd) {

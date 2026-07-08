@@ -349,13 +349,17 @@ func renderPackageCard(m Model, i, width int) string {
 	pkg := m.packages[i]
 	selected := i == m.selectedPkg
 
-	barStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colSurface1))
+	// Lead with the canonical selection marker so the focused package reads
+	// the same way as the history and settings lists. Unselected rows get a
+	// blank of equal width to keep columns aligned.
+	var marker string
 	if selected {
-		barStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colMauve)).Bold(true)
+		marker = accentStyle.Render(selectionMarker)
+	} else {
+		marker = " "
 	}
-	bar := barStyle.Render("▌")
 
-	indent := bar + "  "
+	indent := marker + "  "
 	contentWidth := width - 3
 	if contentWidth < 20 {
 		contentWidth = 20
@@ -404,7 +408,7 @@ func renderPackageCard(m Model, i, width int) string {
 	if gap < 1 {
 		gap = 1
 	}
-	line1 := bar + " " + name + strings.Repeat(" ", gap) + tag
+	line1 := marker + " " + name + strings.Repeat(" ", gap) + tag
 
 	var progress string
 	switch {

@@ -20,7 +20,12 @@ func viewLogs(m Model) string {
 		dimStyle.Render(fmt.Sprintf("%d lines", len(m.logs))),
 	)
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, filter, body, footer)
+	parts := []string{header, filter, body}
+	if status := subviewStatusRow(m); status != "" {
+		parts = append(parts, status)
+	}
+	parts = append(parts, footer)
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
 func renderLogFilter(m Model) string {
