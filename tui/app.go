@@ -64,11 +64,11 @@ type tickMsg time.Time
 // pre-commit dirty state.
 type autoCommittedMsg struct{}
 
-// repoSizeMsg carries the asynchronously computed repo size (in MB).
+// repoSizeMsg carries the asynchronously computed repo size (in bytes).
 // Filed after packagesMsg so the dashboard renders immediately and the
 // size pill updates a moment later — large repos no longer block the
 // post-stow refresh.
-type repoSizeMsg float64
+type repoSizeMsg int64
 
 type stowResultMsg struct {
 	msg       string
@@ -168,7 +168,7 @@ type Model struct {
 
 	sortMode int
 
-	repoSizeCached float64
+	repoSizeCached int64
 
 	confirmOpen       bool
 	confirmAction     string
@@ -329,7 +329,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, computeRepoSize(m.repoDir)
 
 	case repoSizeMsg:
-		m.repoSizeCached = float64(msg)
+		m.repoSizeCached = int64(msg)
 		return m, nil
 
 	case gitStatusMsg:
@@ -1166,7 +1166,7 @@ func discoverPackages(repoDir, homeDir string) tea.Cmd {
 
 func computeRepoSize(repoDir string) tea.Cmd {
 	return func() tea.Msg {
-		return repoSizeMsg(repoSizeMB(repoDir))
+		return repoSizeMsg(repoSizeBytes(repoDir))
 	}
 }
 

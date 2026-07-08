@@ -85,7 +85,9 @@ func renderLogo() string {
 	text := "◆ dotcor"
 	gradient := []string{colMauve, colMauve, colLavender, colPink, colPink, colFlamingo, colFlamingo, colPink}
 	var b strings.Builder
-	for i, r := range text {
+	// Index by rune position, not byte offset: "◆" is a multi-byte rune, so
+	// a byte-indexed range would skip gradient stops and misalign the ramp.
+	for i, r := range []rune(text) {
 		color := gradient[i%len(gradient)]
 		b.WriteString(lipgloss.NewStyle().
 			Foreground(lipgloss.Color(color)).
@@ -151,7 +153,7 @@ func renderStatsStrip(m Model) string {
 
 	repoVal := fmt.Sprintf("%d %s", len(m.packages), pluralize(len(m.packages), "pkg"))
 	if m.repoSizeCached > 0 {
-		repoVal += fmt.Sprintf(" · %.1fMB", m.repoSizeCached)
+		repoVal += metaSep() + humanSize(m.repoSizeCached)
 	}
 
 	items := []string{
@@ -389,7 +391,13 @@ func renderPackageCard(m Model, i, width int) string {
 			displayName = string(runes[:maxNameRunes-1]) + "…"
 		}
 	}
-	name := textStyle.Bold(true).Render(displayName)
+	// Highlight the focused package's name with a filled background so the
+	// selection is scannable at a glance, not just a bar-color change.
+	nameStyle := textStyle.Bold(true)
+	if selected {
+		nameStyle = selectedRowStyle.Foreground(lipgloss.Color(colText))
+	}
+	name := nameStyle.Render(" " + displayName + " ")
 
 	leftW := lipgloss.Width(name)
 	gap := contentWidth - leftW - tagW
@@ -410,7 +418,7 @@ func renderPackageCard(m Model, i, width int) string {
 		progress = warningStyle.Render(fmt.Sprintf("◐ %d/%d", linked, total))
 	}
 	modified := dimStyle.Render(relativeModTime(pkg.Path))
-	line2 := indent + progress + dimStyle.Render(" · ") + modified
+	line2 := indent + progress + metaSep() + modified
 
 	return lipgloss.JoinVertical(lipgloss.Left, line1, line2)
 }
@@ -418,7 +426,7 @@ func renderPackageCard(m Model, i, width int) string {
 func renderEmptyPackages(width int) string {
 	return strings.Join([]string{
 		"",
-		textStyle.Render("No packages yet."),
+		dimStyle.Render("○") + " " + textStyle.Render("No packages yet."),
 		"",
 		dimStyle.Render("Press ") + kbd("a", "add") + dimStyle.Render(" to stow your first dotfile."),
 	}, "\n")
@@ -443,7 +451,12 @@ func renderFileDetail(m Model, width, maxLines int) string {
 	pkg := m.packages[m.selectedPkg]
 
 	if len(pkg.Files) == 0 {
-		return dimStyle.Render("No files in this package.")
+		return strings.Join([]string{
+			"",
+			dimStyle.Render("○") + " " + textStyle.Render("This package is empty."),
+			"",
+			dimStyle.Render("Add files to ") + accentStyle.Render(pkg.Name) + dimStyle.Render(" in your repo, then ") + kbd("s", "stow") + dimStyle.Render("."),
+		}, "\n")
 	}
 
 	var b strings.Builder
@@ -460,17 +473,17 @@ func renderFileDetail(m Model, width, maxLines int) string {
 	}
 
 	summary := []string{
-		pill(fmt.Sprintf("linked %d", linked), colBase, colGreen),
+		pill(fmt.Sprintf("%s %d", statusLinked, linked), colBase, colGreen),
 	}
 	if foreign > 0 {
-		summary = append(summary, pill(fmt.Sprintf("foreign %d", foreign), colBase, colYellow))
+		summary = append(summary, pill(fmt.Sprintf("%s %d", statusForeign, foreign), colBase, colYellow))
 	}
 	if conflicts > 0 {
-		summary = append(summary, pill(fmt.Sprintf("conflict %d", conflicts), colBase, colRed))
+		summary = append(summary, pill(fmt.Sprintf("%s %d", statusConflict, conflicts), colBase, colRed))
 	}
 	unlinked := len(pkg.Files) - linked - conflicts - foreign
 	if unlinked > 0 {
-		summary = append(summary, pill(fmt.Sprintf("unlinked %d", unlinked), colBase, colOverlay0))
+		summary = append(summary, pill(fmt.Sprintf("%s %d", statusUnlinked, unlinked), colBase, colOverlay0))
 	}
 	b.WriteString(strings.Join(summary, " "))
 	b.WriteString("\n")
@@ -645,18 +658,15 @@ func renderFooter(m Model) string {
 			Render("  " + accentStyle.Render("/") + " " + m.searchInput.View())
 	}
 
+	// Show only the primary actions here; the full keymap lives behind ?.
+	// A permanent 14-key wall reads as noise and costs vertical rows.
 	allHints := []string{
-		kbd("↑↓/jk", "nav"), kbd("ctrl+u/d", "page"), kbd("g/G", "top/bot"),
-		kbd("tab", "sort"),
+		kbd("↑↓", "nav"),
 		kbd("s", "stow"),
-		kbd("u", "unstow"),
-		kbd("A", "stow-all"),
 		kbd("a", "add"),
-		kbd("o", "adopt"),
-		kbd("r", "remove"),
-		kbd("i", "init git"),
 		kbd("S", "sync"),
 		kbd("/", "search"),
+		kbd("?", "more"),
 		kbd("q", "quit"),
 	}
 
@@ -706,17 +716,38 @@ func renderFooter(m Model) string {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-func fileBadge(f stow.FileEntry) string {
+// Canonical status vocabulary — one lexicon the whole UI shares so a user
+// learns the four states once. Detail pills, file badges, and card summaries
+// all draw from these labels and colors.
+const (
+	statusLinked   = "linked"
+	statusForeign  = "foreign"
+	statusConflict = "conflict"
+	statusUnlinked = "unlinked"
+)
+
+// fileStatus reduces a file entry to its canonical status label + color.
+func fileStatus(f stow.FileEntry) (label, color string) {
 	switch {
 	case f.IsLinked:
-		return pill("LINK", colBase, colGreen)
+		return statusLinked, colGreen
 	case f.Exists && f.IsSymlink:
-		return pill("FOREIGN", colBase, colYellow)
+		return statusForeign, colYellow
 	case f.Exists:
-		return pill("CONF", colBase, colRed)
+		return statusConflict, colRed
 	default:
-		return pill("NONE", colText, colSurface1)
+		return statusUnlinked, colOverlay0
 	}
+}
+
+func fileBadge(f stow.FileEntry) string {
+	label, color := fileStatus(f)
+	// "unlinked" is the absence of state — render it recessive (dim text,
+	// no fill) so present/conflicting files carry the visual weight.
+	if label == statusUnlinked {
+		return dimStyle.Render(label)
+	}
+	return pill(label, colBase, color)
 }
 
 // categoryTag returns a small colored outlined pill based on package name.
@@ -739,9 +770,10 @@ func categoryTag(name string) string {
 	default:
 		return ""
 	}
-	return lipgloss.NewStyle().
-		Foreground(lipgloss.Color(color)).
-		Render(tag)
+	// Render as a subtle pill (category color on a recessed surface) so it
+	// reads as a deliberate tag alongside the filled conflict pill, rather
+	// than as bare floating text.
+	return pill(tag, color, colSurface0)
 }
 
 func fuzzyMatch(query, target string) bool {
@@ -785,8 +817,9 @@ func relativeModTime(path string) string {
 	return formatRelativeTime(info.ModTime())
 }
 
-// repoSizeMB returns the total size of the repo dir in MB (rough estimate from top-level).
-func repoSizeMB(repoDir string) float64 {
+// repoSizeBytes returns the total size of the repo dir in bytes (rough
+// estimate from top-level, excluding .git/logs/backups).
+func repoSizeBytes(repoDir string) int64 {
 	var total int64
 	entries, err := os.ReadDir(repoDir)
 	if err != nil {
@@ -806,7 +839,7 @@ func repoSizeMB(repoDir string) float64 {
 			total += info.Size()
 		}
 	}
-	return float64(total) / (1024 * 1024)
+	return total
 }
 
 func dirSize(path string) int64 {

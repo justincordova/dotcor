@@ -109,6 +109,13 @@ func joinHints(hints ...string) string {
 	return strings.Join(hints, dimStyle.Render("  ·  "))
 }
 
+// metaSep is the canonical separator for inline metadata (a dimmed middle
+// dot). Use this everywhere two inline facts sit side by side so the whole
+// UI speaks one separator language.
+func metaSep() string {
+	return dimStyle.Render(" · ")
+}
+
 // hRule draws a horizontal rule of given width in the subtle border color.
 func hRule(width int) string {
 	return lipgloss.NewStyle().

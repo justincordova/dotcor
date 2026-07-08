@@ -186,7 +186,11 @@ func renderAddStep0(m Model, footer string, errLine string) string {
 
 	if len(items) == 0 {
 		b.WriteString("\n")
-		b.WriteString(dimStyle.Render("  (empty directory)"))
+		b.WriteString("  " + dimStyle.Render("○") + " " + textStyle.Render("Nothing to add here."))
+		b.WriteString("\n\n")
+		b.WriteString("  " + dimStyle.Render("Every file is already managed, or the directory is empty."))
+		b.WriteString("\n")
+		b.WriteString("  " + dimStyle.Render("Press ") + kbd("/", "jump") + dimStyle.Render(" to go to another path, ") + kbd("esc", "cancel") + dimStyle.Render("."))
 		return b.String()
 	}
 
