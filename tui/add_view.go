@@ -209,7 +209,17 @@ func renderAddStep0(m Model, footer string, errLine string) string {
 		ch = 1
 	}
 
+	// Clamp start to a valid range. Downward navigation on an empty item
+	// list drives browserCursor to len-1 == -1, which browserAdjustScroll
+	// mirrors into a negative browserScroll. renderAddStep0 currently
+	// early-returns for len(items)==0 so this loop isn't reached while
+	// empty — but if the list becomes non-empty while scroll is still
+	// negative, items[start] would index items[-1] and panic. Guard at the
+	// point of use so this loop is safe regardless of how scroll got here.
 	start := m.browserScroll
+	if start < 0 {
+		start = 0
+	}
 	end := start + ch
 	if end > len(items) {
 		end = len(items)
@@ -853,6 +863,11 @@ func (m *Model) browserAdjustScroll() {
 	if m.browserCursor >= m.browserScroll+ch {
 		m.browserScroll = m.browserCursor - ch + 1
 	}
+	// An empty item list drives browserCursor to -1 (len-1), which would
+	// otherwise leave browserScroll negative. Keep it non-negative.
+	if m.browserScroll < 0 {
+		m.browserScroll = 0
+	}
 }
 
 func browserContentHeight(m Model) int {
@@ -1084,6 +1099,23 @@ func (m Model) browserHandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	items := m.buildBrowserItems()
+	// With no items to navigate, keep the cursor/scroll pinned at 0 so the
+	// downward-motion keys below can't drive browserCursor to len-1 == -1,
+	// which then cascades into a negative browserScroll (incoherent state
+	// that becomes an items[-1] panic once the list is non-empty again).
+	// The "/" jump key still needs to work, so handle it before bailing.
+	if len(items) == 0 {
+		if keyMsg.String() == "/" {
+			m.browserJumping = true
+			m.browserJumpInput.Placeholder = "~/.config/nvim"
+			m.browserJumpInput.SetValue("")
+			m.browserJumpInput.Focus()
+			return m, textinput.Blink
+		}
+		m.browserCursor = 0
+		m.browserScroll = 0
+		return m, nil
+	}
 	switch keyMsg.String() {
 	case "up", "k":
 		if m.browserCursor > 0 {
