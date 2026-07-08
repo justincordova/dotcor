@@ -1633,16 +1633,46 @@ func readFilteredLogs(r io.Reader, level string) []string {
 	return filtered
 }
 
+// lineLevelRank returns the severity rank of a log line based on the
+// charmlog level token it carries (DEBU/INFO/WARN/ERRO — the abbreviated
+// forms charmlog writes to the file handler). Lines with no recognizable
+// token rank as debug (0) so they are only hidden by the debug filter,
+// never dropped from a broader view.
+//
+// The tokens are matched space-delimited (" WARN ") to avoid a message
+// body containing the word "WARN" being misclassified as a warning line.
+func lineLevelRank(line string) int {
+	switch {
+	case strings.Contains(line, " ERRO"):
+		return 3
+	case strings.Contains(line, " WARN"):
+		return 2
+	case strings.Contains(line, " INFO"):
+		return 1
+	default:
+		return 0
+	}
+}
+
+// matchesLevel reports whether a log line should be shown at the selected
+// minimum level. Higher-or-equal severity lines pass, matching the usual
+// "show this level and above" semantics of a level filter.
+//
+// charmlog's file handler renders levels as uppercase abbreviations
+// (DEBU/INFO/WARN/ERRO), NOT the logfmt `level=warn` form the previous
+// implementation looked for — so the warn and error filters matched
+// nothing and always rendered an empty log view.
 func matchesLevel(line, level string) bool {
+	rank := lineLevelRank(line)
 	switch level {
 	case "debug":
 		return true
 	case "info":
-		return !strings.Contains(line, "level=debug")
+		return rank >= 1
 	case "warn":
-		return strings.Contains(line, "level=warn") || strings.Contains(line, "level=error")
+		return rank >= 2
 	case "error":
-		return strings.Contains(line, "level=error")
+		return rank >= 3
 	default:
 		return true
 	}
