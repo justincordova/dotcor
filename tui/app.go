@@ -904,12 +904,22 @@ func (m Model) updateInit(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if keyMsg, ok := msg.(tea.KeyMsg); ok {
 			switch {
 			case key.Matches(keyMsg, m.keys.Enter):
-				url := m.settingsInput.Value()
+				url := strings.TrimSpace(m.settingsInput.Value())
 				m.settingsInput.Blur()
 				m.initStep = 0
 				if url != "" {
 					if err := git.SetRemote(m.repoDir, "origin", url); err != nil {
 						m.err = err
+						return m, nil
+					}
+					// Persist to .dotcorrc so the stored git_remote matches
+					// the remote we just wrote to .git/config. Without this
+					// the Settings view renders "(not configured)" even
+					// though a remote is set — the same silent divergence
+					// the settings flow avoids (ISSUES.md #4).
+					m.cfg.GitRemote = url
+					if err := m.cfg.SaveConfig(); err != nil {
+						m.err = fmt.Errorf("saving config: %w", err)
 						return m, nil
 					}
 				}
