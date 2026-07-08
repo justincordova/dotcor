@@ -278,7 +278,7 @@ func renderAddStep0(m Model, footer string, errLine string) string {
 
 		cursor := " "
 		if i == m.browserCursor {
-			cursor = accentStyle.Render("▌")
+			cursor = accentStyle.Render(selectionMarker)
 		}
 		line := fmt.Sprintf(" %s%s%s %s", indent, cursor, icon, styledName)
 		bw := bodyWidth(m.width)
@@ -461,23 +461,25 @@ func renderPreviewHeader(row previewRow, bw int) string {
 		return subtleStyle.Render("  " + strings.Repeat("─", max(bw-2, 4)))
 	}
 
-	// Class section header.
+	// Class section header. Labels are lowercase to match the summary
+	// count pills below and the app-wide status lexicon — the same class
+	// must not read as FOREIGN here and "foreign N" a few rows down.
 	class := row.class
 	var label string
 	var color string
 	switch class {
 	case stow.ClassAdopt:
-		label, color = "ADOPT", colGreen
+		label, color = "adopt", colGreen
 	case stow.ClassAdd:
-		label, color = "ADD", colBlue
+		label, color = "add", colBlue
 	case stow.ClassTrack:
-		label, color = "TRACK", colMauve
+		label, color = "track", colMauve
 	case stow.ClassForeign:
-		label, color = "FOREIGN", colYellow
+		label, color = "foreign", colYellow
 	case stow.ClassManaged:
-		label, color = "MANAGED", colOverlay0
+		label, color = "managed", colOverlay0
 	default:
-		label, color = "UNKNOWN", colOverlay0
+		label, color = "unknown", colOverlay0
 	}
 	return "  " + pill(" "+label+" ", colBase, color)
 }
@@ -510,19 +512,17 @@ func renderPreviewFileRow(cf stow.ClassifiedFile, toggled bool, pkgName string, 
 		detail = dimStyle.Render(fmt.Sprintf("already in repo/%s/", pkgName))
 	}
 
-	var styledName string
+	// Fix the name to a single column width so the detail column lines up
+	// straight regardless of name length — long names truncate rather than
+	// shoving detail out of alignment, short names pad up to the column.
+	const nameCol = 24
+	displayName := truncate(name, nameCol)
 	if isManaged || !toggled {
-		styledName = dimStyle.Render(name)
+		displayName = dimStyle.Render(padRight(displayName, nameCol))
 	} else {
-		styledName = textStyle.Render(name)
+		displayName = textStyle.Render(padRight(displayName, nameCol))
 	}
-
-	nameW := lipgloss.Width(styledName)
-	namePad := ""
-	if nameW < 24 {
-		namePad = strings.Repeat(" ", 24-nameW)
-	}
-	line := fmt.Sprintf("  %s%s%s  %s", checkbox, styledName, namePad, detail)
+	line := fmt.Sprintf("  %s%s  %s", checkbox, displayName, detail)
 
 	return lipgloss.NewStyle().Width(bw).Render(line)
 }
