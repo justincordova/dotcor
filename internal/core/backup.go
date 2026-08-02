@@ -143,7 +143,10 @@ func RestoreBackup(backupPath, targetPath string, cfg *config.Config) error {
 		return fmt.Errorf("backup file does not exist: %s", backupPath)
 	}
 
-	if err := fs.EnsureDir(filepath.Dir(expandedTarget), cfg); err != nil {
+	// Private: restoring ~/.ssh/config when ~/.ssh is missing must not
+	// recreate it world-traversable — ssh itself refuses keys under such a
+	// directory.
+	if err := fs.EnsurePrivateDir(filepath.Dir(expandedTarget), cfg); err != nil {
 		cfg.Logger.Error("failed to create target directory", "error", err)
 		return fmt.Errorf("creating target directory: %w", err)
 	}

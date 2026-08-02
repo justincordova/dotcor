@@ -129,9 +129,26 @@ func ensureDirMode(path string, mode os.FileMode, cfg *config.Config) error {
 
 	cfg.Logger.Debug("ensuring directory exists", "path", path)
 
-	info, err := os.Stat(path)
+	// Lstat, not Stat: a symlink at path would otherwise be followed, and
+	// the mode guarantee below would apply to a directory the caller never
+	// named while backups were written through the link.
+	info, err := os.Lstat(path)
 	if err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("path is a symlink, refusing to use it as a directory: %s", path)
+		}
 		if info.IsDir() {
+			// MkdirAll only applies the mode to directories it creates, so
+			// an already-existing directory keeps whatever mode it had.
+			// Tighten it, otherwise EnsurePrivateDir is not idempotent with
+			// respect to its own guarantee — a backups directory created by
+			// an older build stays world-traversable forever.
+			if extra := info.Mode().Perm() &^ mode; extra != 0 {
+				if chmodErr := os.Chmod(path, mode); chmodErr != nil {
+					cfg.Logger.Warn("could not tighten directory permissions",
+						"path", path, "error", chmodErr)
+				}
+			}
 			cfg.Logger.Debug("directory already exists", "path", path)
 			return nil
 		}

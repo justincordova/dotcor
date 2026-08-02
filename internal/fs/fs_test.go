@@ -471,3 +471,67 @@ func TestMoveFileCleanupOnError(t *testing.T) {
 	require.Error(t, err, "MoveFile should fail when src doesn't exist")
 	assert.False(t, PathExists(dst), "dst must not be created when MoveFile fails")
 }
+
+// TestEnsurePrivateDir_TightensExistingDirectory pins the fix for a guarantee
+// that only held for directories this function created. MkdirAll applies its
+// mode only on creation, so a backups directory left at 0755 by an older
+// build stayed world-traversable forever.
+func TestEnsurePrivateDir_TightensExistingDirectory(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: permissions are not enforced")
+	}
+
+	cfg := testConfig()
+	dir := filepath.Join(t.TempDir(), "backups")
+	require.NoError(t, os.MkdirAll(dir, 0755))
+
+	require.NoError(t, EnsurePrivateDir(dir, cfg))
+
+	info, err := os.Stat(dir)
+	require.NoError(t, err)
+	assert.Zero(t, info.Mode().Perm()&0o077,
+		"an existing directory must be tightened, got %v", info.Mode().Perm())
+}
+
+// TestEnsurePrivateDir_CreatesPrivateDirectory covers the creation path.
+func TestEnsurePrivateDir_CreatesPrivateDirectory(t *testing.T) {
+	cfg := testConfig()
+	dir := filepath.Join(t.TempDir(), "a", "b", "c")
+
+	require.NoError(t, EnsurePrivateDir(dir, cfg))
+
+	info, err := os.Stat(dir)
+	require.NoError(t, err)
+	assert.Zero(t, info.Mode().Perm()&0o077)
+}
+
+// TestEnsureDir_RefusesSymlink pins the Lstat change: following a symlink
+// would apply the mode guarantee to a directory the caller never named, and
+// write backups through the link.
+func TestEnsureDir_RefusesSymlink(t *testing.T) {
+	cfg := testConfig()
+	tmp := t.TempDir()
+	real := filepath.Join(tmp, "real")
+	require.NoError(t, os.MkdirAll(real, 0755))
+	link := filepath.Join(tmp, "link")
+	require.NoError(t, os.Symlink(real, link))
+
+	err := EnsureDir(link, cfg)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "symlink")
+}
+
+// TestEnsureDir_LeavesLooserModeAloneForPublicDirs ensures the tightening
+// only applies where it is asked for.
+func TestEnsureDir_LeavesLooserModeAloneForPublicDirs(t *testing.T) {
+	cfg := testConfig()
+	dir := filepath.Join(t.TempDir(), "public")
+	require.NoError(t, os.MkdirAll(dir, 0755))
+
+	require.NoError(t, EnsureDir(dir, cfg))
+
+	info, err := os.Stat(dir)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0755), info.Mode().Perm())
+}
