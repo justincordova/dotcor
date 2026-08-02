@@ -112,6 +112,7 @@ func runGitNetworkCommand(dir string, name string, args ...string) (*exec.Cmd, c
 	// a failure. Network commands are where a wedged grandchild is the real
 	// hazard, and their call sites tolerate the delay via isBenignWaitDelay.
 	cmd.WaitDelay = gitWaitDelay
+	cmd.Env = append(cmd.Env, sshEnvFor(dir)...)
 	return cmd, cancel
 }
 
@@ -147,21 +148,62 @@ func runGitCommandWithTimeout(dir string, timeout time.Duration, name string, ar
 //     on a localised system the branch silently stops matching. LC_ALL=C
 //     pins them.
 //
-// GIT_SSH_COMMAND is only set when the user has not set their own — clobbering
-// a deliberate ssh configuration would be worse than the prompt it prevents.
+// The askpass helpers are `true`, not `echo`. Git runs $GIT_ASKPASS with the
+// prompt as its argument and reads STDOUT as the answer, so `echo` submits the
+// prompt text itself as the username or password — a nonsensical credential
+// sent to the server, and repeated attempts count toward provider rate limits.
+// `true` produces no output, which fails cleanly.
+//
+// GIT_SSH_COMMAND is deliberately NOT set here; see sshEnvFor.
 func gitEnv() []string {
-	env := append(os.Environ(),
+	return append(os.Environ(),
 		"GIT_TERMINAL_PROMPT=0",
-		"GIT_ASKPASS=echo",
-		"SSH_ASKPASS=echo",
+		"GIT_ASKPASS=true",
+		"SSH_ASKPASS=true",
 		"SSH_ASKPASS_REQUIRE=never",
 		"LC_ALL=C",
 		"LANGUAGE=",
 	)
-	if os.Getenv("GIT_SSH_COMMAND") == "" {
-		env = append(env, "GIT_SSH_COMMAND=ssh -o BatchMode=yes")
+}
+
+// sshEnvFor returns the GIT_SSH_COMMAND entries a network command needs, or
+// nil when the caller's own configuration should be left alone.
+//
+// Only network commands invoke ssh, so only they need this. Checking
+// $GIT_SSH_COMMAND alone was not enough: git also reads core.sshCommand from
+// its config, and the environment variable takes precedence over it — so a
+// user who configured their key with
+// `git config core.sshCommand "ssh -i ~/.ssh/dotfiles_key"` had it silently
+// replaced by a bare ssh, and BatchMode then suppressed the very prompt that
+// would have explained the resulting "Permission denied (publickey)".
+//
+// When either is configured we append BatchMode to the user's own command
+// rather than replacing it, so their identity settings survive while the TUI
+// is still protected from a /dev/tty passphrase prompt.
+func sshEnvFor(dir string) []string {
+	if existing := os.Getenv("GIT_SSH_COMMAND"); existing != "" {
+		return []string{"GIT_SSH_COMMAND=" + existing + " -o BatchMode=yes"}
 	}
-	return env
+	if configured := sshCommandFromConfig(dir); configured != "" {
+		return []string{"GIT_SSH_COMMAND=" + configured + " -o BatchMode=yes"}
+	}
+	return []string{"GIT_SSH_COMMAND=ssh -o BatchMode=yes"}
+}
+
+// sshCommandFromConfig reads core.sshCommand, returning "" when unset. It is
+// a local config read, so it stays well inside the command timeout.
+func sshCommandFromConfig(dir string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), gitCommandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "git", "config", "--get", "core.sshCommand")
+	cmd.Dir = dir
+	cmd.Env = gitEnv()
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // StatusInfo represents Git repository status

@@ -1354,18 +1354,91 @@ func TestGitEnv_SuppressesInteractivePrompts(t *testing.T) {
 	}
 
 	assert.Equal(t, "0", seen["GIT_TERMINAL_PROMPT"])
-	assert.Equal(t, "echo", seen["GIT_ASKPASS"])
+	// `true`, not `echo`: git reads the helper's stdout as the answer, so
+	// `echo` submits the prompt text itself as the credential.
+	assert.Equal(t, "true", seen["GIT_ASKPASS"])
+	assert.Equal(t, "true", seen["SSH_ASKPASS"])
 	assert.Equal(t, "never", seen["SSH_ASKPASS_REQUIRE"])
-	assert.Contains(t, seen["GIT_SSH_COMMAND"], "BatchMode=yes")
 	// Locale must be pinned: isNothingToCommitError and friends branch on
 	// git's translated human-readable output.
 	assert.Equal(t, "C", seen["LC_ALL"])
 	assert.Equal(t, "", seen["LANGUAGE"])
 }
 
-// TestGitEnv_PreservesUserSSHCommand ensures we never clobber a deliberate
-// ssh configuration; the prompt guard is not worth breaking a user's setup.
-func TestGitEnv_PreservesUserSSHCommand(t *testing.T) {
+// TestSshEnvFor_PreservesConfiguredSSHCommand pins the fix for a silently
+// replaced ssh configuration. Checking $GIT_SSH_COMMAND alone was not enough:
+// git also reads core.sshCommand, and the environment variable takes
+// precedence over it, so a user who configured their key in git config had it
+// overridden by a bare ssh — and BatchMode then suppressed the prompt that
+// would have explained the resulting authentication failure.
+func TestSshEnvFor_PreservesConfiguredSSHCommand(t *testing.T) {
+	if !IsGitInstalled() {
+		t.Skip("git not installed")
+	}
+	repo := t.TempDir()
+	require.NoError(t, InitRepo(repo))
+	runGit(t, repo, "config", "core.sshCommand", "ssh -i /custom/key")
+
+	env := sshEnvFor(repo)
+	require.Len(t, env, 1)
+
+	assert.Contains(t, env[0], "ssh -i /custom/key", "the user's identity settings must survive")
+	assert.Contains(t, env[0], "BatchMode=yes", "the TUI must still be protected from a tty prompt")
+}
+
+// TestSshEnvFor_EnvironmentWins keeps the documented precedence.
+func TestSshEnvFor_EnvironmentWins(t *testing.T) {
+	t.Setenv("GIT_SSH_COMMAND", "ssh -i /from/env")
+
+	env := sshEnvFor(t.TempDir())
+	require.Len(t, env, 1)
+
+	assert.Contains(t, env[0], "ssh -i /from/env")
+	assert.Contains(t, env[0], "BatchMode=yes")
+}
+
+// TestSshEnvFor_DefaultsToBatchMode covers the unconfigured case.
+func TestSshEnvFor_DefaultsToBatchMode(t *testing.T) {
+	t.Setenv("GIT_SSH_COMMAND", "")
+
+	env := sshEnvFor(t.TempDir())
+	require.Len(t, env, 1)
+
+	assert.Equal(t, "GIT_SSH_COMMAND=ssh -o BatchMode=yes", env[0])
+}
+
+// TestRunGitNetworkCommand_CarriesSSHCommand ensures only network commands
+// get it — local commands never invoke ssh.
+func TestRunGitNetworkCommand_CarriesSSHCommand(t *testing.T) {
+	t.Setenv("GIT_SSH_COMMAND", "")
+
+	netCmd, cancelNet := runGitNetworkCommand(t.TempDir(), "push")
+	defer cancelNet()
+	localCmd, cancelLocal := runGitCommand(t.TempDir(), "status")
+	defer cancelLocal()
+
+	assert.Contains(t, lastEnvValue(netCmd.Env, "GIT_SSH_COMMAND"), "BatchMode=yes",
+		"network commands need the ssh guard")
+	assert.NotContains(t, lastEnvValue(localCmd.Env, "GIT_SSH_COMMAND"), "BatchMode",
+		"local commands never invoke ssh and must not override the user's config")
+}
+
+// lastEnvValue returns the effective value of key, mirroring os/exec's
+// last-occurrence-wins deduplication.
+func lastEnvValue(env []string, key string) string {
+	value := ""
+	for _, kv := range env {
+		if strings.HasPrefix(kv, key+"=") {
+			value = strings.TrimPrefix(kv, key+"=")
+		}
+	}
+	return value
+}
+
+// TestGitEnv_DoesNotSetSSHCommand pins the split: the base environment must
+// not touch GIT_SSH_COMMAND, because it applies to local commands too and
+// those never invoke ssh. sshEnvFor handles the network commands.
+func TestGitEnv_DoesNotSetSSHCommand(t *testing.T) {
 	t.Setenv("GIT_SSH_COMMAND", "ssh -i /custom/key")
 
 	var got string
@@ -1374,7 +1447,7 @@ func TestGitEnv_PreservesUserSSHCommand(t *testing.T) {
 			got = strings.TrimPrefix(kv, "GIT_SSH_COMMAND=")
 		}
 	}
-	assert.Equal(t, "ssh -i /custom/key", got)
+	assert.Equal(t, "ssh -i /custom/key", got, "the inherited value must be passed through untouched")
 }
 
 // TestRunGitNetworkCommand_SetsWaitDelay pins the guard against a grandchild
