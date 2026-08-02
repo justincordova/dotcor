@@ -25,6 +25,9 @@ const (
 type settingsMsg struct {
 	msg string
 	err error
+	// gitRemote carries the value that was actually persisted, so the model
+	// is only updated once the write has succeeded. Nil means "unchanged".
+	gitRemote *string
 }
 
 type backupsMsg struct {
@@ -277,8 +280,13 @@ func updateSettingsEditRemote(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
+			// Do not update the model optimistically. If git or the config
+			// write rejects the URL, the pane would otherwise display the
+			// rejected value as if configured while .git/config and
+			// .dotcorrc both still held the old one — exactly the silent
+			// divergence applyGitRemote is written to avoid. The value is
+			// applied on the success message instead.
 			m.err = nil
-			m.cfg.GitRemote = newURL
 			return m, m.applyGitRemote(newURL)
 		}
 	}
@@ -343,9 +351,14 @@ func updateSettingsAddPattern(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 // view's in-place edits to IgnorePatterns.
 func (m Model) applyGitRemote(newURL string) tea.Cmd {
 	repoDir := m.repoDir
+	// .dotcorrc lives inside the repository and is picked up by `git add -A`,
+	// so a remote entered as https://user:ghp_token@host would be committed
+	// and pushed, publishing the token. Persist the URL without its password;
+	// .git/config keeps exactly what the user typed and is never staged.
+	stored := git.StripURLPassword(newURL)
 	snapshot := &config.Config{
 		Logger:         m.cfg.Logger,
-		GitRemote:      newURL,
+		GitRemote:      stored,
 		IgnorePatterns: append([]string(nil), m.cfg.IgnorePatterns...),
 	}
 
@@ -371,7 +384,7 @@ func (m Model) applyGitRemote(newURL string) tea.Cmd {
 		if err := snapshot.SaveConfig(); err != nil {
 			return settingsMsg{err: err}
 		}
-		return settingsMsg{msg: "Remote saved"}
+		return settingsMsg{msg: "Remote saved", gitRemote: &stored}
 	}
 }
 

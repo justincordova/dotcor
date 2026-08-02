@@ -187,13 +187,25 @@ func InitRepo(repoPath string) error {
 		return fmt.Errorf("git init failed: %s: %w", RedactURLCredentials(string(output)), err)
 	}
 
-	if err := ensureDotcorGitignore(repoPath); err != nil {
-		// Non-fatal — the init succeeded. Returning the error would
-		// rollback an already-created repo, which is worse than leaving
-		// the gitignore behind.
-		_ = err
+	if err := EnsureIgnorePatterns(repoPath); err != nil {
+		// Non-fatal — the init succeeded, and returning an error here would
+		// roll back an already-created repo. But it must not be silent: the
+		// patterns keep backups/ out of the commit, and that directory holds
+		// verbatim copies of files such as ~/.ssh and ~/.gnupg material.
+		slog.Default().Warn("could not write dotcor .gitignore entries",
+			"repo", repoPath, "err", err)
 	}
 	return nil
+}
+
+// EnsureIgnorePatterns adds dotcor's required .gitignore entries to an
+// existing repository.
+//
+// Exported so it can be applied on startup, not only at init: a repository
+// created before these patterns existed would otherwise keep sweeping
+// backups/ into every commit forever.
+func EnsureIgnorePatterns(repoPath string) error {
+	return ensureDotcorGitignore(repoPath)
 }
 
 // ensureDotcorGitignore appends dotcor-specific patterns to .gitignore.
@@ -478,12 +490,26 @@ func wrapGitError(what, stderr string, err error) error {
 }
 
 // credentialInURL matches the userinfo section of a URL: scheme://user:secret@
-var credentialInURL = regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*://)[^/@\s]*:[^/@\s]*@`)
+// Group 1 is the scheme, group 2 is the username.
+var credentialInURL = regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*://)([^:/@\s]*):[^/@\s]*@`)
 
 // RedactURLCredentials strips passwords and tokens from any URL in s so git
 // output can be shown to the user or written to the log safely.
 func RedactURLCredentials(s string) string {
 	return credentialInURL.ReplaceAllString(s, "${1}***:***@")
+}
+
+// StripURLPassword removes the password/token from a URL's userinfo, keeping
+// the username. It is a no-op for URLs that carry no password.
+//
+// This is what gets persisted to .dotcorrc. That file lives inside the
+// repository and is picked up by `git add -A`, so a remote entered as
+// https://user:ghp_token@github.com/... would otherwise be committed and
+// pushed — publishing the token in the repository's history. The operative
+// copy of the URL lives in .git/config, which is never staged, so stripping
+// the secret here costs nothing operationally.
+func StripURLPassword(remoteURL string) string {
+	return credentialInURL.ReplaceAllString(remoteURL, "${1}${2}@")
 }
 
 // HasChanges checks if working tree has uncommitted changes

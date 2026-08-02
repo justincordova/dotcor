@@ -1603,3 +1603,77 @@ func TestRemoveRemote_MissingRemoteIsSuccess(t *testing.T) {
 
 	assert.NoError(t, RemoveRemote(repo, "origin"), "removing an absent remote reaches the desired end state")
 }
+
+// TestStripURLPassword pins the fix for a credential leak.
+//
+// .dotcorrc lives inside the repository and is picked up by `git add -A`, so
+// a remote entered as https://user:ghp_token@github.com/... was committed and
+// pushed — publishing the token in the repository's history.
+func TestStripURLPassword(t *testing.T) {
+	cases := []struct{ name, in, want string }{
+		{"https token", "https://jc:ghp_secret@github.com/jc/dots.git", "https://jc@github.com/jc/dots.git"},
+		{"no password", "https://github.com/jc/dots.git", "https://github.com/jc/dots.git"},
+		{"ssh scp form untouched", "git@github.com:jc/dots.git", "git@github.com:jc/dots.git"},
+		{"ssh scheme user only", "ssh://git@github.com/jc/dots.git", "ssh://git@github.com/jc/dots.git"},
+		{"ssh scheme with password", "ssh://git:pw@github.com/jc/dots.git", "ssh://git@github.com/jc/dots.git"},
+		{"empty", "", ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := StripURLPassword(tc.in)
+			assert.Equal(t, tc.want, got)
+			assert.NotContains(t, got, "ghp_secret")
+			assert.NotContains(t, got, ":pw@")
+		})
+	}
+}
+
+// TestEnsureIgnorePatterns_AppliesToExistingRepo pins the fix for a
+// repository created before these patterns existed. backups/ holds verbatim
+// copies of managed files — including ~/.ssh and ~/.gnupg material — so a
+// repo without the entry sweeps them into every commit and push.
+func TestEnsureIgnorePatterns_AppliesToExistingRepo(t *testing.T) {
+	if !IsGitInstalled() {
+		t.Skip("git not installed")
+	}
+	repo := t.TempDir()
+	runGit(t, repo, "init", "-q", repo)
+	require.NoError(t, os.WriteFile(filepath.Join(repo, ".gitignore"), []byte("# mine\n*.tmp\n"), 0644))
+
+	require.NoError(t, EnsureIgnorePatterns(repo))
+
+	data, err := os.ReadFile(filepath.Join(repo, ".gitignore"))
+	require.NoError(t, err)
+	content := string(data)
+
+	assert.Contains(t, content, "backups/")
+	assert.Contains(t, content, "logs/")
+	assert.Contains(t, content, "*.tmp", "the user's own entries must be preserved")
+	assert.Contains(t, content, "# mine")
+}
+
+// TestInitRepo_IgnoresBackupsDirectory is the end-to-end guard: after init,
+// staging everything must not include the backup tree.
+func TestInitRepo_IgnoresBackupsDirectory(t *testing.T) {
+	if !IsGitInstalled() {
+		t.Skip("git not installed")
+	}
+	repo := t.TempDir()
+	require.NoError(t, InitRepo(repo))
+
+	require.NoError(t, os.MkdirAll(filepath.Join(repo, "backups", "ts", ".ssh"), 0700))
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "backups", "ts", ".ssh", "id_rsa"), []byte("KEY"), 0600))
+
+	runGit(t, repo, "config", "user.email", "t@t.t")
+	runGit(t, repo, "config", "user.name", "t")
+	runGit(t, repo, "add", "-A")
+
+	cmd := exec.Command("git", "diff", "--cached", "--name-only")
+	cmd.Dir = repo
+	out, err := cmd.Output()
+	require.NoError(t, err)
+
+	assert.NotContains(t, string(out), "id_rsa", "backed-up private material must never be staged")
+	assert.NotContains(t, string(out), "backups/")
+}

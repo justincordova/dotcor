@@ -454,6 +454,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.err = msg.err
 		} else {
+			// Only now that the write succeeded does the model adopt the
+			// value, so a rejected URL never shows as if it were configured.
+			if msg.gitRemote != nil && m.cfg != nil {
+				m.cfg.GitRemote = *msg.gitRemote
+			}
 			m.statusMsg = msg.msg
 			m.err = nil
 			cmds = append(cmds, clearStatusAfter(3*time.Second))
@@ -814,7 +819,20 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.clearErr()
 		if git.IsRepo(m.repoDir) {
 			m.statusMsg = "git already initialized"
-			return m, clearStatusAfter(3 * time.Second)
+			// Top up the ignore entries on an existing repository too. One
+			// created before these patterns existed would otherwise keep
+			// sweeping backups/ — verbatim copies of files such as ~/.ssh
+			// material — into every commit and push.
+			repoDir := m.repoDir
+			return m, tea.Batch(
+				func() tea.Msg {
+					if err := git.EnsureIgnorePatterns(repoDir); err != nil {
+						return settingsMsg{err: fmt.Errorf("updating .gitignore: %w", err)}
+					}
+					return nil
+				},
+				clearStatusAfter(3*time.Second),
+			)
 		}
 		m.initStep = 1
 		return m, nil
@@ -920,15 +938,12 @@ func (m Model) updateInit(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if keyMsg, ok := msg.(tea.KeyMsg); ok {
 			switch {
 			case key.Matches(keyMsg, m.keys.Enter):
-				if err := git.InitRepo(m.repoDir); err != nil {
-					m.err = err
-					m.initStep = 0
-					return m, nil
-				}
+				// git init forks a subprocess with a 30s ceiling; running it
+				// inline froze input and rendering for its whole duration.
 				m.initStep = 2
 				m.settingsInput.SetValue("")
 				m.settingsInput.Focus()
-				return m, textinput.Blink
+				return m, tea.Batch(m.initRepo(), textinput.Blink)
 			case key.Matches(keyMsg, m.keys.Esc):
 				m.initStep = 0
 				return m, nil
@@ -943,32 +958,24 @@ func (m Model) updateInit(msg tea.Msg) (tea.Model, tea.Cmd) {
 				url := strings.TrimSpace(m.settingsInput.Value())
 				m.settingsInput.Blur()
 				m.initStep = 0
-				if url != "" {
-					if err := git.SetRemote(m.repoDir, "origin", url); err != nil {
-						m.err = err
-						return m, nil
-					}
-					// Persist to .dotcorrc so the stored git_remote matches
-					// the remote we just wrote to .git/config. Without this
-					// the Settings view renders "(not configured)" even
-					// though a remote is set — the same silent divergence
-					// the settings flow avoids (ISSUES.md #4).
-					m.cfg.GitRemote = url
-					if err := m.cfg.SaveConfig(); err != nil {
-						m.err = fmt.Errorf("saving config: %w", err)
-						return m, nil
-					}
-				}
-				cmds := []tea.Cmd{
-					m.refreshAll(),
-					clearStatusAfter(3 * time.Second),
-				}
-				if url != "" {
-					m.statusMsg = "git initialized + remote configured"
-				} else {
+				if url == "" {
 					m.statusMsg = "git initialized"
+					return m, tea.Batch(m.refreshAll(), clearStatusAfter(3*time.Second))
 				}
-				return m, tea.Batch(cmds...)
+				// Validate inline (pure string work), then hand the git and
+				// config writes to a command. SetRemote forks up to two
+				// subprocesses at 30s each — the same reason the settings
+				// flow moved this work off the update loop.
+				if err := git.ValidateRemoteURL(url); err != nil {
+					m.err = fmt.Errorf("invalid remote URL: %w", err)
+					return m, nil
+				}
+				m.statusMsg = "git initialized + remote configured"
+				return m, tea.Batch(
+					m.applyGitRemote(url),
+					m.refreshAll(),
+					clearStatusAfter(3*time.Second),
+				)
 			case key.Matches(keyMsg, m.keys.Esc):
 				m.settingsInput.Blur()
 				m.initStep = 0
@@ -1213,6 +1220,17 @@ func fetchGitStatus(repoDir string) tea.Cmd {
 		}
 		status, err := git.GetStatus(repoDir)
 		return gitStatusMsg{status: status, err: err}
+	}
+}
+
+// initRepo runs `git init` off the update loop and reports the outcome.
+func (m Model) initRepo() tea.Cmd {
+	repoDir := m.repoDir
+	return func() tea.Msg {
+		if err := git.InitRepo(repoDir); err != nil {
+			return settingsMsg{err: err}
+		}
+		return settingsMsg{msg: "git initialized"}
 	}
 }
 
