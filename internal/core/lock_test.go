@@ -469,3 +469,65 @@ func TestAcquireLock_MakesRepositoryPrivate(t *testing.T) {
 	assert.Zero(t, info.Mode().Perm()&0o077,
 		"the repository root must be private, got %v", info.Mode().Perm())
 }
+
+// TestAcquireLock_WorksWithSymlinkedConfigDir pins the fix for a startup
+// failure. ~/.dotcor symlinked to another volume or a synced folder is a
+// mainstream setup; refusing symlinks made EnsurePrivateDir fail, and
+// AcquireLock treats any failure as fatal, so dotcor would not start at all.
+func TestAcquireLock_WorksWithSymlinkedConfigDir(t *testing.T) {
+	tmp := t.TempDir()
+	real := filepath.Join(tmp, "real-dotcor")
+	require.NoError(t, os.MkdirAll(real, 0700))
+	link := filepath.Join(tmp, "dotcor-link")
+	require.NoError(t, os.Symlink(real, link))
+
+	t.Setenv("DOTCOR_DIR", link)
+	cfg := testConfig()
+
+	require.NoError(t, AcquireLock(cfg), "a symlinked config directory must not block startup")
+	t.Cleanup(func() { _ = ReleaseLock(cfg) })
+
+	_, err := os.Stat(filepath.Join(real, ".lock"))
+	assert.NoError(t, err, "the lock must land in the resolved directory")
+}
+
+// TestIsProcessAlive_ForeignOwnerIsAlive pins the fix for a live lock being
+// declared stale. kill(pid, 0) returns EPERM when the process exists but
+// belongs to another user; treating that as "dead" let one user reclaim
+// another's live lock on a shared ~/.dotcor, with both mutating $HOME.
+func TestIsProcessAlive_ForeignOwnerIsAlive(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: kill(1,0) succeeds outright")
+	}
+
+	// PID 1 always exists and is owned by root.
+	alive, err := isProcessAlive(1)
+
+	require.NoError(t, err)
+	assert.True(t, alive, "a process owned by another user is still alive")
+}
+
+// TestIsStale_ForeignOwnedLiveLockIsRespected is the end-to-end consequence.
+func TestIsStale_ForeignOwnedLiveLockIsRespected(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: kill(1,0) succeeds outright")
+	}
+	cfg := testConfig()
+	lockPath := filepath.Join(t.TempDir(), ".lock")
+
+	content := fmt.Sprintf("%d\n%s\n%s\n", 1, time.Now().Format(time.RFC3339), localHostname())
+	require.NoError(t, os.WriteFile(lockPath, []byte(content), 0644))
+
+	stale, err := IsStale(lockPath, cfg)
+
+	require.NoError(t, err)
+	assert.False(t, stale, "a lock held by a live process of another user must be respected")
+}
+
+// TestIsProcessAlive_DeadPidIsNotAlive keeps crash recovery prompt.
+func TestIsProcessAlive_DeadPidIsNotAlive(t *testing.T) {
+	alive, err := isProcessAlive(999999)
+
+	require.NoError(t, err)
+	assert.False(t, alive)
+}

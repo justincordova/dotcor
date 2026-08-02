@@ -141,7 +141,29 @@ func createLockFile(lockPath string) error {
 	}
 
 	// Fails with EEXIST if another process already published a lock.
-	return os.Link(tmpPath, lockPath)
+	err = os.Link(tmpPath, lockPath)
+	if err == nil || os.IsExist(err) {
+		return err
+	}
+
+	// Hard links are unsupported on FAT/exFAT, many SMB mounts, and some
+	// FUSE and cloud-sync filesystems, where Link returns ENOTSUP or EPERM
+	// rather than EEXIST. DOTCOR_DIR pointing at a USB stick or a network
+	// share would otherwise make dotcor refuse to start. Fall back to an
+	// O_EXCL create, which is still atomic for mutual exclusion; it only
+	// gives up the guarantee that a lock is never observed zero-length, and
+	// IsStale already judges an unparsable lock by age rather than
+	// reclaiming it on sight.
+	f, openErr := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if openErr != nil {
+		return openErr
+	}
+	if _, writeErr := f.WriteString(content); writeErr != nil {
+		_ = f.Close()
+		_ = os.Remove(lockPath)
+		return writeErr
+	}
+	return f.Close()
 }
 
 // reclaimStaleLock atomically takes ownership of a lock believed to be stale.
@@ -338,14 +360,24 @@ func isProcessAlive(pid int) (bool, error) {
 		return false, nil // Process doesn't exist
 	}
 
-	// On Unix, signal 0 checks if process exists without killing it
+	// On Unix, signal 0 checks whether the process exists without killing it.
 	err = process.Signal(syscall.Signal(0))
-	if err != nil {
-		// Process doesn't exist or we don't have permission
+	switch {
+	case err == nil:
+		return true, nil
+	case errors.Is(err, syscall.EPERM):
+		// EPERM means the process EXISTS but belongs to another user.
+		// Treating that as "dead" made a live lock immediately reclaimable
+		// on the shared ~/.dotcor setups this file explicitly supports:
+		// user B would delete user A's lock and both would mutate $HOME.
+		return true, nil
+	case errors.Is(err, syscall.ESRCH), errors.Is(err, os.ErrProcessDone):
 		return false, nil
+	default:
+		// Unknown state — report it so IsStale can fall back to the age
+		// check rather than guessing.
+		return false, err
 	}
-
-	return true, nil
 }
 
 // GetLockInfo returns information about the current lock, if any
