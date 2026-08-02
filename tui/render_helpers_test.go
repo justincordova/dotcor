@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/justincordova/dotcor/internal/config"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -110,4 +111,24 @@ func TestHumanSize_CompactWidth(t *testing.T) {
 	for _, b := range []int64{0, 999, 1024, 340 * 1024, 5 * 1024 * 1024} {
 		assert.LessOrEqual(t, lipgloss.Width(humanSize(b)), 10)
 	}
+}
+
+// TestHRule_NonPositiveWidth pins the guard against a panic. Callers derive
+// the width from the terminal size, so a zero-width Model — the state before
+// the first WindowSizeMsg — yields a negative number and strings.Repeat
+// panics on those.
+func TestHRule_NonPositiveWidth(t *testing.T) {
+	assert.NotPanics(t, func() { assert.Empty(t, hRule(0)) })
+	assert.NotPanics(t, func() { assert.Empty(t, hRule(-4)) })
+	assert.NotEmpty(t, hRule(10), "a positive width still renders a rule")
+}
+
+// TestViewSettings_ZeroWidthDoesNotPanic covers the call path that reaches
+// hRule with an unclamped width.
+func TestViewSettings_ZeroWidthDoesNotPanic(t *testing.T) {
+	m := NewModel(&config.Config{IgnorePatterns: []string{"*.key"}}, "test")
+	m.width = 0
+	m.height = 0
+
+	assert.NotPanics(t, func() { _ = viewSettings(m) })
 }

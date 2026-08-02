@@ -133,7 +133,15 @@ func metaSep() string {
 }
 
 // hRule draws a horizontal rule of given width in the subtle border color.
+//
+// Non-positive widths render nothing rather than panicking. Callers derive
+// the width from the terminal size (bodyWidth subtracts padding), so a
+// zero-width terminal — the Model's state before the first WindowSizeMsg —
+// produces a negative number, and strings.Repeat panics on those.
 func hRule(width int) string {
+	if width < 1 {
+		return ""
+	}
 	return lipgloss.NewStyle().
 		Foreground(lipgloss.Color(colSurface1)).
 		Render(strings.Repeat("─", width))
