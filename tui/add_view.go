@@ -113,9 +113,19 @@ func clampDialogHeight(dialog string, maxLines int) string {
 	}
 	// Keep top border + stepper + padding + header, and footer + border.
 	// Remove lines from the middle until we fit.
+	const (
+		top    = 5
+		bottom = 2
+	)
+
+	// Nothing sensible to trim from a dialog smaller than its own chrome;
+	// the loop below would otherwise drive excess negative and the slice
+	// expressions would panic.
+	if len(lines) < top+bottom {
+		return dialog
+	}
+
 	excess := len(lines) - maxLines
-	top := 5
-	bottom := 2
 	for len(lines)-excess < top+bottom {
 		excess--
 	}
@@ -1064,6 +1074,16 @@ func (m Model) confirmHandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if maxScroll < 0 {
 		maxScroll = 0
 	}
+	// Clamp the stored offset, not just the local copy the renderer uses.
+	// After a resize shrinks the viewport the model kept a larger value, so
+	// "down" was already at its limit and did nothing while "up" had to be
+	// pressed several times before anything moved.
+	if m.confirmScroll > maxScroll {
+		m.confirmScroll = maxScroll
+	}
+	if m.confirmScroll < 0 {
+		m.confirmScroll = 0
+	}
 
 	switch keyMsg.String() {
 	case "up", "k":
@@ -1114,6 +1134,13 @@ func (m Model) previewHandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	maxScroll := len(m.previewRows) - contentHeight
 	if maxScroll < 0 {
 		maxScroll = 0
+	}
+	// Clamp the stored offset too — see confirmHandleKey.
+	if m.previewScroll > maxScroll {
+		m.previewScroll = maxScroll
+	}
+	if m.previewScroll < 0 {
+		m.previewScroll = 0
 	}
 	halfPage := contentHeight / 2
 	if halfPage < 1 {

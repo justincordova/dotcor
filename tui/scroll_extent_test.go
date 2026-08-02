@@ -130,3 +130,54 @@ func TestConfirmScroll_EndThenDownIsIdempotent(t *testing.T) {
 	assert.Equal(t, end.confirmScroll, afterDown.(Model).confirmScroll,
 		"pressing down at the bottom must not advance a scroll offset the renderer will ignore")
 }
+
+// TestScrollHandlers_ClampStoredOffsetAfterResize pins the fix for dead
+// keypresses. Only the renderer's local copy was clamped, so after a resize
+// shrank the viewport the model kept a larger offset: "down" was already at
+// its limit and did nothing, while "up" had to be pressed several times
+// before anything moved.
+func TestScrollHandlers_ClampStoredOffsetAfterResize(t *testing.T) {
+	t.Run("confirm", func(t *testing.T) {
+		m := addModelWithPlan(200, 24)
+		m.addStep = addStepConfirm
+		atEnd, _ := m.confirmHandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}})
+		big := atEnd.(Model)
+		require.Positive(t, big.confirmScroll)
+
+		// The window GROWS, which lowers maxScroll below the stored offset.
+		big.height = 60
+		lines := buildConfirmLines(big.previewPlan, big.previewToggles, bodyWidth(big.width))
+		maxScroll := len(lines) - confirmContentHeight(big)
+
+		clamped, _ := big.confirmHandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+		got := clamped.(Model).confirmScroll
+
+		assert.LessOrEqual(t, got, maxScroll, "the stored offset must be clamped to the new viewport")
+	})
+
+	t.Run("preview", func(t *testing.T) {
+		m := addModelWithPlan(200, 24)
+		m.addStep = addStepPreview
+		atEnd, _ := m.previewHandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}})
+		big := atEnd.(Model)
+		require.Positive(t, big.previewScroll)
+
+		big.height = 60
+		maxScroll := len(big.previewRows) - previewContentHeight(big)
+
+		clamped, _ := big.previewHandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+		got := clamped.(Model).previewScroll
+
+		assert.LessOrEqual(t, got, maxScroll, "the stored offset must be clamped to the new viewport")
+	})
+}
+
+// TestClampDialogHeight_ShortDialog pins the guard against a panic on a
+// dialog smaller than its own chrome.
+func TestClampDialogHeight_ShortDialog(t *testing.T) {
+	assert.NotPanics(t, func() {
+		got := clampDialogHeight("a\nb\nc", 1)
+		assert.Equal(t, "a\nb\nc", got, "too short to trim: return it unchanged")
+	})
+	assert.NotPanics(t, func() { _ = clampDialogHeight("", 1) })
+}
