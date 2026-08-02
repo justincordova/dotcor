@@ -36,13 +36,9 @@ func Link(repoDir, homeDir, packageName string) (*LinkResult, error) {
 			return fmt.Errorf("computing relative path: %w", err)
 		}
 
-		targetPath := filepath.Join(homeDir, relPath)
-		relSymlink, err := filepath.Rel(filepath.Dir(targetPath), path)
-		if err != nil {
-			return fmt.Errorf("computing relative symlink: %w", err)
-		}
-
-		result.linkFile(path, relPath, targetPath, relSymlink)
+		// The relative link target is computed inside linkFile, after the
+		// parent directory exists — resolving the physical parent requires it.
+		result.linkFile(path, relPath, filepath.Join(homeDir, relPath))
 		return nil
 	})
 
@@ -85,18 +81,9 @@ func linkAutoDetectedFile(result *LinkResult, pkgDir, homeDir string, f FileEntr
 	}
 
 	if targetInfo.Mode()&os.ModeSymlink != 0 {
-		linkTarget, readErr := os.Readlink(f.TargetPath)
-		if readErr == nil {
-			var resolved string
-			if filepath.IsAbs(linkTarget) {
-				resolved = filepath.Clean(linkTarget)
-			} else {
-				resolved = filepath.Clean(filepath.Join(filepath.Dir(f.TargetPath), linkTarget))
-			}
-			if resolved == filepath.Clean(repoPath) {
-				result.Skipped++
-				return
-			}
+		if symlinkTargetsPath(f.TargetPath, repoPath) {
+			result.Skipped++
+			return
 		}
 		// Foreign symlink in $HOME — do NOT silently rewrite it. The user
 		// must confirm via the explicit Add/Adopt flow (the `o` key), where
@@ -129,7 +116,7 @@ func linkAutoDetectedFile(result *LinkResult, pkgDir, homeDir string, f FileEntr
 		return
 	}
 
-	relSymlink, symErr := filepath.Rel(filepath.Dir(f.TargetPath), repoPath)
+	relSymlink, symErr := relLinkTarget(f.TargetPath, repoPath)
 	if symErr != nil {
 		result.Skipped++
 		return
@@ -161,7 +148,7 @@ func linkAutoDetectedFile(result *LinkResult, pkgDir, homeDir string, f FileEntr
 	result.Linked++
 }
 
-func (r *LinkResult) linkFile(path, relPath, targetPath, relSymlink string) {
+func (r *LinkResult) linkFile(path, relPath, targetPath string) {
 	targetInfo, err := os.Lstat(targetPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -171,6 +158,13 @@ func (r *LinkResult) linkFile(path, relPath, targetPath, relSymlink string) {
 		}
 
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+			r.Conflicts = append(r.Conflicts, relPath)
+			r.Skipped++
+			return
+		}
+
+		relSymlink, relErr := relLinkTarget(targetPath, path)
+		if relErr != nil {
 			r.Conflicts = append(r.Conflicts, relPath)
 			r.Skipped++
 			return
@@ -186,21 +180,7 @@ func (r *LinkResult) linkFile(path, relPath, targetPath, relSymlink string) {
 	}
 
 	if targetInfo.Mode()&os.ModeSymlink != 0 {
-		existingTarget, err := os.Readlink(targetPath)
-		if err != nil {
-			r.Conflicts = append(r.Conflicts, relPath)
-			r.Skipped++
-			return
-		}
-
-		var resolved string
-		if filepath.IsAbs(existingTarget) {
-			resolved = filepath.Clean(existingTarget)
-		} else {
-			resolved = filepath.Clean(filepath.Join(filepath.Dir(targetPath), existingTarget))
-		}
-
-		if resolved == filepath.Clean(path) {
+		if symlinkTargetsPath(targetPath, path) {
 			r.Skipped++
 			return
 		}
@@ -270,7 +250,7 @@ func LinkWithBackup(repoDir, homeDir, packageName, backupDir string) (*LinkResul
 		}
 		srcPerm := srcInfo.Mode().Perm()
 
-		relSymlink, symErr := filepath.Rel(filepath.Dir(targetPath), repoPath)
+		relSymlink, symErr := relLinkTarget(targetPath, repoPath)
 		if symErr != nil {
 			remaining = append(remaining, relPath)
 			continue

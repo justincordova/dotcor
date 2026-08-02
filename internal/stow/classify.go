@@ -633,6 +633,72 @@ func resolvedDir(path string) string {
 	return dir
 }
 
+// symlinkTargetsPath reports whether the symlink at linkPath resolves to
+// wantPath. A non-symlink or an unreadable link reports false.
+//
+// Two details make this the single source of truth for "is this link ours":
+//
+//   - A relative target is resolved against the link's *physical* parent, the
+//     way the kernel resolves it. Joining against the lexical parent gives a
+//     different answer whenever an ancestor is itself a symlink.
+//   - Both sides are compared after EvalSymlinks so an alias on either side
+//     (macOS /var → /private/var, a symlinked $HOME, a repo reached through a
+//     symlinked parent) still matches.
+//
+// link.go, unlink.go and package.go each carried their own copy of this
+// comparison and only unlink.go resolved. The result was three code paths
+// disagreeing about one symlink: Link reported a correctly-linked file as a
+// conflict, LinkWithBackup then reported it as foreign and told the user to
+// adopt their own file, DiscoverPackages showed the package as unlinked, and
+// Unlink — the one that resolved — removed it correctly.
+func symlinkTargetsPath(linkPath, wantPath string) bool {
+	target, err := os.Readlink(linkPath)
+	if err != nil {
+		return false
+	}
+
+	var abs string
+	if filepath.IsAbs(target) {
+		abs = filepath.Clean(target)
+	} else {
+		abs = filepath.Clean(filepath.Join(resolvedDir(linkPath), target))
+	}
+
+	return resolveForCompare(abs) == resolveForCompare(wantPath)
+}
+
+// relLinkTarget computes the target string for a relative symlink that will
+// be placed at linkPath and must point to wantPath.
+//
+// The relative path has to be computed from the link's PHYSICAL parent
+// directory, because that is the directory the kernel walks when resolving
+// it. Using the lexical parent produces a link that silently dangles whenever
+// an ancestor is itself a symlink (~/.config → /data/config) and the two
+// paths sit at different depths — Link reports the package linked cleanly
+// while none of the config is actually reachable.
+//
+// Both ends are resolved, not just the link's parent: mixing a resolved
+// directory with an unresolved destination produces an escape path across the
+// alias boundary (on macOS /var vs /private/var), which is worse than the bug
+// being fixed.
+//
+// Call this only once linkPath's parent directory exists, since resolving it
+// requires it to be present.
+func relLinkTarget(linkPath, wantPath string) (string, error) {
+	want := filepath.Join(resolvedDir(wantPath), filepath.Base(wantPath))
+	return filepath.Rel(resolvedDir(linkPath), want)
+}
+
+// resolveForCompare fully resolves path for comparison, falling back to a
+// lexical clean when the path doesn't exist (EvalSymlinks fails on a dangling
+// link, which is exactly when we still want a best-effort compare).
+func resolveForCompare(path string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved
+	}
+	return filepath.Clean(path)
+}
+
 // safeReadFile reads a regular file, refusing to load anything larger than
 // maxFileSizeBytes.
 //

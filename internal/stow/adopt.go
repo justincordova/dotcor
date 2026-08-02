@@ -96,7 +96,7 @@ func Adopt(repoDir, homeDir, packageName string) (*AdoptResult, error) {
 			continue
 		}
 
-		relSymlink, err := filepath.Rel(filepath.Dir(f.TargetPath), repoPath)
+		relSymlink, err := relLinkTarget(f.TargetPath, repoPath)
 		if err != nil {
 			_ = os.Remove(repoPath)
 			result.Failures = append(result.Failures, f.RelPath)

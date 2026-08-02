@@ -161,16 +161,7 @@ func discoverFiles(pkgDir, homeDir string) ([]FileEntry, error) {
 			entry.IsSymlink = targetInfo.Mode()&os.ModeSymlink != 0
 
 			if entry.IsSymlink {
-				linkTarget, err := os.Readlink(targetPath)
-				if err == nil {
-					var resolved string
-					if filepath.IsAbs(linkTarget) {
-						resolved = filepath.Clean(linkTarget)
-					} else {
-						resolved = filepath.Clean(filepath.Join(filepath.Dir(targetPath), linkTarget))
-					}
-					entry.IsLinked = resolved == filepath.Clean(path)
-				}
+				entry.IsLinked = symlinkTargetsPath(targetPath, path)
 			}
 		}
 
@@ -245,17 +236,7 @@ func appendAutoDetected(files []FileEntry, pkgDir, homeDir string) []FileEntry {
 		linkInfo, statErr := os.Lstat(path)
 		if statErr == nil && linkInfo.Mode()&os.ModeSymlink != 0 {
 			entry.IsSymlink = true
-			linkTarget, readErr := os.Readlink(path)
-			if readErr == nil {
-				var resolved string
-				if filepath.IsAbs(linkTarget) {
-					resolved = filepath.Clean(linkTarget)
-				} else {
-					resolved = filepath.Clean(filepath.Join(filepath.Dir(path), linkTarget))
-				}
-				repoPath := filepath.Join(pkgDir, relPath)
-				entry.IsLinked = resolved == filepath.Clean(repoPath)
-			}
+			entry.IsLinked = symlinkTargetsPath(path, filepath.Join(pkgDir, relPath))
 		}
 
 		files = append(files, entry)

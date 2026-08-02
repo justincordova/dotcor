@@ -64,32 +64,10 @@ func Unlink(repoDir, homeDir, packageName string) (*UnlinkResult, error) {
 			return nil
 		}
 
-		existingTarget, err := os.Readlink(targetPath)
-		if err != nil {
-			return fmt.Errorf("reading symlink %s: %w", targetPath, err)
-		}
-
-		var resolved string
-		if filepath.IsAbs(existingTarget) {
-			resolved = filepath.Clean(existingTarget)
-		} else {
-			resolved = filepath.Clean(filepath.Join(filepath.Dir(targetPath), existingTarget))
-		}
-
-		// Compare both sides after EvalSymlinks so a /var → /private/var
-		// alias on either side still matches. EvalSymlinks fails if the
-		// path doesn't exist; in that rare case fall back to filepath.Clean
-		// (the same behaviour as before) — we only need the extra resolve
-		// step to handle the macOS alias problem.
-		left := resolved
-		if r, err := filepath.EvalSymlinks(resolved); err == nil {
-			left = r
-		}
-		right := filepath.Clean(path)
-		if r, err := filepath.EvalSymlinks(right); err == nil {
-			right = r
-		}
-		if left != right {
+		// Only remove links this package owns. symlinkTargetsPath resolves
+		// both sides, so a /var → /private/var alias or a symlinked ancestor
+		// on either side still matches.
+		if !symlinkTargetsPath(targetPath, path) {
 			return nil
 		}
 
