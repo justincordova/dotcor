@@ -109,28 +109,62 @@ func stepWriteFile(dst string, data []byte, perm os.FileMode) fileStep {
 	deepestExisting := deepestExistingDir(parent)
 
 	// Capture prior state at construction time, before any step runs.
+	//
+	// captureErr is deliberately carried into do() rather than being
+	// swallowed. If something is at dst that we cannot faithfully restore —
+	// an unreadable file, or a symlink that WriteFile would silently write
+	// *through* — then proceeding would destroy state the undo cannot bring
+	// back, which is exactly what this step promises never to do. Refuse
+	// instead, and let the caller record the failure.
 	var priorData []byte
 	var priorPerm os.FileMode
+	var captureErr error
 	priorExisted := false
-	if info, err := os.Lstat(dst); err == nil && info.Mode().IsRegular() {
-		if b, rerr := os.ReadFile(dst); rerr == nil {
-			priorData = b
-			priorPerm = info.Mode().Perm()
-			priorExisted = true
+
+	if info, err := os.Lstat(dst); err == nil {
+		switch {
+		case !info.Mode().IsRegular():
+			captureErr = fmt.Errorf("refusing to overwrite non-regular file (%s): %s",
+				fileKind(info.Mode()), dst)
+		case info.Size() > maxFileSizeBytes:
+			captureErr = fmt.Errorf("existing file too large to snapshot for rollback (%d bytes): %s",
+				info.Size(), dst)
+		default:
+			b, rerr := os.ReadFile(dst)
+			if rerr != nil {
+				captureErr = fmt.Errorf("cannot snapshot existing file for rollback: %w", rerr)
+			} else {
+				priorData = b
+				priorPerm = info.Mode().Perm()
+				priorExisted = true
+			}
 		}
 	}
 
 	return fileStep{
 		desc: "write " + dst,
 		do: func() error {
+			if captureErr != nil {
+				return captureErr
+			}
 			if err := os.MkdirAll(parent, 0755); err != nil {
 				return fmt.Errorf("mkdir %s: %w", parent, err)
 			}
-			return os.WriteFile(dst, data, perm)
+			if err := os.WriteFile(dst, data, perm); err != nil {
+				return err
+			}
+			// WriteFile passes perm to open(2), which ignores it when the
+			// file already exists. Without this an existing repo copy keeps
+			// whatever mode it had — re-adding a 0600 ~/.ssh/config over a
+			// 0644 copy left the repo copy world-readable.
+			return os.Chmod(dst, perm)
 		},
 		undo: func() error {
 			if priorExisted {
-				return os.WriteFile(dst, priorData, priorPerm)
+				if err := os.WriteFile(dst, priorData, priorPerm); err != nil {
+					return err
+				}
+				return os.Chmod(dst, priorPerm)
 			}
 			if err := os.Remove(dst); err != nil && !os.IsNotExist(err) {
 				return err

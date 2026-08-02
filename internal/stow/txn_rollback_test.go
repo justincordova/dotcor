@@ -87,3 +87,85 @@ func TestStepWriteFile_UndoStopsAtNonEmptyDir(t *testing.T) {
 	_, err := os.Stat(sibling)
 	assert.NoError(t, err, "a non-empty directory must never be removed")
 }
+
+// TestStepWriteFile_RefusesUnreadableDestination pins the fix for a silent
+// downgrade to "did not exist". When the prior contents could not be read,
+// priorExisted stayed false and the undo then deleted a repo file that
+// existed before the transaction started — the exact outcome the step
+// promises never to produce.
+func TestStepWriteFile_RefusesUnreadableDestination(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: file permissions are not enforced")
+	}
+
+	dst := filepath.Join(t.TempDir(), "existing.conf")
+	require.NoError(t, os.WriteFile(dst, []byte("precious"), 0644))
+	require.NoError(t, os.Chmod(dst, 0000))
+	t.Cleanup(func() { _ = os.Chmod(dst, 0644) })
+
+	if _, err := os.ReadFile(dst); err == nil {
+		t.Skip("filesystem allowed the read; the failure path was not exercised")
+	}
+
+	txn := &fileTxn{}
+	err := txn.run(stepWriteFile(dst, []byte("replacement"), 0644))
+
+	require.Error(t, err, "a destination we cannot snapshot must not be overwritten")
+
+	require.NoError(t, os.Chmod(dst, 0644))
+	data, readErr := os.ReadFile(dst)
+	require.NoError(t, readErr)
+	assert.Equal(t, "precious", string(data), "the existing file must be left untouched")
+}
+
+// TestStepWriteFile_RefusesSymlinkDestination pins the other capture hole.
+// os.WriteFile follows a symlink and writes through it, so the undo's
+// os.Remove would drop the link and leave the clobbered target behind.
+func TestStepWriteFile_RefusesSymlinkDestination(t *testing.T) {
+	tmp := t.TempDir()
+	real := filepath.Join(tmp, "real.conf")
+	link := filepath.Join(tmp, "link.conf")
+	require.NoError(t, os.WriteFile(real, []byte("original target"), 0644))
+	require.NoError(t, os.Symlink(real, link))
+
+	txn := &fileTxn{}
+	err := txn.run(stepWriteFile(link, []byte("replacement"), 0644))
+
+	require.Error(t, err, "a symlink destination must be refused, not written through")
+	assert.Contains(t, err.Error(), "non-regular")
+
+	data, readErr := os.ReadFile(real)
+	require.NoError(t, readErr)
+	assert.Equal(t, "original target", string(data), "the symlink's target must not be clobbered")
+}
+
+// TestStepWriteFile_AppliesModeToExistingFile pins the chmod. open(2) ignores
+// the mode argument when the file already exists, so re-adding a 0600
+// ~/.ssh/config over a 0644 repo copy left the repo copy world-readable.
+func TestStepWriteFile_AppliesModeToExistingFile(t *testing.T) {
+	dst := filepath.Join(t.TempDir(), "config")
+	require.NoError(t, os.WriteFile(dst, []byte("old"), 0644))
+
+	txn := &fileTxn{}
+	require.NoError(t, txn.run(stepWriteFile(dst, []byte("new"), 0600)))
+	txn.commit()
+
+	info, err := os.Stat(dst)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0600), info.Mode().Perm(),
+		"the requested mode must be applied even when the destination already existed")
+}
+
+// TestStepWriteFile_UndoRestoresPriorMode covers the reverse direction.
+func TestStepWriteFile_UndoRestoresPriorMode(t *testing.T) {
+	dst := filepath.Join(t.TempDir(), "config")
+	require.NoError(t, os.WriteFile(dst, []byte("old"), 0600))
+
+	txn := &fileTxn{}
+	require.NoError(t, txn.run(stepWriteFile(dst, []byte("new"), 0644)))
+	require.NoError(t, txn.rollback())
+
+	info, err := os.Stat(dst)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0600), info.Mode().Perm(), "rollback must restore the prior mode")
+}

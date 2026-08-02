@@ -127,6 +127,13 @@ func linkAutoDetectedFile(result *LinkResult, pkgDir, homeDir string, f FileEntr
 		result.Skipped++
 		return
 	}
+	// open(2) applies perm only when it creates the file, so an existing
+	// repo copy would keep a looser mode than the $HOME file it mirrors.
+	if chmodErr := os.Chmod(repoPath, srcPerm); chmodErr != nil {
+		result.Conflicts = append(result.Conflicts, f.RelPath)
+		result.Skipped++
+		return
+	}
 
 	relSymlink, symErr := relLinkTarget(f.TargetPath, repoPath)
 	if symErr != nil {
