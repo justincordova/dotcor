@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -1312,4 +1313,53 @@ func TestValidateRemoteURL_RejectsMalformedURLs(t *testing.T) {
 			assert.Error(t, ValidateRemoteURL(url))
 		})
 	}
+}
+
+// TestGitEnv_SuppressesInteractivePrompts pins the fix for a TUI hang:
+// a git subprocess that prompts for credentials writes onto the alt-screen
+// and blocks for the whole timeout. Every git invocation must carry the
+// prompt-suppression and locale-pinning variables, not just the two
+// progress-reporting call sites that used to set them by hand.
+func TestGitEnv_SuppressesInteractivePrompts(t *testing.T) {
+	env := gitEnv()
+
+	seen := map[string]string{}
+	for _, kv := range env {
+		if i := strings.Index(kv, "="); i > 0 {
+			seen[kv[:i]] = kv[i+1:]
+		}
+	}
+
+	assert.Equal(t, "0", seen["GIT_TERMINAL_PROMPT"])
+	assert.Equal(t, "echo", seen["GIT_ASKPASS"])
+	assert.Equal(t, "never", seen["SSH_ASKPASS_REQUIRE"])
+	assert.Contains(t, seen["GIT_SSH_COMMAND"], "BatchMode=yes")
+	// Locale must be pinned: isNothingToCommitError and friends branch on
+	// git's translated human-readable output.
+	assert.Equal(t, "C", seen["LC_ALL"])
+	assert.Equal(t, "", seen["LANGUAGE"])
+}
+
+// TestGitEnv_PreservesUserSSHCommand ensures we never clobber a deliberate
+// ssh configuration; the prompt guard is not worth breaking a user's setup.
+func TestGitEnv_PreservesUserSSHCommand(t *testing.T) {
+	t.Setenv("GIT_SSH_COMMAND", "ssh -i /custom/key")
+
+	var got string
+	for _, kv := range gitEnv() {
+		if strings.HasPrefix(kv, "GIT_SSH_COMMAND=") {
+			got = strings.TrimPrefix(kv, "GIT_SSH_COMMAND=")
+		}
+	}
+	assert.Equal(t, "ssh -i /custom/key", got)
+}
+
+// TestRunGitCommand_SetsWaitDelay pins the guard against a grandchild
+// process (ssh, credential helper) holding the output pipe open past the
+// context deadline and blocking Wait forever.
+func TestRunGitCommand_SetsWaitDelay(t *testing.T) {
+	cmd, cancel := runGitCommand(t.TempDir(), "status")
+	defer cancel()
+
+	assert.Positive(t, cmd.WaitDelay, "WaitDelay must bound child cleanup")
 }

@@ -98,7 +98,48 @@ func runGitCommandWithTimeout(dir string, timeout time.Duration, name string, ar
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	cmd := exec.CommandContext(ctx, "git", append([]string{name}, args...)...)
 	cmd.Dir = dir
+	cmd.Env = gitEnv()
+	// CommandContext kills only the direct `git` process on timeout. A
+	// grandchild (ssh, git-remote-https, a credential helper) inherits the
+	// stdout/stderr pipe write ends, so Wait would block past the deadline
+	// waiting for EOF. WaitDelay bounds that: after the context fires, the
+	// pipes are force-closed and the process group is killed.
+	cmd.WaitDelay = 5 * time.Second
 	return cmd, cancel
+}
+
+// gitEnv returns the environment every git invocation runs with.
+//
+// Two problems it solves:
+//
+//   - Interactive prompts. The TUI owns the terminal under the alt-screen.
+//     A git subprocess that prompts for credentials writes onto that screen
+//     and then blocks for the whole timeout, wedging the UI with a corrupted
+//     display. GIT_TERMINAL_PROMPT/GIT_ASKPASS stop git's own prompts;
+//     BatchMode is the only thing that reliably stops OpenSSH, which opens
+//     /dev/tty directly for passphrase and host-key prompts and ignores both
+//     stdin and SSH_ASKPASS when a tty is available.
+//
+//   - Translated messages. Several code paths branch on git's human-readable
+//     output ("nothing to commit"). Those strings are gettext-translated, so
+//     on a localised system the branch silently stops matching. LC_ALL=C
+//     pins them.
+//
+// GIT_SSH_COMMAND is only set when the user has not set their own — clobbering
+// a deliberate ssh configuration would be worse than the prompt it prevents.
+func gitEnv() []string {
+	env := append(os.Environ(),
+		"GIT_TERMINAL_PROMPT=0",
+		"GIT_ASKPASS=echo",
+		"SSH_ASKPASS=echo",
+		"SSH_ASKPASS_REQUIRE=never",
+		"LC_ALL=C",
+		"LANGUAGE=",
+	)
+	if os.Getenv("GIT_SSH_COMMAND") == "" {
+		env = append(env, "GIT_SSH_COMMAND=ssh -o BatchMode=yes")
+	}
+	return env
 }
 
 // StatusInfo represents Git repository status
@@ -407,17 +448,9 @@ func PushWithProgress(repoPath string) error {
 		pushCmd, cancelPush = runGitNetworkCommand(repoPath, "push", "-u", "origin", branch, "--progress")
 	}
 	defer cancelPush()
+	// Prompt suppression is applied to every git invocation by gitEnv().
 	pushCmd.Stdout = nil
 	pushCmd.Stderr = nil
-	// Defeat interactive credential prompts so the TUI never wedges
-	// waiting on stdin under the alt-screen. GIT_TERMINAL_PROMPT=0 makes
-	// git fail fast on missing credentials; GIT_ASKPASS=echo neutralises
-	// any helper that would otherwise try to prompt.
-	pushCmd.Env = append(os.Environ(),
-		"GIT_TERMINAL_PROMPT=0",
-		"GIT_ASKPASS=echo",
-		"SSH_ASKPASS=echo",
-	)
 	return pushCmd.Run()
 }
 
@@ -690,16 +723,9 @@ func CloneWithProgress(url, destPath string) error {
 	// Clone with progress
 	cmd, cancel := runGitNetworkCommand("", "clone", "--progress", url, destPath)
 	defer cancel()
+	// Prompt suppression is applied to every git invocation by gitEnv().
 	cmd.Stdout = nil
 	cmd.Stderr = nil
-	// Same auth-prompt suppression as PushWithProgress: a clone of a
-	// private repo without credentials would otherwise sit forever
-	// waiting on stdin under the TUI's alt-screen.
-	cmd.Env = append(os.Environ(),
-		"GIT_TERMINAL_PROMPT=0",
-		"GIT_ASKPASS=echo",
-		"SSH_ASKPASS=echo",
-	)
 	return cmd.Run()
 }
 
