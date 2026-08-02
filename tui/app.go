@@ -1407,7 +1407,10 @@ func (m Model) deletePackage(name string) tea.Cmd {
 		pkgDir := filepath.Join(repoDir, pkg.Name)
 		ts := time.Now().Format("2006-01-02_15-04-05")
 		backupPath := filepath.Join(backupDir, "pre-delete-"+ts, pkg.Name)
-		if err := os.MkdirAll(filepath.Dir(backupPath), 0755); err != nil {
+		// 0700: this copy can hold anything the package tracked, including
+		// ~/.ssh and ~/.gnupg contents. It must not be more exposed than the
+		// originals.
+		if err := os.MkdirAll(filepath.Dir(backupPath), 0700); err != nil {
 			return stowResultMsg{err: fmt.Errorf("creating backup directory: %w", err)}
 		}
 		if err := copyDir(pkgDir, backupPath); err != nil {

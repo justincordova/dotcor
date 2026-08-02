@@ -293,7 +293,12 @@ func resolveOneConflict(result *LinkResult, homeDir, targetPath, backupPath, rel
 	// Step 1: write backup. We DO NOT roll this back on later failure —
 	// the backup is the user's only safety net if anything else goes
 	// wrong, and removing it on failure would leave them stranded.
-	if err := os.MkdirAll(filepath.Dir(backupPath), 0755); err != nil {
+	// 0700, not 0755. The backup tree mirrors $HOME, so backing up
+	// ~/.ssh/config creates a .ssh directory inside it. The file itself keeps
+	// its own mode, but a world-traversable directory still leaks the
+	// filenames under ~/.ssh, ~/.gnupg and ~/.aws on a shared host. A backup
+	// must never be more exposed than what it copied.
+	if err := os.MkdirAll(filepath.Dir(backupPath), 0700); err != nil {
 		return err
 	}
 	if err := os.WriteFile(backupPath, srcData, srcPerm); err != nil {

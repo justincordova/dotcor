@@ -108,6 +108,21 @@ func CopyWithPermissions(src, dst string, cfg *config.Config) error {
 }
 
 func EnsureDir(path string, cfg *config.Config) error {
+	return ensureDirMode(path, 0755, cfg)
+}
+
+// EnsurePrivateDir creates a directory readable only by its owner.
+//
+// Use this for anything mirroring $HOME, above all the backup tree: backing
+// up ~/.ssh/config creates a .ssh directory inside it, and at 0755 that
+// directory is world-traversable. The copied file keeps its own 0600, but the
+// filenames under ~/.ssh, ~/.gnupg and ~/.aws still leak on a shared host. A
+// backup must never be more exposed than what it copied.
+func EnsurePrivateDir(path string, cfg *config.Config) error {
+	return ensureDirMode(path, 0700, cfg)
+}
+
+func ensureDirMode(path string, mode os.FileMode, cfg *config.Config) error {
 	if path == "" {
 		return nil
 	}
@@ -124,7 +139,7 @@ func EnsureDir(path string, cfg *config.Config) error {
 	}
 
 	if os.IsNotExist(err) {
-		if err := os.MkdirAll(path, 0755); err != nil {
+		if err := os.MkdirAll(path, mode); err != nil {
 			cfg.Logger.Error("failed to create directory", "path", path, "error", err)
 			return fmt.Errorf("creating directory: %w", err)
 		}

@@ -65,7 +65,7 @@ func CreateBackup(sourcePath string, cfg *config.Config) (string, error) {
 		return "", fmt.Errorf("backup path exists as file, not directory: %s", timestampDir)
 	}
 
-	if err := fs.EnsureDir(timestampDir, cfg); err != nil {
+	if err := fs.EnsurePrivateDir(timestampDir, cfg); err != nil {
 		cfg.Logger.Error("failed to create backup directory", "error", err)
 		return "", fmt.Errorf("creating backup directory: %w", err)
 	}
@@ -82,7 +82,7 @@ func CreateBackup(sourcePath string, cfg *config.Config) (string, error) {
 	backupPath := filepath.Join(timestampDir, backupRelativePath)
 
 	// Ensure parent directory exists
-	if err := fs.EnsureDir(filepath.Dir(backupPath), cfg); err != nil {
+	if err := fs.EnsurePrivateDir(filepath.Dir(backupPath), cfg); err != nil {
 		cfg.Logger.Error("failed to create backup subdirectory", "error", err)
 		return "", fmt.Errorf("creating backup subdirectory: %w", err)
 	}
