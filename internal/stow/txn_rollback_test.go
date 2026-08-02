@@ -169,3 +169,78 @@ func TestStepWriteFile_UndoRestoresPriorMode(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, os.FileMode(0600), info.Mode().Perm(), "rollback must restore the prior mode")
 }
+
+// TestStepWriteFile_UndoRestoresReadOnlyDestination pins the fix for a
+// rollback that could not reopen its own destination.
+//
+// do() gives dst exactly the mode requested, so a read-only source (0444)
+// left the undo's write failing with EACCES — before the chmod that would
+// have fixed it — and the prior repo copy was destroyed.
+func TestStepWriteFile_UndoRestoresReadOnlyDestination(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: file permissions are not enforced")
+	}
+
+	dir := t.TempDir()
+	dst := filepath.Join(dir, "gitconfig")
+	require.NoError(t, os.WriteFile(dst, []byte("CURATED REPO COPY"), 0644))
+
+	txn := &fileTxn{}
+	require.NoError(t, txn.run(stepWriteFile(dst, []byte("SOURCE"), 0444)))
+	require.NoError(t, txn.rollback(), "rollback must not fail on a read-only destination")
+
+	data, err := os.ReadFile(dst)
+	require.NoError(t, err)
+	assert.Equal(t, "CURATED REPO COPY", string(data), "the prior repo copy must be restored")
+
+	info, err := os.Stat(dst)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0644), info.Mode().Perm(), "the prior mode must be restored")
+}
+
+// TestAtomicWriteFile_NoStagingLeftBehind pins the cleanup. A leftover
+// *.dotcor-tmp inside a package would be stowed into $HOME as a junk symlink.
+func TestAtomicWriteFile_NoStagingLeftBehind(t *testing.T) {
+	dir := t.TempDir()
+	dst := filepath.Join(dir, "file.conf")
+
+	require.NoError(t, atomicWriteFile(dst, []byte("x"), 0644))
+
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	for _, e := range entries {
+		assert.NotContains(t, e.Name(), tmpSuffix, "no staging file may survive")
+	}
+
+	// A failing write (the parent is removed) must also leave nothing.
+	missing := filepath.Join(dir, "gone", "file.conf")
+	require.Error(t, atomicWriteFile(missing, []byte("x"), 0644))
+}
+
+// TestLink_SkipsStagingFiles pins the guard against a crashed swap's leftover
+// being treated as package content.
+func TestLink_SkipsStagingFiles(t *testing.T) {
+	tmp := t.TempDir()
+	homeDir := filepath.Join(tmp, "home")
+	repoDir := filepath.Join(tmp, "repo")
+	pkgDir := filepath.Join(repoDir, "cfg")
+	require.NoError(t, os.MkdirAll(pkgDir, 0755))
+	require.NoError(t, os.MkdirAll(homeDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".gitconfig"), []byte("real"), 0644))
+	// Debris from a crashed atomic swap.
+	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".gitconfig"+tmpSuffix), nil, 0644))
+
+	result, err := Link(repoDir, homeDir, "cfg", nil)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Linked, "only the real file should be linked")
+
+	_, statErr := os.Lstat(filepath.Join(homeDir, ".gitconfig"+tmpSuffix))
+	assert.True(t, os.IsNotExist(statErr), "a staging leftover must never reach $HOME")
+
+	packages, err := DiscoverPackages(repoDir, homeDir)
+	require.NoError(t, err)
+	require.Len(t, packages, 1)
+	for _, f := range packages[0].Files {
+		assert.NotContains(t, f.RelPath, tmpSuffix, "discovery must not list staging files")
+	}
+}

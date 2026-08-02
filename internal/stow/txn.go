@@ -7,6 +7,11 @@ import (
 	"path/filepath"
 )
 
+// tmpSuffix names the staging file used by every atomic swap in this package.
+// It is listed in the .gitignore dotcor writes, and the package walk skips it
+// so a leftover from a crashed run is never stowed into $HOME.
+const tmpSuffix = ".dotcor-tmp"
+
 // fileTxn is a per-file transaction primitive used by the stow execute paths.
 //
 // Why this exists rather than just using internal/core.Transaction:
@@ -151,40 +156,17 @@ func stepWriteFile(dst string, data []byte, perm os.FileMode) fileStep {
 				return fmt.Errorf("mkdir %s: %w", parent, err)
 			}
 
-			// Stage into a temporary file and rename it into place, rather
-			// than writing dst directly.
-			//
-			// os.WriteFile opens with O_TRUNC, so the prior contents are
-			// gone the instant it is entered. A failure after that point —
-			// ENOSPC, EIO — leaves dst truncated, and fileTxn.run only
-			// appends a step to the rollback list AFTER do() succeeds, so
-			// this step's own undo never runs and the snapshot taken above
-			// is discarded. The repo copy would be left zero-length with no
-			// way back. Rename replaces dst atomically or not at all, which
-			// makes a failing do() a genuine no-op.
-			tmp := dst + ".dotcor-tmp"
-			_ = os.Remove(tmp) // clear any leftover from a crashed prior run
-			if err := os.WriteFile(tmp, data, perm); err != nil {
-				return err
-			}
-			// open(2) applies perm only when it creates the file, and the
-			// process umask may have cleared bits; set the mode explicitly.
-			if err := os.Chmod(tmp, perm); err != nil {
-				_ = os.Remove(tmp)
-				return err
-			}
-			if err := os.Rename(tmp, dst); err != nil {
-				_ = os.Remove(tmp)
-				return err
-			}
-			return nil
+			return atomicWriteFile(dst, data, perm)
 		},
 		undo: func() error {
 			if priorExisted {
-				if err := os.WriteFile(dst, priorData, priorPerm); err != nil {
-					return err
-				}
-				return os.Chmod(dst, priorPerm)
+				// Restore via rename as well. A direct write would need
+				// write permission on dst, and do() gives dst exactly the
+				// mode it was asked for — so a read-only source file (0444)
+				// left the undo unable to reopen its own destination and the
+				// prior repo copy was lost. Rename needs permission on the
+				// directory, not the file.
+				return atomicWriteFile(dst, priorData, priorPerm)
 			}
 			if err := os.Remove(dst); err != nil && !os.IsNotExist(err) {
 				return err
@@ -223,7 +205,7 @@ func stepReplaceFileWithSymlink(srcPath, linkTarget string, origData []byte, ori
 	return fileStep{
 		desc: "replace " + srcPath + " with symlink",
 		do: func() error {
-			tmp := srcPath + ".dotcor-tmp"
+			tmp := srcPath + tmpSuffix
 			_ = os.Remove(tmp) // clean any leftover from a crashed prior run
 			if err := os.Symlink(linkTarget, tmp); err != nil {
 				return fmt.Errorf("create tmp symlink: %w", err)
@@ -266,6 +248,43 @@ func stepRepointSymlink(linkPath, newTarget, origTarget string) fileStep {
 			return atomicSymlink(origTarget, linkPath)
 		},
 	}
+}
+
+// atomicWriteFile writes data to path with the given mode, via a staging file
+// in the same directory that is renamed into place.
+//
+// Renaming rather than writing path directly matters twice over:
+//
+//   - os.WriteFile opens with O_TRUNC, so the prior contents are gone the
+//     instant it is entered. A failure after that point (ENOSPC, EIO) would
+//     leave path truncated — and fileTxn.run only records a step for
+//     rollback AFTER do() succeeds, so the failing step's own undo never
+//     runs. Rename replaces path completely or not at all.
+//   - Rename needs write permission on the directory, not on path, so this
+//     also works when path itself is read-only.
+//
+// The staging file is removed on every failure path; leaving it behind would
+// put a stray *.dotcor-tmp entry inside a package, which the next stow would
+// happily symlink into $HOME.
+func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
+	tmp := path + tmpSuffix
+	_ = os.Remove(tmp) // clear any leftover from a crashed prior run
+
+	if err := os.WriteFile(tmp, data, perm); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	// open(2) applies perm only when it creates the file, and the process
+	// umask may have cleared bits; set the mode explicitly.
+	if err := os.Chmod(tmp, perm); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
 }
 
 // pathExists reports whether path exists (regular file, dir, or symlink).

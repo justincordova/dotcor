@@ -795,7 +795,7 @@ func fileKind(mode os.FileMode) string {
 // atomicSymlink creates a symlink at dst atomically using a tmp+rename.
 // Any pre-existing .dotcor-tmp file is removed first to handle crashed prior runs.
 func atomicSymlink(target, dst string) error {
-	tmp := dst + ".dotcor-tmp"
+	tmp := dst + tmpSuffix
 	_ = os.Remove(tmp) // clean up any leftover from a prior crashed run
 	if err := os.Symlink(target, tmp); err != nil {
 		return fmt.Errorf("creating tmp symlink: %w", err)

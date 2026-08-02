@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -36,6 +37,12 @@ func Link(repoDir, homeDir, packageName string, ignorePatterns []string) (*LinkR
 			return walkErr
 		}
 		if fi.IsDir() {
+			return nil
+		}
+
+		// Skip staging files left by a crashed atomic swap — see
+		// DiscoverPackages.
+		if strings.HasSuffix(path, tmpSuffix) {
 			return nil
 		}
 
@@ -166,7 +173,7 @@ func linkAutoDetectedFile(result *LinkResult, pkgDir, homeDir string, f FileEntr
 	// first, as the previous implementation did, opened a window where
 	// $HOME had no file at all; a crash there left the file gone with
 	// the bytes only present in the just-written repo copy.
-	tmpLink := f.TargetPath + ".dotcor-tmp"
+	tmpLink := f.TargetPath + tmpSuffix
 	_ = os.Remove(tmpLink) // clean any leftover from a prior crashed run
 	if symErr = os.Symlink(relSymlink, tmpLink); symErr != nil {
 		result.Skipped++

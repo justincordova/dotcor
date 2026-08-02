@@ -112,7 +112,7 @@ func Adopt(repoDir, homeDir, packageName string) (*AdoptResult, error) {
 		// replaces the existing entry atomically in one syscall, so the
 		// link is either the old foreign one or the new repo one,
 		// never absent.
-		tmpLink := f.TargetPath + ".dotcor-tmp"
+		tmpLink := f.TargetPath + tmpSuffix
 		_ = os.Remove(tmpLink) // clean any leftover from a prior crashed run
 		if err := os.Symlink(relSymlink, tmpLink); err != nil {
 			_ = os.Remove(repoPath)

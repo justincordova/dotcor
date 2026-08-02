@@ -139,6 +139,12 @@ func discoverFiles(pkgDir, homeDir string) ([]FileEntry, error) {
 			return nil
 		}
 
+		// A staging file left behind by a crashed atomic swap is not
+		// package content; stowing it would put a junk symlink in $HOME.
+		if strings.HasSuffix(path, tmpSuffix) {
+			return nil
+		}
+
 		relPath, err := filepath.Rel(pkgDir, path)
 		if err != nil {
 			slog.Default().Warn("discover: skipping file with bad rel path",
