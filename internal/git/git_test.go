@@ -1515,3 +1515,91 @@ func runGit(t *testing.T, dir string, args ...string) {
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "git %v: %s", args, string(out))
 }
+
+// TestRefExists_MissingBranch pins the fix for a wrong error. `git cat-file
+// -e` exits 128 (not 1) for a name that doesn't resolve at all, so a plain
+// missing branch used to be reported as a hard failure instead of "absent".
+func TestRefExists_MissingBranch(t *testing.T) {
+	if !IsGitInstalled() {
+		t.Skip("git not installed")
+	}
+	repo := t.TempDir()
+	require.NoError(t, InitRepo(repo))
+	stageInitialCommit(t, repo)
+
+	exists, err := RefExists(repo, "no-such-branch")
+
+	require.NoError(t, err, "a missing branch is not an error")
+	assert.False(t, exists)
+}
+
+func TestRefExists_PresentRef(t *testing.T) {
+	if !IsGitInstalled() {
+		t.Skip("git not installed")
+	}
+	repo := t.TempDir()
+	require.NoError(t, InitRepo(repo))
+	stageInitialCommit(t, repo)
+
+	exists, err := RefExists(repo, "HEAD")
+
+	require.NoError(t, err)
+	assert.True(t, exists)
+}
+
+// TestGetRemoteURL_NoRemote confirms the "no remote" case is still reported
+// as (empty, nil) now that other failures propagate.
+func TestGetRemoteURL_NoRemote(t *testing.T) {
+	if !IsGitInstalled() {
+		t.Skip("git not installed")
+	}
+	repo := t.TempDir()
+	require.NoError(t, InitRepo(repo))
+
+	url, err := GetRemoteURL(repo)
+
+	require.NoError(t, err)
+	assert.Empty(t, url)
+}
+
+// TestGetRemoteURL_NotARepoErrors pins the fix for a silent no-op: any
+// failure other than "no such remote" used to be swallowed as "no remote",
+// so Sync skipped the push and still reported success.
+func TestGetRemoteURL_NotARepoErrors(t *testing.T) {
+	if !IsGitInstalled() {
+		t.Skip("git not installed")
+	}
+
+	_, err := GetRemoteURL(t.TempDir())
+
+	assert.Error(t, err, "a non-repository must not look like 'no remote configured'")
+}
+
+// TestClone_RejectsDangerousTransport pins the RCE guard. git's ext::
+// transport runs an arbitrary command; Clone previously passed the URL
+// straight through while CloneWithProgress validated it.
+func TestClone_RejectsDangerousTransport(t *testing.T) {
+	err := Clone("ext::sh -c 'touch /tmp/dotcor-pwned'", t.TempDir())
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid clone URL")
+}
+
+func TestClone_RejectsFlagLikeURL(t *testing.T) {
+	err := Clone("--upload-pack=touch /tmp/dotcor-pwned", t.TempDir())
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid clone URL")
+}
+
+// TestRemoveRemote_MissingRemoteIsSuccess pins the exit-code check that
+// replaced a match on git's translated "No such remote" message.
+func TestRemoveRemote_MissingRemoteIsSuccess(t *testing.T) {
+	if !IsGitInstalled() {
+		t.Skip("git not installed")
+	}
+	repo := t.TempDir()
+	require.NoError(t, InitRepo(repo))
+
+	assert.NoError(t, RemoveRemote(repo, "origin"), "removing an absent remote reaches the desired end state")
+}

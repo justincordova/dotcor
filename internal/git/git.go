@@ -3,6 +3,7 @@ package git
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -527,13 +528,21 @@ func SetRemote(repoPath, remoteName, remoteURL string) error {
 	return nil
 }
 
-// GetRemoteURL returns configured remote URL, or empty if none
+// GetRemoteURL returns the configured origin URL, or empty if none is set.
+//
+// Only exit code 2 means "no such remote". Collapsing every other failure
+// (context timeout, git missing, not a repository) into "" made Sync a silent
+// no-op: it skips the push and reports success while nothing was pushed.
 func GetRemoteURL(repoPath string) (string, error) {
 	cmd, cancel := runGitCommand(repoPath, "remote", "get-url", "origin")
 	defer cancel()
 	output, err := cmd.Output()
 	if err != nil {
-		return "", nil // No remote configured
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 2 {
+			return "", nil // No remote configured
+		}
+		return "", fmt.Errorf("git remote get-url failed: %w", err)
 	}
 	return strings.TrimSpace(string(output)), nil
 }
@@ -545,8 +554,12 @@ func RemoveRemote(repoPath, remoteName string) error {
 	defer cancel()
 	if output, err := cmd.CombinedOutput(); err != nil {
 		// `git remote remove <name>` returns 2 when the remote doesn't
-		// exist. That's the desired end state — treat as success.
-		if strings.Contains(string(output), "No such remote") {
+		// exist. That's the desired end state — treat as success. Match on
+		// the exit code, not the message: "No such remote" is translated,
+		// so on a localised system the string compare silently stops
+		// matching and clearing an absent remote reports a failure.
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 2 {
 			return nil
 		}
 		return fmt.Errorf("git remote remove failed: %s: %w", RedactURLCredentials(string(output)), err)
@@ -731,9 +744,17 @@ func GetDiffStat(repoPath string) (string, error) {
 	return string(output), nil
 }
 
-// Clone clones a repository to the specified path
+// Clone clones a repository to the specified path.
+//
+// The URL goes through the same allowlist as SetRemote/CloneWithProgress —
+// git's `ext::` transport executes arbitrary commands, so an unvalidated URL
+// here is remote code execution. `--` stops a URL or path beginning with `-`
+// from being read as a flag.
 func Clone(url, destPath string) error {
-	cmd, cancel := runGitNetworkCommand("", "clone", url, destPath)
+	if err := ValidateRemoteURL(url); err != nil {
+		return fmt.Errorf("invalid clone URL: %w", err)
+	}
+	cmd, cancel := runGitNetworkCommand("", "clone", "--", url, destPath)
 	defer cancel()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -981,17 +1002,22 @@ func RefExists(repoPath, ref string) (bool, error) {
 		return false, fmt.Errorf("ref is absolute but not a valid ref: %s", ref)
 	}
 
-	cmd, cancel := runGitCommand(repoPath, "cat-file", "-e", ref)
+	// `git cat-file -e <ref>` exits 1 only for a well-formed object name that
+	// isn't present; a name that doesn't resolve at all (an ordinary branch
+	// name that doesn't exist) is a fatal error with exit 128. That made
+	// RefExists return an error for the most common "does not exist" case.
+	// `rev-parse --verify --quiet` exits 1 for every non-resolution.
+	cmd, cancel := runGitCommand(repoPath, "rev-parse", "--verify", "--quiet", ref+"^{object}")
 	defer cancel()
+	cmd.Stdout = nil
 	err := cmd.Run()
 
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			if exitErr.ExitCode() == 1 {
-				return false, nil
-			}
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			return false, nil
 		}
-		return false, fmt.Errorf("git cat-file failed for ref %s: %w", ref, err)
+		return false, fmt.Errorf("git rev-parse failed for ref %s: %w", ref, err)
 	}
 
 	return true, nil
