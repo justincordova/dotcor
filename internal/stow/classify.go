@@ -633,11 +633,22 @@ func resolvedDir(path string) string {
 	return dir
 }
 
-// safeReadFile reads a file, refusing to load anything larger than maxFileSizeBytes.
+// safeReadFile reads a regular file, refusing to load anything larger than
+// maxFileSizeBytes.
+//
+// The regular-file check is not a nicety. A FIFO under a managed directory
+// (gpg-agent sockets under ~/.gnupg, app-created named pipes) reports
+// Size() == 0, so the size guard never fires, and os.Open on a FIFO blocks
+// indefinitely waiting for a writer — freezing the TUI with no error and no
+// timeout. Character devices are worse: /dev/zero also reports size 0 and
+// would be read until memory runs out.
 func safeReadFile(path string) ([]byte, os.FileMode, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return nil, 0, fmt.Errorf("stat %q: %w", path, err)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, 0, fmt.Errorf("not a regular file (%s): %q", fileKind(info.Mode()), path)
 	}
 	if info.Size() > maxFileSizeBytes {
 		return nil, 0, fmt.Errorf("file too large (%d bytes, max %d): %q", info.Size(), maxFileSizeBytes, path)
@@ -647,6 +658,24 @@ func safeReadFile(path string) ([]byte, os.FileMode, error) {
 		return nil, 0, fmt.Errorf("reading %q: %w", path, err)
 	}
 	return data, info.Mode().Perm(), nil
+}
+
+// fileKind names a non-regular file mode for error messages.
+func fileKind(mode os.FileMode) string {
+	switch {
+	case mode.IsDir():
+		return "directory"
+	case mode&os.ModeNamedPipe != 0:
+		return "named pipe"
+	case mode&os.ModeSocket != 0:
+		return "socket"
+	case mode&os.ModeDevice != 0:
+		return "device"
+	case mode&os.ModeSymlink != 0:
+		return "symlink"
+	default:
+		return "irregular file"
+	}
 }
 
 // atomicSymlink creates a symlink at dst atomically using a tmp+rename.
