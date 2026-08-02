@@ -104,10 +104,10 @@ func (m Model) updateHistory(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.confirmOpen {
 			switch {
 			case key.Matches(msg, m.keys.Enter):
-				ref := m.confirmRestoreRef
-				path := m.confirmFilePath
-				m.clearConfirm()
-				return m, m.restoreFromCommit(ref, path)
+				// Dispatch on confirmAction. The modal shown over History is
+				// not always History's own restore prompt — the top-level
+				// Update opens a conflict-resolution prompt from any view.
+				return m.confirmAccept()
 			default:
 				m.clearConfirm()
 				return m, nil

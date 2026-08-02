@@ -506,6 +506,46 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m.updateDashboard(msg)
 }
 
+// confirmAccept runs the pending confirmation and clears the modal.
+//
+// This must be shared by every view that can display the modal. The confirm
+// state is set from the top-level Update — stowResultMsg opens the
+// "N conflicts detected" modal regardless of which view is active — and
+// viewHistory renders it, so History could show a conflict prompt while its
+// own handler unconditionally ran a git restore with an empty ref and path.
+// Pressing enter then produced an unrelated git error and silently dropped
+// the conflict resolution.
+//
+// An unrecognised action is treated as a cancel rather than falling through
+// to some other view's destructive default.
+func (m Model) confirmAccept() (tea.Model, tea.Cmd) {
+	action := m.confirmAction
+	target := m.confirmTarget
+	restoreRef := m.confirmRestoreRef
+	restorePath := m.confirmFilePath
+	m.clearConfirm()
+
+	switch action {
+	case "stow":
+		return m, m.stowPackage(target)
+	case "unstow":
+		return m, m.unstowPackage(target)
+	case "stow-all":
+		return m, m.stowAllPackages()
+	case "delete":
+		return m, m.deletePackage(target)
+	case "remove":
+		return m, m.removeFileFromPackage(target, restorePath)
+	case "resolve-conflicts":
+		return m, m.resolveConflicts(target)
+	case "adopt":
+		return m, m.adoptPackage(target)
+	case "restore":
+		return m, m.restoreFromCommit(restoreRef, restorePath)
+	}
+	return m, nil
+}
+
 func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 	keyMsg, ok := msg.(tea.KeyMsg)
 	if !ok {
@@ -515,29 +555,7 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.confirmOpen {
 		switch {
 		case key.Matches(keyMsg, m.keys.Enter):
-			action := m.confirmAction
-			target := m.confirmTarget
-			restoreRef := m.confirmRestoreRef
-			restorePath := m.confirmFilePath
-			m.clearConfirm()
-			switch action {
-			case "stow":
-				return m, m.stowPackage(target)
-			case "unstow":
-				return m, m.unstowPackage(target)
-			case "stow-all":
-				return m, m.stowAllPackages()
-			case "delete":
-				return m, m.deletePackage(target)
-			case "remove":
-				return m, m.removeFileFromPackage(target, restorePath)
-			case "resolve-conflicts":
-				return m, m.resolveConflicts(target)
-			case "adopt":
-				return m, m.adoptPackage(target)
-			case "restore":
-				return m, m.restoreFromCommit(restoreRef, restorePath)
-			}
+			return m.confirmAccept()
 		default:
 			m.clearConfirm()
 			return m, nil
