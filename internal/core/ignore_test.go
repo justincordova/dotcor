@@ -3,7 +3,9 @@ package core
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -419,4 +421,62 @@ func TestShouldIgnore_DefaultPatternsStillApply(t *testing.T) {
 
 	matched, _ := ShouldIgnore("/home/u/.zshrc", patterns)
 	assert.False(t, matched, "an ordinary dotfile must not be ignored")
+}
+
+// TestShouldIgnore_GlobstarsDoNotBlowUp pins the fix for a pattern that could
+// hang the TUI.
+//
+// The recursive matcher branched at every "**" with no memoisation, so cost
+// grew as segments^globstars: on a 30-segment path, six globstars took 410ms
+// and eight took 9 seconds. Patterns come from .dotcorrc and the settings
+// view and are evaluated per file during a $HOME walk, so a pasted or
+// malformed pattern froze classification with no error and no cancellation.
+func TestShouldIgnore_GlobstarsDoNotBlowUp(t *testing.T) {
+	path := "/home/u/" + strings.Repeat("a/", 28) + "x.txt"
+	pattern := strings.Repeat("**/", 12) + "*.log"
+
+	done := make(chan bool, 1)
+	go func() {
+		matched, _ := ShouldIgnore(path, []string{pattern})
+		done <- matched
+	}()
+
+	select {
+	case matched := <-done:
+		assert.False(t, matched, "*.log must not match x.txt")
+	case <-time.After(5 * time.Second):
+		t.Fatal("pattern matching did not terminate promptly — the matcher is superlinear in globstar count")
+	}
+}
+
+// TestMatchSegments_GlobstarSemantics pins the behaviour of the rewritten
+// matcher directly.
+func TestMatchSegments_GlobstarSemantics(t *testing.T) {
+	tests := []struct {
+		name     string
+		pattern  []string
+		segments []string
+		want     bool
+	}{
+		{"globstar matches nothing", []string{"a", "**"}, []string{"a"}, true},
+		{"globstar matches one", []string{"a", "**"}, []string{"a", "b"}, true},
+		{"globstar matches many", []string{"a", "**"}, []string{"a", "b", "c", "d"}, true},
+		{"globstar in the middle", []string{"a", "**", "d"}, []string{"a", "b", "c", "d"}, true},
+		{"globstar in the middle, no tail match", []string{"a", "**", "z"}, []string{"a", "b", "c", "d"}, false},
+		{"leading globstar", []string{"**", "d"}, []string{"a", "b", "c", "d"}, true},
+		{"consecutive globstars", []string{"**", "**", "d"}, []string{"a", "b", "d"}, true},
+		{"only globstars", []string{"**", "**"}, []string{"a", "b"}, true},
+		{"star does not cross a segment", []string{"a", "*"}, []string{"a", "b", "c"}, false},
+		{"exact match", []string{"a", "b"}, []string{"a", "b"}, true},
+		{"pattern longer than path", []string{"a", "b", "c"}, []string{"a", "b"}, false},
+		{"empty pattern, empty path", nil, nil, true},
+		{"empty pattern, non-empty path", nil, []string{"a"}, false},
+		{"globstar against empty path", []string{"**"}, nil, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, matchSegments(tt.pattern, tt.segments))
+		})
+	}
 }
