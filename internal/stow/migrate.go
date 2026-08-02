@@ -158,8 +158,24 @@ func rollbackMigration(completed []MigrationStep) {
 	}
 }
 
+// cleanEmptyParents removes now-empty directories walking up from dir,
+// stopping at stopAt.
+//
+// Both paths are cleaned before comparing. stopAt originates from
+// config.GetConfigDir, which returns $DOTCOR_DIR verbatim — so a value with a
+// trailing separator never string-equals the canonical paths produced by
+// filepath.Walk. The loop would then walk straight past the repository root
+// and remove it, and keep going up into $HOME, stopping only at the first
+// non-empty directory.
+//
+// The containment check is the real guard: never delete anything at or above
+// stopAt, whatever form the caller passed it in.
 func cleanEmptyParents(dir, stopAt string) {
-	for dir != "" && dir != stopAt {
+	dir = filepath.Clean(dir)
+	stopAt = filepath.Clean(stopAt)
+	boundary := stopAt + string(filepath.Separator)
+
+	for dir != stopAt && strings.HasPrefix(dir, boundary) {
 		parent := filepath.Dir(dir)
 		if parent == dir {
 			break

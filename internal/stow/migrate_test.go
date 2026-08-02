@@ -265,3 +265,46 @@ func TestFullMigration_V1ToV2(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, filepath.IsAbs(linkTarget))
 }
+
+// TestCleanEmptyParents_StopsAtRepoRootWithTrailingSeparator pins the fix for
+// a boundary check that compared raw strings.
+//
+// stopAt comes from config.GetConfigDir, which returns $DOTCOR_DIR verbatim.
+// A trailing separator never string-equals the canonical paths produced by
+// filepath.Walk, so the loop walked past the repository root, removed it, and
+// continued up into $HOME.
+func TestCleanEmptyParents_StopsAtRepoRootWithTrailingSeparator(t *testing.T) {
+	tmp := t.TempDir()
+	repoDir := filepath.Join(tmp, "dotcor")
+	deep := filepath.Join(repoDir, "files", "nested")
+	require.NoError(t, os.MkdirAll(deep, 0755))
+
+	// stopAt as a user would supply it via DOTCOR_DIR with a trailing slash.
+	cleanEmptyParents(deep, repoDir+string(filepath.Separator))
+
+	_, err := os.Stat(repoDir)
+	assert.NoError(t, err, "the repository root must never be removed")
+
+	_, err = os.Stat(tmp)
+	assert.NoError(t, err, "directories above the repository must never be touched")
+
+	_, err = os.Stat(deep)
+	assert.True(t, os.IsNotExist(err), "the empty source tree should still be cleaned")
+}
+
+// TestCleanEmptyParents_LeavesNonEmptyDirectories guards the normal path.
+func TestCleanEmptyParents_LeavesNonEmptyDirectories(t *testing.T) {
+	tmp := t.TempDir()
+	repoDir := filepath.Join(tmp, "dotcor")
+	keep := filepath.Join(repoDir, "files")
+	deep := filepath.Join(keep, "nested")
+	require.NoError(t, os.MkdirAll(deep, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(keep, "keep.txt"), []byte("x"), 0644))
+
+	cleanEmptyParents(deep, repoDir)
+
+	_, err := os.Stat(keep)
+	assert.NoError(t, err, "a directory with contents must survive")
+	_, err = os.Stat(deep)
+	assert.True(t, os.IsNotExist(err), "the empty leaf should be removed")
+}
