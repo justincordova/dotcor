@@ -264,8 +264,11 @@ func renderAddStep0(m Model, footer string, errLine string) string {
 				styledName = accentStyle.Render(name + "/")
 			}
 			if m.browserSelected[item.path] && !expanded {
-				count := countFilesRecursive(item.path)
-				styledName += dimStyle.Render(fmt.Sprintf(" (%d files)", count))
+				// Read the count cached when the directory was selected;
+				// never walk the filesystem from View.
+				if count, ok := m.browserFileCounts[item.path]; ok {
+					styledName += dimStyle.Render(fmt.Sprintf(" (%d files)", count))
+				}
 			}
 		} else if isSymlink(item.path) {
 			if m.browserSelected[item.path] {
@@ -1435,9 +1438,19 @@ func (m Model) browserSelectAndClassify(fullPath string) (tea.Model, tea.Cmd) {
 func (m *Model) toggleDirSelection(dirPath string) {
 	if m.browserSelected[dirPath] {
 		delete(m.browserSelected, dirPath)
+		delete(m.browserFileCounts, dirPath)
 		return
 	}
 	m.browserSelected[dirPath] = true
+	// Count once, here on the update goroutine. The renderer used to call
+	// countFilesRecursive — a full WalkDir — for every selected directory on
+	// every frame, and the program runs with mouse cell motion enabled, so
+	// each mouse movement produced a frame. Selecting a large tree made the
+	// UI stall on every pixel of mouse travel.
+	if m.browserFileCounts == nil {
+		m.browserFileCounts = make(map[string]int)
+	}
+	m.browserFileCounts[dirPath] = countFilesRecursive(dirPath)
 }
 
 // ─── File system helpers ──────────────────────────────────────────────────────

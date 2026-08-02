@@ -145,14 +145,17 @@ type Model struct {
 
 	classifyResult *stow.ClassificationResult
 
-	browserEntries   map[string][]os.DirEntry
-	browserExpanded  map[string]bool
-	browserCursor    int
-	browserScroll    int
-	browserItems     []browserItem
-	browserSelected  map[string]bool
-	browserJumping   bool
-	browserJumpInput textinput.Model
+	browserEntries  map[string][]os.DirEntry
+	browserExpanded map[string]bool
+	browserCursor   int
+	browserScroll   int
+	browserItems    []browserItem
+	browserSelected map[string]bool
+	// browserFileCounts caches the recursive file count for each selected
+	// directory, computed once on selection so View never walks the disk.
+	browserFileCounts map[string]int
+	browserJumping    bool
+	browserJumpInput  textinput.Model
 
 	commits        []git.CommitInfo
 	selectedCommit int
@@ -213,25 +216,26 @@ func NewModel(cfg *config.Config, version string) Model {
 	vp := viewport.New(80, 20)
 
 	return Model{
-		cfg:              cfg,
-		version:          version,
-		repoDir:          repoDir,
-		homeDir:          homeDir,
-		spinner:          sp,
-		help:             newHelpModel(),
-		keys:             newKeyMap(),
-		searchInput:      si,
-		settingsInput:    sti,
-		viewport:         vp,
-		expanded:         make(map[int]bool),
-		logLevel:         "info",
-		loading:          true,
-		width:            80,
-		height:           24,
-		browserEntries:   make(map[string][]os.DirEntry),
-		browserExpanded:  make(map[string]bool),
-		browserSelected:  make(map[string]bool),
-		browserJumpInput: textinput.New(),
+		cfg:               cfg,
+		version:           version,
+		repoDir:           repoDir,
+		homeDir:           homeDir,
+		spinner:           sp,
+		help:              newHelpModel(),
+		keys:              newKeyMap(),
+		searchInput:       si,
+		settingsInput:     sti,
+		viewport:          vp,
+		expanded:          make(map[int]bool),
+		logLevel:          "info",
+		loading:           true,
+		width:             80,
+		height:            24,
+		browserEntries:    make(map[string][]os.DirEntry),
+		browserExpanded:   make(map[string]bool),
+		browserSelected:   make(map[string]bool),
+		browserFileCounts: make(map[string]int),
+		browserJumpInput:  textinput.New(),
 	}
 }
 
@@ -1196,6 +1200,7 @@ func (m *Model) resetAddState() {
 	m.browserEntries = make(map[string][]os.DirEntry)
 	m.browserItems = nil
 	m.browserSelected = make(map[string]bool)
+	m.browserFileCounts = make(map[string]int)
 	m.browserJumping = false
 	m.browserJumpInput.SetValue("")
 	m.browserJumpInput.Blur()

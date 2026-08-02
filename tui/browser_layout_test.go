@@ -126,3 +126,60 @@ func TestAddBrowser_CollapseKeepsBrowserPopulated(t *testing.T) {
 	body := stripANSI(after.View())
 	assert.Contains(t, body, "adir", "the browser must not be blank after collapsing")
 }
+
+// TestBrowserView_DoesNotWalkFilesystem pins the fix for a per-frame
+// recursive walk.
+//
+// The renderer called countFilesRecursive — a full WalkDir — for every
+// selected directory on every frame, and the program runs with mouse cell
+// motion enabled, so each mouse movement produced a frame. Selecting a large
+// tree made the UI stall on every pixel of mouse travel.
+func TestBrowserView_DoesNotWalkFilesystem(t *testing.T) {
+	home := t.TempDir()
+	big := filepath.Join(home, "bigdir")
+	require.NoError(t, os.MkdirAll(big, 0755))
+	for i := 0; i < 300; i++ {
+		require.NoError(t, os.WriteFile(filepath.Join(big, fmt.Sprintf("f%03d", i)), []byte("x"), 0644))
+	}
+
+	m := NewModel(testCfg(), "test")
+	m.loading = false
+	m.homeDir = home
+	m.activeView = AddView
+	m.width, m.height = 100, 40
+	m.buildBrowserItems()
+	m.toggleDirSelection(big)
+
+	// The count is resolved at selection time, not at render time.
+	assert.Equal(t, 300, m.browserFileCounts[big],
+		"the count must be computed once when the directory is selected")
+
+	body := stripANSI(m.View())
+	assert.Contains(t, body, "(300 files)")
+
+	// Removing the directory entirely must not change what renders: proof
+	// that View is reading the cache rather than walking the disk.
+	require.NoError(t, os.RemoveAll(big))
+	body = stripANSI(m.View())
+	assert.Contains(t, body, "(300 files)",
+		"View must render from the cached count, not from the filesystem")
+}
+
+// TestToggleDirSelection_DropsCachedCount avoids an unbounded cache and a
+// stale count if the directory is reselected.
+func TestToggleDirSelection_DropsCachedCount(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, "d")
+	require.NoError(t, os.MkdirAll(dir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a"), []byte("x"), 0644))
+
+	m := NewModel(testCfg(), "test")
+	m.homeDir = home
+
+	m.toggleDirSelection(dir)
+	require.Equal(t, 1, m.browserFileCounts[dir])
+
+	m.toggleDirSelection(dir)
+	_, ok := m.browserFileCounts[dir]
+	assert.False(t, ok, "deselecting must drop the cached count")
+}
