@@ -708,6 +708,9 @@ func TestParseGitStatusLine_UntrackedFiles(t *testing.T) {
 	}
 }
 
+// TestParseGitStatusLine_RenamedFiles covers the -z record layout: a
+// rename/copy record holds only the DESTINATION path, and the source path
+// follows as a separate record. There is no " -> " separator in -z output.
 func TestParseGitStatusLine_RenamedFiles(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -716,22 +719,22 @@ func TestParseGitStatusLine_RenamedFiles(t *testing.T) {
 	}{
 		{
 			name:     "renamed file (R)",
-			line:     "R  oldname.txt -> newname.txt",
+			line:     "R  newname.txt",
 			expected: "newname.txt",
 		},
 		{
 			name:     "renamed file (RR)",
-			line:     "RR oldname.txt -> newname.txt",
+			line:     "RR newname.txt",
 			expected: "newname.txt",
 		},
 		{
 			name:     "renamed file with spaces",
-			line:     "R  old name.txt -> new name.txt",
+			line:     "R  new name.txt",
 			expected: "new name.txt",
 		},
 		{
 			name:     "renamed file in subdirectory",
-			line:     "R  old/oldname.txt -> new/newname.txt",
+			line:     "R  new/newname.txt",
 			expected: "new/newname.txt",
 		},
 	}
@@ -739,8 +742,24 @@ func TestParseGitStatusLine_RenamedFiles(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := parseGitStatusLine(tt.line)
-			assert.Equal(t, tt.expected, result, "parseGitStatusLine() should return new filename for renamed files")
+			assert.Equal(t, tt.expected, result, "parseGitStatusLine() should return the destination path")
 		})
+	}
+}
+
+// TestIsRenameRecord pins the fix for RM/RD/RA/RU and the copy codes.
+// Matching on a "R " / "RR " prefix missed every rename that was also
+// modified in the worktree, and those records were then parsed as ordinary
+// entries yielding a bogus filename.
+func TestIsRenameRecord(t *testing.T) {
+	renames := []string{"R  a", "RR a", "RM a", "RD a", "RA a", "RU a", "C  a", "CM a"}
+	for _, line := range renames {
+		assert.True(t, isRenameRecord(line), "%q should be treated as a rename/copy record", line)
+	}
+
+	others := []string{"M  a", "?? a", "A  a", "D  a", "MM a", "", "M"}
+	for _, line := range others {
+		assert.False(t, isRenameRecord(line), "%q should not be treated as a rename/copy record", line)
 	}
 }
 
@@ -817,14 +836,16 @@ func TestParseGitStatusLine_EdgeCases(t *testing.T) {
 			expected: "",
 		},
 		{
-			name:     "renamed file without arrow",
-			line:     "R  oldname.txt newname.txt",
+			name:     "three characters only",
+			line:     "M  ",
 			expected: "",
 		},
 		{
-			name:     "trailing whitespace",
+			// Trailing spaces are part of the filename. -z emits paths raw,
+			// so trimming them would produce a name git cannot resolve.
+			name:     "trailing whitespace is preserved",
 			line:     "M  file.txt   ",
-			expected: "file.txt",
+			expected: "file.txt   ",
 		},
 	}
 
@@ -1419,4 +1440,78 @@ func TestPushWithProgress_ReportsGitStderr(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "git push failed")
 	assert.NotEqual(t, "exit status 1", err.Error(), "bare exit status tells the user nothing")
+}
+
+// TestGetChangedFiles_NonASCIIPath pins the fix for corrupted filenames.
+// `git status --porcelain` C-quotes any path with a non-ASCII byte
+// ("caf\303\251.txt"); stripping the outer quotes without unescaping the
+// body produced a literal backslash-octal string that no later git command
+// could match. The -z form emits paths raw.
+func TestGetChangedFiles_NonASCIIPath(t *testing.T) {
+	if !IsGitInstalled() {
+		t.Skip("git not installed")
+	}
+	repo := t.TempDir()
+	require.NoError(t, InitRepo(repo))
+	stageInitialCommit(t, repo)
+
+	name := "café.txt"
+	require.NoError(t, os.WriteFile(filepath.Join(repo, name), []byte("x"), 0644))
+
+	files, err := GetChangedFiles(repo)
+
+	require.NoError(t, err)
+	assert.Contains(t, files, name, "non-ASCII filename must survive parsing intact")
+}
+
+// TestGetChangedFiles_QuoteInPath covers the other trigger for C-quoting.
+func TestGetChangedFiles_QuoteInPath(t *testing.T) {
+	if !IsGitInstalled() {
+		t.Skip("git not installed")
+	}
+	repo := t.TempDir()
+	require.NoError(t, InitRepo(repo))
+	stageInitialCommit(t, repo)
+
+	name := `quo"te.txt`
+	require.NoError(t, os.WriteFile(filepath.Join(repo, name), []byte("x"), 0644))
+
+	files, err := GetChangedFiles(repo)
+
+	require.NoError(t, err)
+	assert.Contains(t, files, name)
+}
+
+// TestGetChangedFiles_RenamedAndModified pins the RM case. git emits RM when
+// a path is renamed in the index and then modified in the worktree. That code
+// matched neither the old "R " nor "RR " prefix, so the whole record was
+// parsed as a plain entry and yielded "old.txt -> new.txt" as one filename.
+func TestGetChangedFiles_RenamedAndModified(t *testing.T) {
+	if !IsGitInstalled() {
+		t.Skip("git not installed")
+	}
+	repo := t.TempDir()
+	require.NoError(t, InitRepo(repo))
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "old.txt"), []byte("x"), 0644))
+	stageInitialCommit(t, repo)
+
+	runGit(t, repo, "mv", "old.txt", "new.txt")
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "new.txt"), []byte("changed"), 0644))
+
+	files, err := GetChangedFiles(repo)
+
+	require.NoError(t, err)
+	assert.Contains(t, files, "new.txt", "rename destination must be reported")
+	for _, f := range files {
+		assert.NotContains(t, f, " -> ", "a filename must never contain the rename separator")
+		assert.NotEqual(t, "old.txt", f, "the rename source must not be reported as a changed file")
+	}
+}
+
+func runGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "git %v: %s", args, string(out))
 }

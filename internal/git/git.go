@@ -786,63 +786,65 @@ func GetCurrentCommit(repoPath string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-// parseGitStatusLine parses a single line from git status --porcelain
+// parseGitStatusLine parses a single record from `git status --porcelain -z`.
+//
+// The -z form is what makes this tractable: without it git C-quotes any path
+// containing a non-ASCII byte, a quote, or a control character
+// ("caf\303\251.txt"), and stripping the surrounding quotes without
+// unescaping the body yields a corrupted name that no later git command can
+// match. With -z, paths are emitted raw and NUL-delimited.
+//
+// A record is "XY <path>", where XY is the two-character status code. Rename
+// and copy records place the destination in this record and the source in the
+// following one; the caller is responsible for consuming that extra record
+// (see splitPorcelainZ).
 func parseGitStatusLine(line string) string {
+	// Minimum record is two status characters, a space, and one path byte.
+	if len(line) < 4 {
+		return ""
+	}
+	return line[3:]
+}
+
+// isRenameRecord reports whether a porcelain record carries a second,
+// following record holding the rename/copy source path.
+//
+// Matching on the full two-character code rather than a "R " / "RR " prefix
+// matters: git emits RM when a path is renamed in the index and then modified
+// in the worktree, plus RD/RA/RU during a conflicted merge. Those were
+// previously parsed as ordinary records, producing a bogus filename.
+func isRenameRecord(line string) bool {
 	if len(line) < 2 {
-		return ""
+		return false
 	}
-
-	// Handle untracked files (?? prefix)
-	if strings.HasPrefix(line, "?? ") {
-		return stripQuotes(strings.TrimSpace(line[2:]))
-	}
-
-	// Handle renamed files (R  old -> new)
-	if strings.HasPrefix(line, "R ") || strings.HasPrefix(line, "RR ") {
-		parts := strings.SplitN(line, " -> ", 2)
-		if len(parts) == 2 {
-			return stripQuotes(strings.TrimSpace(parts[1]))
-		}
-		// Malformed rename line, don't fall through
-		return ""
-	}
-
-	// Standard case: XY filename (minimum 3 chars: X, Y, space)
-	if len(line) >= 3 {
-		return stripQuotes(strings.TrimSpace(line[3:]))
-	}
-
-	return ""
+	return line[0] == 'R' || line[0] == 'C'
 }
 
-func stripQuotes(filename string) string {
-	if len(filename) >= 2 {
-		if (filename[0] == '"' && filename[len(filename)-1] == '"') ||
-			(filename[0] == '\'' && filename[len(filename)-1] == '\'') {
-			return filename[1 : len(filename)-1]
-		}
-	}
-	return filename
-}
-
-// GetChangedFiles returns list of changed files
+// GetChangedFiles returns the list of changed files, one entry per path.
 func GetChangedFiles(repoPath string) ([]string, error) {
-	cmd, cancel := runGitCommand(repoPath, "status", "--porcelain")
+	// core.quotepath=false is belt-and-braces alongside -z: it stops git
+	// quoting non-ASCII paths in any output this command produces.
+	cmd, cancel := runGitCommand(repoPath, "-c", "core.quotepath=false", "status", "--porcelain", "-z")
 	defer cancel()
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("git status failed: %w", err)
 	}
 
-	var files []string
-	lines := strings.Split(string(output), "\n")
+	records := strings.Split(string(output), "\x00")
 
-	for _, line := range lines {
-		if line == "" {
+	var files []string
+	for i := 0; i < len(records); i++ {
+		record := records[i]
+		if record == "" {
 			continue
 		}
-		filename := parseGitStatusLine(line)
-		if filename != "" {
+		// A rename/copy record is followed by a bare source path with no
+		// status prefix. Skip it so it isn't parsed as its own record.
+		if isRenameRecord(record) {
+			i++
+		}
+		if filename := parseGitStatusLine(record); filename != "" {
 			files = append(files, filename)
 		}
 	}
