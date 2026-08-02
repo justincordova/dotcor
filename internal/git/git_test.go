@@ -1,6 +1,8 @@
 package git
 
 import (
+	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -1375,14 +1377,37 @@ func TestGitEnv_PreservesUserSSHCommand(t *testing.T) {
 	assert.Equal(t, "ssh -i /custom/key", got)
 }
 
-// TestRunGitCommand_SetsWaitDelay pins the guard against a grandchild
+// TestRunGitNetworkCommand_SetsWaitDelay pins the guard against a grandchild
 // process (ssh, credential helper) holding the output pipe open past the
 // context deadline and blocking Wait forever.
-func TestRunGitCommand_SetsWaitDelay(t *testing.T) {
+func TestRunGitNetworkCommand_SetsWaitDelay(t *testing.T) {
+	cmd, cancel := runGitNetworkCommand(t.TempDir(), "push")
+	defer cancel()
+
+	assert.Positive(t, cmd.WaitDelay, "network commands must bound child cleanup")
+}
+
+// TestRunGitCommand_NoWaitDelayOnLocalCommands pins the scope of that guard.
+//
+// os/exec returns ErrWaitDelay INSTEAD OF nil when a successful command's
+// pipes had to be force-closed. Applying WaitDelay to local commands meant a
+// commit that actually landed could be reported as "git commit failed", so it
+// is restricted to the network commands where a wedged grandchild is the real
+// hazard and whose call sites tolerate the delay explicitly.
+func TestRunGitCommand_NoWaitDelayOnLocalCommands(t *testing.T) {
 	cmd, cancel := runGitCommand(t.TempDir(), "status")
 	defer cancel()
 
-	assert.Positive(t, cmd.WaitDelay, "WaitDelay must bound child cleanup")
+	assert.Zero(t, cmd.WaitDelay,
+		"a local command must not risk reporting success as ErrWaitDelay")
+}
+
+// TestIsBenignWaitDelay distinguishes the bookkeeping error from real ones.
+func TestIsBenignWaitDelay(t *testing.T) {
+	assert.True(t, isBenignWaitDelay(exec.ErrWaitDelay))
+	assert.True(t, isBenignWaitDelay(fmt.Errorf("wrapped: %w", exec.ErrWaitDelay)))
+	assert.False(t, isBenignWaitDelay(nil))
+	assert.False(t, isBenignWaitDelay(errors.New("exit status 1")))
 }
 
 // TestRedactURLCredentials strips secrets from git output before it reaches

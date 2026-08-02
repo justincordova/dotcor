@@ -24,6 +24,11 @@ const (
 	// fetch). Slow connections and large repos justify a longer ceiling, but a
 	// bound is essential — without one, a dead remote or auth prompt wedges the TUI.
 	gitNetworkTimeout = 5 * time.Minute
+
+	// gitWaitDelay bounds how long Wait will block on a grandchild that
+	// inherited the command's output pipes after the command itself has
+	// finished or been killed.
+	gitWaitDelay = 5 * time.Second
 )
 
 // ValidateRemoteURL rejects URLs that would let git execute arbitrary code
@@ -93,7 +98,28 @@ func runGitCommand(dir string, name string, args ...string) (*exec.Cmd, context.
 // runGitNetworkCommand executes a git command with the longer network timeout.
 // Use for push/pull/clone/fetch. Caller must defer the returned cancel.
 func runGitNetworkCommand(dir string, name string, args ...string) (*exec.Cmd, context.CancelFunc) {
-	return runGitCommandWithTimeout(dir, gitNetworkTimeout, name, args...)
+	cmd, cancel := runGitCommandWithTimeout(dir, gitNetworkTimeout, name, args...)
+
+	// CommandContext kills only the direct `git` process on timeout. A
+	// grandchild — ssh, git-remote-https, a credential helper — inherits the
+	// stdout/stderr pipe write ends, so Wait would block past the deadline
+	// waiting for EOF and the TUI's push would never resolve. WaitDelay
+	// bounds that: the pipes are force-closed and the process killed.
+	//
+	// Only network commands get this. Wait returns ErrWaitDelay INSTEAD OF
+	// nil when a successful command's pipes had to be force-closed, so
+	// applying it to every local command risked reporting a landed commit as
+	// a failure. Network commands are where a wedged grandchild is the real
+	// hazard, and their call sites tolerate the delay via isBenignWaitDelay.
+	cmd.WaitDelay = gitWaitDelay
+	return cmd, cancel
+}
+
+// isBenignWaitDelay reports whether err is only the WaitDelay bookkeeping
+// error, which os/exec returns in place of nil when a command exited
+// successfully but its pipes had to be force-closed.
+func isBenignWaitDelay(err error) bool {
+	return errors.Is(err, exec.ErrWaitDelay)
 }
 
 func runGitCommandWithTimeout(dir string, timeout time.Duration, name string, args ...string) (*exec.Cmd, context.CancelFunc) {
@@ -101,12 +127,6 @@ func runGitCommandWithTimeout(dir string, timeout time.Duration, name string, ar
 	cmd := exec.CommandContext(ctx, "git", append([]string{name}, args...)...)
 	cmd.Dir = dir
 	cmd.Env = gitEnv()
-	// CommandContext kills only the direct `git` process on timeout. A
-	// grandchild (ssh, git-remote-https, a credential helper) inherits the
-	// stdout/stderr pipe write ends, so Wait would block past the deadline
-	// waiting for EOF. WaitDelay bounds that: after the context fires, the
-	// pipes are force-closed and the process group is killed.
-	cmd.WaitDelay = 5 * time.Second
 	return cmd, cancel
 }
 
@@ -384,7 +404,7 @@ func SyncDetailed(repoPath string, logger *slog.Logger) (SyncResult, error) {
 		pushCmd, cancelPush = runGitNetworkCommand(repoPath, "push", "-u", "origin", branch)
 	}
 	defer cancelPush()
-	if output, err := pushCmd.CombinedOutput(); err != nil {
+	if output, err := pushCmd.CombinedOutput(); err != nil && !isBenignWaitDelay(err) {
 		return result, fmt.Errorf("git push failed: %s: %w", RedactURLCredentials(string(output)), err)
 	}
 	result.Pushed = true
@@ -430,7 +450,7 @@ func Sync(repoPath string, logger *slog.Logger) error {
 		pushCmd, cancelPush = runGitNetworkCommand(repoPath, "push", "-u", "origin", branch)
 	}
 	defer cancelPush()
-	if output, err := pushCmd.CombinedOutput(); err != nil {
+	if output, err := pushCmd.CombinedOutput(); err != nil && !isBenignWaitDelay(err) {
 		return fmt.Errorf("git push failed: %s: %w", RedactURLCredentials(string(output)), err)
 	}
 
@@ -469,7 +489,7 @@ func PushWithProgress(repoPath string) error {
 	var stderr bytes.Buffer
 	pushCmd.Stdout = nil
 	pushCmd.Stderr = &stderr
-	if err := pushCmd.Run(); err != nil {
+	if err := pushCmd.Run(); err != nil && !isBenignWaitDelay(err) {
 		return wrapGitError("git push", stderr.String(), err)
 	}
 	return nil
@@ -783,7 +803,7 @@ func Clone(url, destPath string) error {
 	cmd, cancel := runGitNetworkCommand("", "clone", "--", url, destPath)
 	defer cancel()
 	output, err := cmd.CombinedOutput()
-	if err != nil {
+	if err != nil && !isBenignWaitDelay(err) {
 		return fmt.Errorf("git clone failed: %s: %w", RedactURLCredentials(string(output)), err)
 	}
 	return nil
@@ -805,7 +825,7 @@ func CloneWithProgress(url, destPath string) error {
 	var stderr bytes.Buffer
 	cmd.Stdout = nil
 	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
+	if err := cmd.Run(); err != nil && !isBenignWaitDelay(err) {
 		return wrapGitError("git clone", stderr.String(), err)
 	}
 	return nil
@@ -816,7 +836,7 @@ func Pull(repoPath string) error {
 	cmd, cancel := runGitNetworkCommand(repoPath, "pull")
 	defer cancel()
 	output, err := cmd.CombinedOutput()
-	if err != nil {
+	if err != nil && !isBenignWaitDelay(err) {
 		return fmt.Errorf("git pull failed: %s: %w", RedactURLCredentials(string(output)), err)
 	}
 	return nil
