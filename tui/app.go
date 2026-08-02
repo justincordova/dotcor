@@ -1602,13 +1602,17 @@ func (m Model) pushRepo() tea.Cmd {
 			return syncResultMsg{err: fmt.Errorf("git not initialized — press i to set up git")}
 		}
 	}
-	remoteURL, _ := git.GetRemoteURL(repoDir)
-	if remoteURL == "" {
-		return func() tea.Msg {
+	return func() tea.Msg {
+		// Inside the command, not outside it. GetRemoteURL carries a 30s
+		// timeout and this ran on the update loop, freezing input and
+		// rendering for its whole duration on a slow or contended repo.
+		remoteURL, err := git.GetRemoteURL(repoDir)
+		if err != nil {
+			return syncResultMsg{err: err}
+		}
+		if remoteURL == "" {
 			return syncResultMsg{err: fmt.Errorf("no remote configured — press i to set up git")}
 		}
-	}
-	return func() tea.Msg {
 		if err := git.PushWithProgress(repoDir); err != nil {
 			return syncResultMsg{err: err}
 		}

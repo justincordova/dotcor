@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/justincordova/dotcor/internal/config"
 	"github.com/justincordova/dotcor/internal/core"
 	"github.com/justincordova/dotcor/internal/git"
 )
@@ -269,32 +270,16 @@ func updateSettingsEditRemote(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.settingsInput.Blur()
 			m.settingsStep = settingsStepMain
 
-			// Apply to .git/config FIRST. If git rejects the URL (or the
-			// allowlist in ValidateRemoteURL does), abort before persisting
-			// to .dotcorrc — otherwise the config file claims one URL while
-			// push/pull use a different (or none) and the divergence is
-			// silent until the user notices a sync failing.
-			if newURL == "" {
-				if existing, _ := git.GetRemoteURL(m.repoDir); existing != "" {
-					if err := git.RemoveRemote(m.repoDir, "origin"); err != nil {
-						m.err = fmt.Errorf("removing remote: %w", err)
-						return m, nil
-					}
-				}
-			} else {
-				if err := git.SetRemote(m.repoDir, "origin", newURL); err != nil {
-					m.err = err
-					return m, nil
-				}
-			}
-
-			m.cfg.GitRemote = newURL
-			if err := m.cfg.SaveConfig(); err != nil {
-				m.err = err
+			// Validate here: it is pure string work, so a bad URL is
+			// rejected instantly instead of after a round trip through git.
+			if err := git.ValidateRemoteURL(newURL); err != nil {
+				m.err = fmt.Errorf("invalid remote URL: %w", err)
 				return m, nil
 			}
-			m.statusMsg = "Remote saved"
-			return m, clearStatusAfter(3 * time.Second)
+
+			m.err = nil
+			m.cfg.GitRemote = newURL
+			return m, m.applyGitRemote(newURL)
 		}
 	}
 
@@ -345,6 +330,49 @@ func updateSettingsAddPattern(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.settingsInput, cmd = m.settingsInput.Update(msg)
 	return m, cmd
+}
+
+// applyGitRemote writes the remote to .git/config and then to .dotcorrc.
+//
+// This runs off the update loop. Each git call carries a 30s timeout and
+// SetRemote forks two processes, so doing the work inline froze input and
+// rendering for the whole duration with no spinner and no way to cancel.
+//
+// The config is snapshotted rather than shared: SaveConfig marshals every
+// field, and marshalling m.cfg on this goroutine would race the settings
+// view's in-place edits to IgnorePatterns.
+func (m Model) applyGitRemote(newURL string) tea.Cmd {
+	repoDir := m.repoDir
+	snapshot := &config.Config{
+		Logger:         m.cfg.Logger,
+		GitRemote:      newURL,
+		IgnorePatterns: append([]string(nil), m.cfg.IgnorePatterns...),
+	}
+
+	return func() tea.Msg {
+		// Apply to .git/config FIRST. If git rejects the URL, abort before
+		// persisting to .dotcorrc — otherwise the config file claims one URL
+		// while push/pull use a different one (or none), and the divergence
+		// stays silent until the user notices a sync failing.
+		if newURL == "" {
+			existing, err := git.GetRemoteURL(repoDir)
+			if err != nil {
+				return settingsMsg{err: fmt.Errorf("reading remote: %w", err)}
+			}
+			if existing != "" {
+				if err := git.RemoveRemote(repoDir, "origin"); err != nil {
+					return settingsMsg{err: fmt.Errorf("removing remote: %w", err)}
+				}
+			}
+		} else if err := git.SetRemote(repoDir, "origin", newURL); err != nil {
+			return settingsMsg{err: err}
+		}
+
+		if err := snapshot.SaveConfig(); err != nil {
+			return settingsMsg{err: err}
+		}
+		return settingsMsg{msg: "Remote saved"}
+	}
 }
 
 func (m Model) loadBackups() tea.Cmd {
