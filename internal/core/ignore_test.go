@@ -346,3 +346,77 @@ id_rsa
 		assert.Equal(t, pattern, patterns[i])
 	}
 }
+
+// TestShouldIgnore_DirectoryScopedPatterns pins the fix for a silent failure
+// of the secret-exclusion mechanism. filepath.Match's `*` never crosses a
+// separator, and callers pass absolute paths, so every directory-scoped
+// pattern a user could write matched nothing — while still appearing in the
+// settings list and saving to .dotcorrc.
+func TestShouldIgnore_DirectoryScopedPatterns(t *testing.T) {
+	tests := []struct {
+		name    string
+		pattern string
+		path    string
+		want    bool
+	}{
+		{"single-star under a directory", ".ssh/*", "/home/u/.ssh/id_rsa", true},
+		{"nested directory prefix", ".config/nvim/*", "/home/u/.config/nvim/init.lua", true},
+		{"globstar prefix", "**/*.log", "/home/u/a/b/x.log", true},
+		{"globstar suffix", "secrets/**", "/home/u/secrets/a/b.txt", true},
+		{"bare directory name excludes subtree", "node_modules", "/home/u/p/node_modules/x.js", true},
+		{"bare filename still matches", ".env", "/home/u/.env", true},
+		{"bare filename at depth", ".env", "/home/u/app/.env", true},
+		{"glob on basename", "*.key", "/home/u/.ssh/server.key", true},
+
+		{"different directory must not match", ".ssh/*", "/home/u/.aws/credentials", false},
+		{"single-star does not cross separator", ".ssh/*", "/home/u/.ssh/sub/id_rsa", false},
+		{"unrelated path", "secrets/**", "/home/u/public/a.txt", false},
+		{"prefix is not a match", "node_modules", "/home/u/node_modules_old/x.js", false},
+		{"extension mismatch", "**/*.log", "/home/u/a/b/x.txt", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, pattern := ShouldIgnore(tt.path, []string{tt.pattern})
+			assert.Equal(t, tt.want, got)
+			if tt.want {
+				assert.Equal(t, tt.pattern, pattern, "the matching pattern must be reported")
+			}
+			assert.Equal(t, tt.want, MatchesPattern(tt.path, tt.pattern), "MatchesPattern must agree with ShouldIgnore")
+		})
+	}
+}
+
+// TestShouldIgnore_EmptyAndDegenerate guards the edges.
+func TestShouldIgnore_EmptyAndDegenerate(t *testing.T) {
+	got, _ := ShouldIgnore("/home/u/.zshrc", nil)
+	assert.False(t, got, "no patterns means nothing is ignored")
+
+	got, _ = ShouldIgnore("/home/u/.zshrc", []string{""})
+	assert.False(t, got, "an empty pattern must not match everything")
+
+	got, _ = ShouldIgnore("/home/u/.zshrc", []string{"/"})
+	assert.False(t, got, "a bare separator must not match everything")
+}
+
+// TestShouldIgnore_DefaultPatternsStillApply is the regression guard for the
+// shipped defaults, which are all basename-shaped.
+func TestShouldIgnore_DefaultPatternsStillApply(t *testing.T) {
+	patterns := []string{"*.key", "*.pem", ".env", ".env.*", "id_rsa", "id_rsa.*", "*_history", ".DS_Store"}
+
+	for _, path := range []string{
+		"/home/u/.ssh/id_rsa",
+		"/home/u/.ssh/id_rsa.pub",
+		"/home/u/.env",
+		"/home/u/.env.local",
+		"/home/u/certs/server.pem",
+		"/home/u/.bash_history",
+		"/home/u/.config/.DS_Store",
+	} {
+		matched, _ := ShouldIgnore(path, patterns)
+		assert.True(t, matched, "%s should be ignored by the default patterns", path)
+	}
+
+	matched, _ := ShouldIgnore("/home/u/.zshrc", patterns)
+	assert.False(t, matched, "an ordinary dotfile must not be ignored")
+}
