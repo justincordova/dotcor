@@ -78,3 +78,58 @@ func TestClassifyFiles_UnreadableSubtreeIsWarned(t *testing.T) {
 	assert.NotEmpty(t, plan.Warnings,
 		"a subtree omitted from the plan must be surfaced as a warning, not dropped silently")
 }
+
+// TestClassifyFiles_UnscannableHomeDirIsWarned pins the fix for a warning
+// that could never fire.
+//
+// buildHomeSymlinkIndex returned an error the caller handled, but no code
+// path ever produced one — unreadable directories were dropped with a bare
+// continue. A missed $HOME symlink silently downgrades an Adopt to an Add,
+// which MOVES the source file and breaks whatever external tool owned the
+// original target, so the user must be told.
+func TestClassifyFiles_UnscannableHomeDirIsWarned(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: directory permissions are not enforced")
+	}
+
+	tmp := t.TempDir()
+	homeDir := filepath.Join(tmp, "home")
+	repoDir := filepath.Join(tmp, "repo")
+	require.NoError(t, os.MkdirAll(homeDir, 0755))
+	require.NoError(t, os.MkdirAll(repoDir, 0755))
+
+	source := filepath.Join(homeDir, "dotfiles", "zshrc")
+	writeFile(t, source, "export ZSH=1")
+
+	// Make $HOME itself unreadable so the symlink scan fails.
+	require.NoError(t, os.Chmod(homeDir, 0300))
+	t.Cleanup(func() { _ = os.Chmod(homeDir, 0755) })
+
+	if entries, err := os.ReadDir(homeDir); err == nil {
+		_ = entries
+		t.Skip("filesystem allowed the read; the failure path was not exercised")
+	}
+
+	plan, err := ClassifyFiles([]string{source}, repoDir, homeDir, nil)
+	require.NoError(t, err)
+
+	assert.NotEmpty(t, plan.Warnings,
+		"an unscannable $HOME must be surfaced, since adopt detection is now degraded")
+}
+
+// TestClassifyFiles_NoWarningsOnHealthyScan guards against warning noise.
+func TestClassifyFiles_NoWarningsOnHealthyScan(t *testing.T) {
+	tmp := t.TempDir()
+	homeDir := filepath.Join(tmp, "home")
+	repoDir := filepath.Join(tmp, "repo")
+	require.NoError(t, os.MkdirAll(homeDir, 0755))
+	require.NoError(t, os.MkdirAll(repoDir, 0755))
+
+	source := filepath.Join(homeDir, "dotfiles", "zshrc")
+	writeFile(t, source, "export ZSH=1")
+
+	plan, err := ClassifyFiles([]string{source}, repoDir, homeDir, nil)
+
+	require.NoError(t, err)
+	assert.Empty(t, plan.Warnings, "a healthy scan must not produce warnings")
+}

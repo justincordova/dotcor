@@ -160,14 +160,8 @@ func ClassifyFiles(selections []string, repoDir, homeDir string, ignorePatterns 
 	// knows adopt detection is degraded — without this, files that should
 	// classify as Adopt silently become Add (which moves the source file
 	// and breaks any external tool owning the original target).
-	homeIndex, err := buildHomeSymlinkIndex(homeDir, repoDir, selections)
-	if err != nil {
-		homeIndex = make(map[string]string)
-		plan.Warnings = append(plan.Warnings,
-			fmt.Sprintf("$HOME symlink index unavailable (%v) — adopt detection disabled; files pointing into the repo via existing $HOME symlinks may be classified as Add instead", err))
-		slog.Default().Warn("classify: home symlink index unavailable",
-			"err", err, "homeDir", homeDir)
-	}
+	homeIndex, indexWarnings := buildHomeSymlinkIndex(homeDir, repoDir, selections)
+	plan.Warnings = append(plan.Warnings, indexWarnings...)
 
 	for _, sel := range selections {
 		sel = filepath.Clean(sel)
@@ -250,8 +244,15 @@ func ClassifyFiles(selections []string, repoDir, homeDir string, ignorePatterns 
 // under $HOME plus depth-1 entries under each selection's parent. This
 // catches the common Adopt case ($HOME symlink → external file) without
 // scanning .npm, .nvm, .local, etc.
-func buildHomeSymlinkIndex(homeDir, repoDir string, selections []string) (map[string]string, error) {
+//
+// Directories that cannot be read are skipped, but each one is reported: a
+// missed symlink silently downgrades an Adopt to an Add, which MOVES the
+// source file and breaks whatever external tool owned the original target.
+// The previous signature returned an error that no code path could ever
+// produce, so the warning the caller was written to surface never appeared.
+func buildHomeSymlinkIndex(homeDir, repoDir string, selections []string) (map[string]string, []string) {
 	index := make(map[string]string)
+	var warnings []string
 
 	dirs := map[string]bool{homeDir: true}
 	for _, sel := range selections {
@@ -266,9 +267,20 @@ func buildHomeSymlinkIndex(homeDir, repoDir string, selections []string) (map[st
 		}
 	}
 
+	// Sort so the warnings (and therefore the preview) are deterministic.
+	dirList := make([]string, 0, len(dirs))
 	for dir := range dirs {
+		dirList = append(dirList, dir)
+	}
+	sort.Strings(dirList)
+
+	for _, dir := range dirList {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
+			warnings = append(warnings, fmt.Sprintf(
+				"could not scan %s for $HOME symlinks (%v) — files reached through a symlink there will be classified as Add rather than Adopt", dir, err))
+			slog.Default().Warn("classify: cannot scan directory for home symlinks",
+				"dir", dir, "err", err)
 			continue
 		}
 		for _, e := range entries {
@@ -297,7 +309,7 @@ func buildHomeSymlinkIndex(homeDir, repoDir string, selections []string) (map[st
 		}
 	}
 
-	return index, nil
+	return index, warnings
 }
 
 // isStowParent returns true when every non-excluded direct child of dir is
