@@ -1363,3 +1363,60 @@ func TestRunGitCommand_SetsWaitDelay(t *testing.T) {
 
 	assert.Positive(t, cmd.WaitDelay, "WaitDelay must bound child cleanup")
 }
+
+// TestRedactURLCredentials strips secrets from git output before it reaches
+// the TUI footer or the log file. ValidateRemoteURL permits
+// https://user:token@host, so git's own messages can echo a live token.
+func TestRedactURLCredentials(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "https token",
+			in:   "fatal: could not read from 'https://jc:ghp_secret123@github.com/o/r.git'",
+			want: "fatal: could not read from 'https://***:***@github.com/o/r.git'",
+		},
+		{
+			name: "no credentials is untouched",
+			in:   "fatal: could not read from 'https://github.com/o/r.git'",
+			want: "fatal: could not read from 'https://github.com/o/r.git'",
+		},
+		{
+			name: "ssh scheme",
+			in:   "error: ssh://git:hunter2@example.com/repo",
+			want: "error: ssh://***:***@example.com/repo",
+		},
+		{
+			name: "plain message untouched",
+			in:   "Updates were rejected because the remote contains work",
+			want: "Updates were rejected because the remote contains work",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, RedactURLCredentials(tc.in))
+		})
+	}
+}
+
+// TestPushWithProgress_ReportsGitStderr pins the fix for an unhelpful error:
+// stderr used to be discarded, so every failure surfaced as a bare
+// "exit status N" with no indication of what went wrong.
+func TestPushWithProgress_ReportsGitStderr(t *testing.T) {
+	if !IsGitInstalled() {
+		t.Skip("git not installed")
+	}
+	repo := t.TempDir()
+	require.NoError(t, InitRepo(repo))
+	stageInitialCommit(t, repo)
+	require.NoError(t, SetRemote(repo, "origin", "https://127.0.0.1:1/nope.git"))
+
+	err := PushWithProgress(repo)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "git push failed")
+	assert.NotEqual(t, "exit status 1", err.Error(), "bare exit status tells the user nothing")
+}

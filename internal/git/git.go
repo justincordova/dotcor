@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -182,7 +183,7 @@ func InitRepo(repoPath string) error {
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("git init failed: %s: %w", string(output), err)
+		return fmt.Errorf("git init failed: %s: %w", RedactURLCredentials(string(output)), err)
 	}
 
 	if err := ensureDotcorGitignore(repoPath); err != nil {
@@ -270,7 +271,7 @@ func AutoCommit(repoPath, message string, logger *slog.Logger) error {
 	addCmd, cancelAdd := runGitCommand(repoPath, "add", "-A")
 	defer cancelAdd()
 	if output, err := addCmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("git add failed: %s: %w", string(output), err)
+		return fmt.Errorf("git add failed: %s: %w", RedactURLCredentials(string(output)), err)
 	}
 
 	// Commit
@@ -283,7 +284,7 @@ func AutoCommit(repoPath, message string, logger *slog.Logger) error {
 			}
 			return nil
 		}
-		return fmt.Errorf("git commit failed: %s: %w", string(output), err)
+		return fmt.Errorf("git commit failed: %s: %w", RedactURLCredentials(string(output)), err)
 	}
 
 	return nil
@@ -317,7 +318,7 @@ func AutoCommitFiles(repoPath string, files []string, message string) error {
 		if isNothingToCommitError(string(output)) {
 			return nil
 		}
-		return fmt.Errorf("committing: %s: %w", string(output), err)
+		return fmt.Errorf("committing: %s: %w", RedactURLCredentials(string(output)), err)
 	}
 
 	return nil
@@ -371,7 +372,7 @@ func SyncDetailed(repoPath string, logger *slog.Logger) (SyncResult, error) {
 	}
 	defer cancelPush()
 	if output, err := pushCmd.CombinedOutput(); err != nil {
-		return result, fmt.Errorf("git push failed: %s: %w", string(output), err)
+		return result, fmt.Errorf("git push failed: %s: %w", RedactURLCredentials(string(output)), err)
 	}
 	result.Pushed = true
 	return result, nil
@@ -417,7 +418,7 @@ func Sync(repoPath string, logger *slog.Logger) error {
 	}
 	defer cancelPush()
 	if output, err := pushCmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("git push failed: %s: %w", string(output), err)
+		return fmt.Errorf("git push failed: %s: %w", RedactURLCredentials(string(output)), err)
 	}
 
 	return nil
@@ -449,9 +450,39 @@ func PushWithProgress(repoPath string) error {
 	}
 	defer cancelPush()
 	// Prompt suppression is applied to every git invocation by gitEnv().
+	// Capture stderr rather than discarding it: without it the caller —
+	// and therefore the TUI footer — only ever sees "exit status 1", so a
+	// rejected non-fast-forward push looks identical to a missing remote.
+	var stderr bytes.Buffer
 	pushCmd.Stdout = nil
-	pushCmd.Stderr = nil
-	return pushCmd.Run()
+	pushCmd.Stderr = &stderr
+	if err := pushCmd.Run(); err != nil {
+		return wrapGitError("git push", stderr.String(), err)
+	}
+	return nil
+}
+
+// wrapGitError builds an error carrying git's own diagnostics.
+//
+// Any credentials embedded in a remote URL are redacted first:
+// ValidateRemoteURL deliberately permits https://user:token@host, so git's
+// output can legitimately contain a secret that must not reach the UI or
+// the log file.
+func wrapGitError(what, stderr string, err error) error {
+	msg := strings.TrimSpace(RedactURLCredentials(stderr))
+	if msg == "" {
+		return fmt.Errorf("%s failed: %w", what, err)
+	}
+	return fmt.Errorf("%s failed: %s: %w", what, msg, err)
+}
+
+// credentialInURL matches the userinfo section of a URL: scheme://user:secret@
+var credentialInURL = regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*://)[^/@\s]*:[^/@\s]*@`)
+
+// RedactURLCredentials strips passwords and tokens from any URL in s so git
+// output can be shown to the user or written to the log safely.
+func RedactURLCredentials(s string) string {
+	return credentialInURL.ReplaceAllString(s, "${1}***:***@")
 }
 
 // HasChanges checks if working tree has uncommitted changes
@@ -483,14 +514,14 @@ func SetRemote(repoPath, remoteName, remoteURL string) error {
 		cmd, cancel := runGitCommand(repoPath, "remote", "set-url", remoteName, remoteURL)
 		defer cancel()
 		if output, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("git remote set-url failed: %s: %w", string(output), err)
+			return fmt.Errorf("git remote set-url failed: %s: %w", RedactURLCredentials(string(output)), err)
 		}
 	} else {
 		// Add new remote
 		cmd, cancel := runGitCommand(repoPath, "remote", "add", remoteName, remoteURL)
 		defer cancel()
 		if output, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("git remote add failed: %s: %w", string(output), err)
+			return fmt.Errorf("git remote add failed: %s: %w", RedactURLCredentials(string(output)), err)
 		}
 	}
 	return nil
@@ -518,7 +549,7 @@ func RemoveRemote(repoPath, remoteName string) error {
 		if strings.Contains(string(output), "No such remote") {
 			return nil
 		}
-		return fmt.Errorf("git remote remove failed: %s: %w", string(output), err)
+		return fmt.Errorf("git remote remove failed: %s: %w", RedactURLCredentials(string(output)), err)
 	}
 	return nil
 }
@@ -652,7 +683,7 @@ func RestoreFile(repoPath, filePath, ref string) error {
 	defer cancel()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("git checkout failed: %s: %w", string(output), err)
+		return fmt.Errorf("git checkout failed: %s: %w", RedactURLCredentials(string(output)), err)
 	}
 	return nil
 }
@@ -706,7 +737,7 @@ func Clone(url, destPath string) error {
 	defer cancel()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("git clone failed: %s: %w", string(output), err)
+		return fmt.Errorf("git clone failed: %s: %w", RedactURLCredentials(string(output)), err)
 	}
 	return nil
 }
@@ -724,9 +755,13 @@ func CloneWithProgress(url, destPath string) error {
 	cmd, cancel := runGitNetworkCommand("", "clone", "--progress", url, destPath)
 	defer cancel()
 	// Prompt suppression is applied to every git invocation by gitEnv().
+	var stderr bytes.Buffer
 	cmd.Stdout = nil
-	cmd.Stderr = nil
-	return cmd.Run()
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return wrapGitError("git clone", stderr.String(), err)
+	}
+	return nil
 }
 
 // Pull pulls changes from remote
@@ -735,7 +770,7 @@ func Pull(repoPath string) error {
 	defer cancel()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("git pull failed: %s: %w", string(output), err)
+		return fmt.Errorf("git pull failed: %s: %w", RedactURLCredentials(string(output)), err)
 	}
 	return nil
 }
@@ -821,7 +856,7 @@ func StageFile(repoPath, filePath string) error {
 	defer cancel()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("git add failed: %s: %w", string(output), err)
+		return fmt.Errorf("git add failed: %s: %w", RedactURLCredentials(string(output)), err)
 	}
 	return nil
 }
@@ -832,7 +867,7 @@ func UnstageFile(repoPath, filePath string) error {
 	defer cancel()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("git reset failed: %s: %w", string(output), err)
+		return fmt.Errorf("git reset failed: %s: %w", RedactURLCredentials(string(output)), err)
 	}
 	return nil
 }
