@@ -371,30 +371,9 @@ func renderPreviewStep(m Model, innerW, cw int) string {
 	rows := m.previewRows
 	bw := bodyWidth(m.width)
 
-	stepper := renderAddStepper(innerW, m.addStep)
-	counts := renderPreviewCounts(m.previewPlan, m.previewToggles)
-	footer := plainFooter(innerW,
-		kbd("↑/k", "up"), kbd("↓/j", "down"),
-		kbd("pgup/pgdn", "page"), kbd("g/G", "top/bot"),
-		kbd("enter", "confirm"), kbd("esc", "back"),
-	)
-	fixedContent := lipgloss.JoinVertical(lipgloss.Left,
-		stepper,
-		"", "",
-		"", counts,
-		footer,
-	)
-	fixedDialog := boxStyle.Width(cw - 2).Render(fixedContent)
-	fixedLines := strings.Count(fixedDialog, "\n") + 1
-	if m.err != nil {
-		fixedLines += 2
-	}
-	fixedLines += 1 // scroll indicator or counts separator
-
-	contentHeight := m.height - fixedLines
-	if contentHeight < 4 {
-		contentHeight = 4
-	}
+	// Shared with previewHandleKey so maxScroll and the drawn viewport can
+	// never disagree.
+	contentHeight := previewContentHeight(m)
 
 	// Clamp scroll to [0, max(0, len-contentHeight)]. This handles
 	// window resizes shrinking the viewport underneath an existing
@@ -593,28 +572,9 @@ func renderConfirmStep(m Model, innerW, cw int) string {
 
 	lines := buildConfirmLines(m.previewPlan, m.previewToggles, bodyWidth(m.width))
 
-	stepper := renderAddStepper(innerW, m.addStep)
-	footer := plainFooter(innerW,
-		kbd("↑/k", "up"), kbd("↓/j", "down"),
-		kbd("pgup/pgdn", "page"), kbd("g/G", "top/bot"),
-		kbd("enter", "execute"), kbd("esc", "back"),
-	)
-	fixedContent := lipgloss.JoinVertical(lipgloss.Left,
-		stepper,
-		"", "",
-		"enter to execute · esc to go back",
-		footer,
-	)
-	fixedDialog := boxStyle.Width(cw - 2).Render(fixedContent)
-	fixedLines := strings.Count(fixedDialog, "\n") + 1
-	if m.err != nil {
-		fixedLines += 2
-	}
-
-	contentHeight := m.height - fixedLines
-	if contentHeight < 3 {
-		contentHeight = 3
-	}
+	// Shared with confirmHandleKey so maxScroll and the drawn viewport can
+	// never disagree.
+	contentHeight := confirmContentHeight(m)
 
 	// Clamp scroll to [0, max(0, len-contentHeight)]. This also handles
 	// window resizes shrinking the viewport underneath an existing scroll.
@@ -656,8 +616,34 @@ func renderConfirmStep(m Model, innerW, cw int) string {
 // (1) + padding top/bottom (2) + footer (1) + box border (2) + two
 // sticky bottom rows = 8. A hard floor of 3 keeps the view usable on
 // tiny terminals.
-func confirmContentHeight(terminalHeight int) int {
-	h := terminalHeight - 14
+// confirmContentHeight returns the number of confirm rows that actually fit.
+//
+// It measures the chrome it will render rather than assuming a fixed number
+// of lines. The key handler and the renderer previously computed this
+// independently — the handler with a hardcoded `height - 14` — so maxScroll
+// disagreed with what was drawn and G/end stopped several rows short. Those
+// unreachable rows are the tail of the list of files the user is being asked
+// to approve.
+func confirmContentHeight(m Model) int {
+	cw := contentWidth(m.width)
+	innerW := cw - 4
+
+	fixedContent := lipgloss.JoinVertical(lipgloss.Left,
+		renderAddStepper(innerW, addStepConfirm),
+		"", "",
+		"enter to execute · esc to go back",
+		plainFooter(innerW,
+			kbd("↑/k", "up"), kbd("↓/j", "down"),
+			kbd("pgup/pgdn", "page"), kbd("g/G", "top/bot"),
+			kbd("enter", "execute"), kbd("esc", "back"),
+		),
+	)
+	fixedLines := strings.Count(boxStyle.Width(cw-2).Render(fixedContent), "\n") + 1
+	if m.err != nil {
+		fixedLines += 2
+	}
+
+	h := m.height - fixedLines
 	if h < 3 {
 		h = 3
 	}
@@ -908,11 +894,29 @@ func footerLines(width int, hints ...string) int {
 //   - errLine (2 rows) when an error is showing              = 2
 //
 // A hard floor of 4 keeps navigation usable on very small terminals.
-func previewContentHeight(terminalHeight int, hasErr bool) int {
-	h := terminalHeight - 14
-	if hasErr {
-		h -= 2
+// previewContentHeight returns the number of preview rows that actually fit.
+// Same measured approach, and same reason, as confirmContentHeight.
+func previewContentHeight(m Model) int {
+	cw := contentWidth(m.width)
+	innerW := cw - 4
+
+	fixedContent := lipgloss.JoinVertical(lipgloss.Left,
+		renderAddStepper(innerW, addStepPreview),
+		"", "",
+		"", renderPreviewCounts(m.previewPlan, m.previewToggles),
+		plainFooter(innerW,
+			kbd("↑/k", "up"), kbd("↓/j", "down"),
+			kbd("pgup/pgdn", "page"), kbd("g/G", "top/bot"),
+			kbd("enter", "confirm"), kbd("esc", "back"),
+		),
+	)
+	fixedLines := strings.Count(boxStyle.Width(cw-2).Render(fixedContent), "\n") + 1
+	if m.err != nil {
+		fixedLines += 2
 	}
+	fixedLines++ // scroll indicator or counts separator
+
+	h := m.height - fixedLines
 	if h < 4 {
 		h = 4
 	}
@@ -999,7 +1003,7 @@ func (m Model) confirmHandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	lines := buildConfirmLines(m.previewPlan, m.previewToggles, bodyWidth(m.width))
-	contentHeight := confirmContentHeight(m.height)
+	contentHeight := confirmContentHeight(m)
 	maxScroll := len(lines) - contentHeight
 	if maxScroll < 0 {
 		maxScroll = 0
@@ -1050,7 +1054,7 @@ func (m Model) previewHandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.previewPlan == nil {
 		return m, nil
 	}
-	contentHeight := previewContentHeight(m.height, m.err != nil)
+	contentHeight := previewContentHeight(m)
 	maxScroll := len(m.previewRows) - contentHeight
 	if maxScroll < 0 {
 		maxScroll = 0
