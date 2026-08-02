@@ -1722,10 +1722,16 @@ func loadLogs(level string) tea.Cmd {
 			} else {
 				// Discard the partial first line since a mid-line seek
 				// almost certainly landed in the middle of a record.
+				//
+				// Return through br either way. On the error branch the
+				// fallback below would build a fresh reader over f, whose
+				// offset br has already advanced by its read-ahead — so a
+				// tail containing no newline at all (one huge record) left
+				// f at EOF and the view showed "no log entries" for a
+				// non-empty log.
 				br := bufio.NewReader(f)
-				if _, err := br.ReadString('\n'); err == nil {
-					return logsLoadedMsg{lines: readFilteredLogs(br, level)}
-				}
+				_, _ = br.ReadString('\n')
+				return logsLoadedMsg{lines: readFilteredLogs(br, level)}
 			}
 		}
 
@@ -1766,15 +1772,17 @@ func readFilteredLogs(r io.Reader, level string) []string {
 // token rank as debug (0) so they are only hidden by the debug filter,
 // never dropped from a broader view.
 //
-// The tokens are matched space-delimited (" WARN ") to avoid a message
-// body containing the word "WARN" being misclassified as a warning line.
+// The tokens are matched with delimiters on BOTH sides (" ERRO ") so that only
+// the level column matches. A leading space alone also matched inside the free
+// text: a warning whose payload carries git's own "ERROR: Repository not
+// found." was ranked as an error and surfaced by the error filter.
 func lineLevelRank(line string) int {
 	switch {
-	case strings.Contains(line, " ERRO"):
+	case strings.Contains(line, " ERRO "):
 		return 3
-	case strings.Contains(line, " WARN"):
+	case strings.Contains(line, " WARN "):
 		return 2
-	case strings.Contains(line, " INFO"):
+	case strings.Contains(line, " INFO "):
 		return 1
 	default:
 		return 0

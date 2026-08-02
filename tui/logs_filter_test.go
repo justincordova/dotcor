@@ -68,3 +68,31 @@ func TestMatchesLevel_MessageBodyNotMisclassified(t *testing.T) {
 		t.Errorf("info line should pass the info filter: %q", line)
 	}
 }
+
+// TestMatchesLevel_UppercaseLevelWordInBody pins the fix for a
+// misclassification. The tokens were matched with a leading space only, so a
+// warning whose payload carried git's own "ERROR: Repository not found."
+// ranked as an error and showed up under the error filter.
+func TestMatchesLevel_UppercaseLevelWordInBody(t *testing.T) {
+	line := `2026/07/08 08:04:44 WARN stow failed error="remote: ERROR: Repository not found."`
+
+	if matchesLevel(line, "error") {
+		t.Errorf("a warn line whose payload contains ERROR must not pass the error filter: %q", line)
+	}
+	if !matchesLevel(line, "warn") {
+		t.Errorf("the line should still be classified as a warning: %q", line)
+	}
+	if got := lineLevelRank(line); got != 2 {
+		t.Errorf("lineLevelRank(%q) = %d, want 2 (warn)", line, got)
+	}
+}
+
+// TestLineLevelRank_ColumnTokens keeps the ordinary classification intact.
+func TestLineLevelRank_ColumnTokens(t *testing.T) {
+	cases := map[string]int{debugLine: 0, infoLine: 1, warnLine: 2, errorLine: 3}
+	for line, want := range cases {
+		if got := lineLevelRank(line); got != want {
+			t.Errorf("lineLevelRank(%q) = %d, want %d", line, got, want)
+		}
+	}
+}
