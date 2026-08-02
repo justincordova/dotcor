@@ -1466,8 +1466,16 @@ func selectionCount(selected map[string]bool) string {
 // ─── Tea commands ─────────────────────────────────────────────────────────────
 
 func classifySelections(selections []string, repoDir, homeDir string, ignorePatterns []string) tea.Cmd {
+	// Snapshot the pattern list before it crosses the goroutine boundary.
+	// The settings view edits m.cfg.IgnorePatterns in place —
+	// `append(s[:i], s[i+1:]...)` shifts elements within the same backing
+	// array — so a classification running concurrently would read patterns
+	// as they are being overwritten. These are the rules that decide whether
+	// a private key enters the repo; they must not be read mid-shuffle.
+	patterns := append([]string(nil), ignorePatterns...)
+
 	return func() tea.Msg {
-		plan, err := stow.ClassifyFiles(selections, repoDir, homeDir, ignorePatterns)
+		plan, err := stow.ClassifyFiles(selections, repoDir, homeDir, patterns)
 		return classifyPlanMsg{plan: plan, err: err}
 	}
 }

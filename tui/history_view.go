@@ -194,33 +194,36 @@ func shortRef(ref string) string {
 	return ref
 }
 
+// historyFilePath returns the path history should be shown for: the selected
+// file when a package is expanded, otherwise the package itself.
+//
+// Must be called on the Update goroutine — it reads m.expanded, which is
+// shared mutable state.
 func historyFilePath(m Model) string {
-	if m.selectedPkg < len(m.packages) {
-		pkg := m.packages[m.selectedPkg]
-		if m.expanded[m.selectedPkg] && m.selectedFile < len(pkg.Files) {
-			return pkg.Files[m.selectedFile].RelPath
-		}
-		return pkg.Name
+	if m.selectedPkg < 0 || m.selectedPkg >= len(m.packages) {
+		return ""
 	}
-	return ""
+	pkg := m.packages[m.selectedPkg]
+	if rel := selectedFileRelPath(m); rel != "" {
+		return rel
+	}
+	return pkg.Name
 }
 
+// getFileHistory resolves the target on the Update goroutine and hands the
+// command only immutable values. See getDiff for why capturing the Model and
+// reading m.expanded inside the goroutine is a fatal data race.
 func getFileHistory(m Model) tea.Cmd {
+	repoDir := m.repoDir
+	hasPackage := m.selectedPkg >= 0 && m.selectedPkg < len(m.packages)
+	filePath := historyFilePath(m)
+
 	return func() tea.Msg {
-		if m.selectedPkg >= len(m.packages) {
+		if !hasPackage {
 			return historyMsg{err: fmt.Errorf("no package selected")}
 		}
 
-		pkg := m.packages[m.selectedPkg]
-
-		var filePath string
-		if m.expanded[m.selectedPkg] && m.selectedFile < len(pkg.Files) {
-			filePath = pkg.Files[m.selectedFile].RelPath
-		} else {
-			filePath = pkg.Name
-		}
-
-		commits, err := git.GetFileHistory(m.repoDir, filePath, 50)
+		commits, err := git.GetFileHistory(repoDir, filePath, 50)
 		if err != nil {
 			return historyMsg{err: err}
 		}

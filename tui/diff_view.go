@@ -73,16 +73,27 @@ func (m Model) updateDiff(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// getDiff resolves the diff target on the Update goroutine and hands the
+// command only immutable values.
+//
+// The closure used to capture the whole Model and read m.expanded inside the
+// goroutine. m.expanded is a map, so it is shared rather than copied with the
+// Model, and Update writes it on every enter keypress. A map read racing a
+// map write is an unrecoverable Go runtime fatal error — no recover catches
+// it — and `git diff` on a large repo holds the window open for seconds:
+// press D, esc back to the dashboard, then enter, and the process dies.
 func getDiff(m Model) tea.Cmd {
+	repoDir := m.repoDir
+	hasPackage := m.selectedPkg >= 0 && m.selectedPkg < len(m.packages)
+	filePath := selectedFileRelPath(m)
+
 	return func() tea.Msg {
-		if m.selectedPkg >= len(m.packages) {
+		if !hasPackage {
 			return diffMsg{err: fmt.Errorf("no package selected")}
 		}
 
-		pkg := m.packages[m.selectedPkg]
-
-		if !m.expanded[m.selectedPkg] || m.selectedFile >= len(pkg.Files) {
-			content, err := git.GetDiff(m.repoDir)
+		if filePath == "" {
+			content, err := git.GetDiff(repoDir)
 			if err != nil {
 				// Fresh repo with no commits → `git diff HEAD` errors with
 				// "fatal: bad revision 'HEAD'". Surface a friendly hint
@@ -99,16 +110,31 @@ func getDiff(m Model) tea.Cmd {
 			return diffMsg{content: content}
 		}
 
-		f := pkg.Files[m.selectedFile]
-		content, err := git.GetFileDiff(m.repoDir, f.RelPath)
+		content, err := git.GetFileDiff(repoDir, filePath)
 		if err != nil {
 			return diffMsg{err: err}
 		}
 		if content == "" {
-			return diffMsg{content: fmt.Sprintf("No changes for %s", f.RelPath)}
+			return diffMsg{content: fmt.Sprintf("No changes for %s", filePath)}
 		}
 		return diffMsg{content: content}
 	}
+}
+
+// selectedFileRelPath returns the RelPath of the file under the cursor, or ""
+// when the cursor is on a package row rather than a file.
+//
+// Must be called on the Update goroutine: it reads m.expanded, which is
+// shared mutable state.
+func selectedFileRelPath(m Model) string {
+	if m.selectedPkg < 0 || m.selectedPkg >= len(m.packages) {
+		return ""
+	}
+	pkg := m.packages[m.selectedPkg]
+	if m.expanded[m.selectedPkg] && m.selectedFile >= 0 && m.selectedFile < len(pkg.Files) {
+		return pkg.Files[m.selectedFile].RelPath
+	}
+	return ""
 }
 
 func (m Model) commitDiff() tea.Cmd {
