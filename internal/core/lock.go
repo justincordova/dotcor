@@ -71,11 +71,15 @@ func AcquireLock(cfg *config.Config) error {
 				}
 
 				if stale {
-					// Try to remove stale lock
-					if removeErr := os.Remove(lockPath); removeErr != nil {
+					if reclaimErr := reclaimStaleLock(lockPath, cfg); reclaimErr != nil {
 						info, _ := ReadLockInfo(lockPath)
-						cfg.Logger.Error("failed to remove stale lock", "pid", info.PID)
-						lastErr = fmt.Errorf("stale lock but cannot remove: PID %d", info.PID)
+						if errors.Is(reclaimErr, ErrLockHeld) {
+							cfg.Logger.Debug("stale lock was reclaimed by another process", "pid", info.PID)
+							lastErr = fmt.Errorf("%w: PID %d on %s", ErrLockHeld, info.PID, info.Hostname)
+						} else {
+							cfg.Logger.Error("failed to remove stale lock", "pid", info.PID, "error", reclaimErr)
+							lastErr = fmt.Errorf("stale lock but cannot remove: PID %d", info.PID)
+						}
 						continue
 					}
 					// Successfully removed stale lock, retry
@@ -102,10 +106,7 @@ func AcquireLock(cfg *config.Config) error {
 		}()
 
 		// Write lock content
-		hostname, err := os.Hostname()
-		if err != nil {
-			hostname = "unknown"
-		}
+		hostname := localHostname()
 
 		content := fmt.Sprintf("%d\n%s\n%s\n",
 			os.Getpid(),
@@ -126,6 +127,36 @@ func AcquireLock(cfg *config.Config) error {
 	}
 	cfg.Logger.Error("failed to acquire lock after retries", "attempts", maxRetries, "last_error", lastErr)
 	return fmt.Errorf("failed to acquire lock after %d attempts: %w", maxRetries, lastErr)
+}
+
+// reclaimStaleLock atomically takes ownership of a lock believed to be stale.
+//
+// Removing the stale file directly is a TOCTOU. Two processes can both
+// observe the same stale lock; the first removes it and immediately creates
+// its own, and the second's Remove then deletes that live lock — leaving both
+// convinced they hold it and mutating $HOME concurrently, which is the exact
+// situation the lock exists to prevent.
+//
+// Renaming instead moves the file aside in a single syscall, under a name
+// only this process can produce, so the winner is unambiguous. If what we
+// moved turns out to be a live lock (the other process recreated it in
+// between), we put it straight back and report the lock as held.
+func reclaimStaleLock(lockPath string, cfg *config.Config) error {
+	staged := fmt.Sprintf("%s.stale.%d", lockPath, os.Getpid())
+
+	if err := os.Rename(lockPath, staged); err != nil {
+		return err
+	}
+
+	if stale, err := IsStale(staged, cfg); err == nil && !stale {
+		if restoreErr := os.Rename(staged, lockPath); restoreErr != nil {
+			cfg.Logger.Error("failed to restore live lock after reclaim attempt",
+				"error", restoreErr, "staged", staged)
+		}
+		return ErrLockHeld
+	}
+
+	return os.Remove(staged)
 }
 
 // ReleaseLock releases the file lock
@@ -210,6 +241,19 @@ func IsStale(lockPath string, cfg *config.Config) (bool, error) {
 		return true, nil
 	}
 
+	// A lock written on a different host says nothing about the local
+	// process table — PID 4321 on "laptop" is an unrelated process here.
+	// This is reachable whenever ~/.dotcor lives on a shared or synced
+	// filesystem (NFS, SMB, a synced folder, or DOTCOR_DIR pointed at one).
+	// Judging such a lock by the local process table either declares a live
+	// lock stale (concurrent runs) or a dead one live. Fall back to the age
+	// check performed above, which is host-independent.
+	if info.Hostname != "" && info.Hostname != localHostname() {
+		cfg.Logger.Debug("lock owned by another host, judging by age only",
+			"pid", info.PID, "hostname", info.Hostname)
+		return false, nil
+	}
+
 	// Check if process is alive
 	alive, err := isProcessAlive(info.PID)
 	if err != nil {
@@ -222,6 +266,17 @@ func IsStale(lockPath string, cfg *config.Config) (bool, error) {
 	}
 
 	return !alive, nil
+}
+
+// localHostname returns this machine's hostname, or "unknown" when it can't
+// be determined. Both the writer and the reader of a lock file must agree on
+// this value, so it lives in one place.
+func localHostname() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return "unknown"
+	}
+	return hostname
 }
 
 // isProcessAlive checks if a process with given PID is still running
