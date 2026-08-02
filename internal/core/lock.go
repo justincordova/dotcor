@@ -58,8 +58,7 @@ func AcquireLock(cfg *config.Config) error {
 			return fmt.Errorf("failed to create lock directory at %s: %w", filepath.Dir(lockPath), err)
 		}
 
-		// Try atomic lock creation with O_EXCL
-		f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+		err = createLockFile(lockPath)
 		if err != nil {
 			if os.IsExist(err) {
 				// Lock file exists, check if stale
@@ -98,35 +97,48 @@ func AcquireLock(cfg *config.Config) error {
 			return fmt.Errorf("creating lock file: %w", err)
 		}
 
-		// Lock acquired successfully
-		defer func() {
-			if err := f.Close(); err != nil {
-				cfg.Logger.Warn("failed to close lock file", "error", err)
-			}
-		}()
-
-		// Write lock content
-		hostname := localHostname()
-
-		content := fmt.Sprintf("%d\n%s\n%s\n",
-			os.Getpid(),
-			time.Now().Format(time.RFC3339),
-			hostname,
-		)
-		if _, err := f.WriteString(content); err != nil {
-			if closeErr := f.Close(); closeErr != nil {
-				cfg.Logger.Warn("failed to close lock file", "error", closeErr)
-			}
-			_ = os.Remove(lockPath)
-			cfg.Logger.Error("failed to write lock file", "error", err)
-			return fmt.Errorf("writing lock file: %w", err)
-		}
-
 		cfg.Logger.Info("lock acquired")
 		return nil
 	}
 	cfg.Logger.Error("failed to acquire lock after retries", "attempts", maxRetries, "last_error", lastErr)
 	return fmt.Errorf("failed to acquire lock after %d attempts: %w", maxRetries, lastErr)
+}
+
+// createLockFile publishes a fully-populated lock file at lockPath, or
+// returns an os.IsExist error if one is already there.
+//
+// The content is written to a private temporary file first and only then
+// linked into place. An O_EXCL create followed by a separate write leaves the
+// lock file on disk with zero bytes for the duration of the write — and a
+// concurrent acquirer that reads it in that window sees a malformed lock,
+// concludes it is stale, and deletes it. Both processes then hold the lock.
+//
+// os.Link is the right primitive: it is atomic and, unlike os.Rename, it
+// fails rather than clobbering an existing destination.
+func createLockFile(lockPath string) error {
+	content := fmt.Sprintf("%d\n%s\n%s\n",
+		os.Getpid(),
+		time.Now().Format(time.RFC3339),
+		localHostname(),
+	)
+
+	tmp, err := os.CreateTemp(filepath.Dir(lockPath), ".lock.tmp.*")
+	if err != nil {
+		return fmt.Errorf("creating temp lock file: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer func() { _ = os.Remove(tmpPath) }()
+
+	if _, err := tmp.WriteString(content); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("writing lock content: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("closing temp lock file: %w", err)
+	}
+
+	// Fails with EEXIST if another process already published a lock.
+	return os.Link(tmpPath, lockPath)
 }
 
 // reclaimStaleLock atomically takes ownership of a lock believed to be stale.
@@ -142,21 +154,42 @@ func AcquireLock(cfg *config.Config) error {
 // moved turns out to be a live lock (the other process recreated it in
 // between), we put it straight back and report the lock as held.
 func reclaimStaleLock(lockPath string, cfg *config.Config) error {
-	staged := fmt.Sprintf("%s.stale.%d", lockPath, os.Getpid())
+	// A PID alone is not unique on a shared ~/.dotcor, which the hostname
+	// handling in IsStale explicitly supports. CreateTemp gives a name no
+	// other process can collide with.
+	staged, err := os.CreateTemp(filepath.Dir(lockPath), ".lock.stale.*")
+	if err != nil {
+		return fmt.Errorf("staging stale lock: %w", err)
+	}
+	stagedPath := staged.Name()
+	if err := staged.Close(); err != nil {
+		_ = os.Remove(stagedPath)
+		return fmt.Errorf("staging stale lock: %w", err)
+	}
 
-	if err := os.Rename(lockPath, staged); err != nil {
+	// Always clean up the staging path, on every exit. Leaving it behind
+	// would strand the lock contents in a file nothing ever looks at.
+	defer func() { _ = os.Remove(stagedPath) }()
+
+	if err := os.Rename(lockPath, stagedPath); err != nil {
 		return err
 	}
 
-	if stale, err := IsStale(staged, cfg); err == nil && !stale {
-		if restoreErr := os.Rename(staged, lockPath); restoreErr != nil {
+	stale, err := IsStale(stagedPath, cfg)
+	if err != nil || !stale {
+		// What we moved aside is a live lock: another process reclaimed and
+		// republished between our staleness check and this rename. Put it
+		// back with os.Link, which fails rather than clobbering — a third
+		// process may already have acquired the lock in the meantime, and
+		// overwriting that would hand the lock to two owners at once.
+		if linkErr := os.Link(stagedPath, lockPath); linkErr != nil && !os.IsExist(linkErr) {
 			cfg.Logger.Error("failed to restore live lock after reclaim attempt",
-				"error", restoreErr, "staged", staged)
+				"error", linkErr, "staged", stagedPath)
 		}
 		return ErrLockHeld
 	}
 
-	return os.Remove(staged)
+	return nil
 }
 
 // ReleaseLock releases the file lock
@@ -181,10 +214,13 @@ func ReleaseLock(cfg *config.Config) error {
 		return os.Remove(lockPath)
 	}
 
-	// Only remove if we own it
-	if info.PID != os.Getpid() {
-		cfg.Logger.Error("cannot release lock owned by another process", "pid", info.PID)
-		return fmt.Errorf("cannot release lock owned by PID %d", info.PID)
+	// Only remove if we own it — same PID AND same host. On a shared or
+	// synced ~/.dotcor, a PID on its own is not an identity: host B whose
+	// own PID happens to match would otherwise delete host A's live lock.
+	if info.PID != os.Getpid() || (info.Hostname != "" && info.Hostname != localHostname()) {
+		cfg.Logger.Error("cannot release lock owned by another process",
+			"pid", info.PID, "hostname", info.Hostname)
+		return fmt.Errorf("cannot release lock owned by PID %d on %s", info.PID, info.Hostname)
 	}
 
 	if err := os.Remove(lockPath); err != nil {
@@ -227,38 +263,51 @@ func ReadLockInfo(lockPath string) (LockInfo, error) {
 	}, nil
 }
 
-// IsStale checks if lock file is stale (process dead)
+// staleTimeout bounds how long a lock we cannot evaluate is respected.
+//
+// It is a fallback for the cases where liveness is genuinely unknowable — a
+// lock written on another host, or one we cannot parse. It must NOT be
+// applied to a lock whose owner we can see is alive: the timestamp is written
+// once at acquisition and never refreshed, while main.go holds the lock for
+// the whole TUI session. Checking age first meant leaving the TUI open for
+// five minutes was enough for a second instance to declare the lock stale,
+// delete it, and run concurrently.
+const staleTimeout = 5 * time.Minute
+
+// IsStale reports whether a lock file may be reclaimed.
 func IsStale(lockPath string, cfg *config.Config) (bool, error) {
 	info, err := ReadLockInfo(lockPath)
 	if err != nil {
+		// An unparsable lock is usually a truncated leftover, but it is also
+		// what a lock being written by another process looks like for an
+		// instant. Judge it by the file's age rather than reclaiming
+		// immediately, so a live acquisition in progress is never destroyed.
 		cfg.Logger.Debug("malformed lock file", "error", err)
-		return true, nil // Malformed lock file is considered stale
-	}
-
-	// Check if lock is older than configured timeout
-	if time.Since(info.Timestamp) > 5*time.Minute {
-		cfg.Logger.Debug("lock is stale due to age", "pid", info.PID, "age", time.Since(info.Timestamp))
-		return true, nil
+		fi, statErr := os.Lstat(lockPath)
+		if statErr != nil {
+			return true, nil
+		}
+		return time.Since(fi.ModTime()) > staleTimeout, nil
 	}
 
 	// A lock written on a different host says nothing about the local
 	// process table — PID 4321 on "laptop" is an unrelated process here.
 	// This is reachable whenever ~/.dotcor lives on a shared or synced
 	// filesystem (NFS, SMB, a synced folder, or DOTCOR_DIR pointed at one).
-	// Judging such a lock by the local process table either declares a live
-	// lock stale (concurrent runs) or a dead one live. Fall back to the age
-	// check performed above, which is host-independent.
+	// Liveness is unknowable, so fall back to age.
 	if info.Hostname != "" && info.Hostname != localHostname() {
+		age := time.Since(info.Timestamp)
 		cfg.Logger.Debug("lock owned by another host, judging by age only",
-			"pid", info.PID, "hostname", info.Hostname)
-		return false, nil
+			"pid", info.PID, "hostname", info.Hostname, "age", age)
+		return age > staleTimeout, nil
 	}
 
-	// Check if process is alive
+	// Same host: the process table is authoritative, so use it and nothing
+	// else. A live owner keeps its lock however long it has held it.
 	alive, err := isProcessAlive(info.PID)
 	if err != nil {
-		cfg.Logger.Debug("cannot check process status, assuming stale", "pid", info.PID, "error", err)
-		return true, nil // Cannot check, assume stale
+		cfg.Logger.Debug("cannot check process status, judging by age", "pid", info.PID, "error", err)
+		return time.Since(info.Timestamp) > staleTimeout, nil
 	}
 
 	if !alive {

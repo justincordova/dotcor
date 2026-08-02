@@ -316,3 +316,130 @@ func TestReclaimStaleLock_RemovesGenuinelyStaleLock(t *testing.T) {
 	matches, _ := filepath.Glob(lockPath + ".stale.*")
 	assert.Empty(t, matches, "no staged file may be left behind")
 }
+
+// TestAcquireLock_PublishesContentAtomically pins the fix for a window in
+// which the lock file existed with zero bytes.
+//
+// Creating with O_EXCL and writing the content afterwards left the file empty
+// for the duration of the write. A concurrent acquirer reading it in that
+// window saw a malformed lock, judged it stale, deleted it, and acquired —
+// leaving two processes convinced they held the lock.
+func TestAcquireLock_PublishesContentAtomically(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("DOTCOR_DIR", dir)
+	cfg := testConfig()
+
+	require.NoError(t, AcquireLock(cfg))
+	t.Cleanup(func() { _ = ReleaseLock(cfg) })
+
+	lockPath := filepath.Join(dir, ".lock")
+	info, err := ReadLockInfo(lockPath)
+	require.NoError(t, err, "the published lock must always be parsable")
+	assert.Equal(t, os.Getpid(), info.PID)
+	assert.Equal(t, localHostname(), info.Hostname)
+
+	// No staging artefacts left behind.
+	leftovers, _ := filepath.Glob(filepath.Join(dir, ".lock.*"))
+	assert.Empty(t, leftovers, "temporary lock files must not be left behind")
+}
+
+// TestIsStale_EmptyLockIsNotImmediatelyStale pins the same fix from the
+// reader's side: a freshly created but not-yet-written lock must be respected.
+func TestIsStale_EmptyLockIsNotImmediatelyStale(t *testing.T) {
+	cfg := testConfig()
+	lockPath := filepath.Join(t.TempDir(), ".lock")
+	require.NoError(t, os.WriteFile(lockPath, nil, 0644))
+
+	stale, err := IsStale(lockPath, cfg)
+
+	require.NoError(t, err)
+	assert.False(t, stale, "a just-created lock must not be reclaimed mid-publication")
+}
+
+// TestIsStale_OldMalformedLockIsStale keeps genuine leftovers reclaimable.
+func TestIsStale_OldMalformedLockIsStale(t *testing.T) {
+	cfg := testConfig()
+	lockPath := filepath.Join(t.TempDir(), ".lock")
+	require.NoError(t, os.WriteFile(lockPath, []byte("garbage"), 0644))
+
+	old := time.Now().Add(-10 * time.Minute)
+	require.NoError(t, os.Chtimes(lockPath, old, old))
+
+	stale, err := IsStale(lockPath, cfg)
+
+	require.NoError(t, err)
+	assert.True(t, stale, "a long-abandoned malformed lock must be reclaimable")
+}
+
+// TestIsStale_LiveOwnerKeepsLockPastTimeout pins the fix for a live lock
+// being stolen. The timestamp is written once at acquisition and never
+// refreshed, while the TUI holds the lock for the whole session — so an age
+// check applied ahead of the liveness check meant leaving the TUI open for
+// five minutes let a second instance reclaim the lock and run concurrently.
+func TestIsStale_LiveOwnerKeepsLockPastTimeout(t *testing.T) {
+	cfg := testConfig()
+	lockPath := filepath.Join(t.TempDir(), ".lock")
+
+	old := time.Now().Add(-6 * time.Minute).Format(time.RFC3339)
+	content := fmt.Sprintf("%d\n%s\n%s\n", os.Getpid(), old, localHostname())
+	require.NoError(t, os.WriteFile(lockPath, []byte(content), 0644))
+
+	stale, err := IsStale(lockPath, cfg)
+
+	require.NoError(t, err)
+	assert.False(t, stale, "a lock whose owner is demonstrably alive must never be reclaimed")
+}
+
+// TestIsStale_DeadOwnerIsStaleImmediately confirms the liveness check still
+// reclaims promptly — the fix must not make crash recovery wait 5 minutes.
+func TestIsStale_DeadOwnerIsStaleImmediately(t *testing.T) {
+	cfg := testConfig()
+	lockPath := filepath.Join(t.TempDir(), ".lock")
+
+	content := fmt.Sprintf("%d\n%s\n%s\n", 999999, time.Now().Format(time.RFC3339), localHostname())
+	require.NoError(t, os.WriteFile(lockPath, []byte(content), 0644))
+
+	stale, err := IsStale(lockPath, cfg)
+
+	require.NoError(t, err)
+	assert.True(t, stale, "a dead owner's lock must be reclaimable at once")
+}
+
+// TestReleaseLock_RefusesForeignHost pins the identity check. On a shared
+// ~/.dotcor a matching PID alone is not proof of ownership.
+func TestReleaseLock_RefusesForeignHost(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("DOTCOR_DIR", dir)
+	cfg := testConfig()
+
+	lockPath := filepath.Join(dir, ".lock")
+	content := fmt.Sprintf("%d\n%s\n%s\n", os.Getpid(), time.Now().Format(time.RFC3339), "some-other-host")
+	require.NoError(t, os.WriteFile(lockPath, []byte(content), 0644))
+
+	err := ReleaseLock(cfg)
+
+	require.Error(t, err, "a lock held on another host must not be released here")
+	_, statErr := os.Stat(lockPath)
+	assert.NoError(t, statErr, "the foreign lock must still be present")
+}
+
+// TestReclaimStaleLock_LeavesNoStagingArtefacts covers both exits.
+func TestReclaimStaleLock_LeavesNoStagingArtefacts(t *testing.T) {
+	cfg := testConfig()
+	dir := t.TempDir()
+	lockPath := filepath.Join(dir, ".lock")
+
+	live := fmt.Sprintf("%d\n%s\n%s\n", os.Getpid(), time.Now().Format(time.RFC3339), localHostname())
+	require.NoError(t, os.WriteFile(lockPath, []byte(live), 0644))
+	require.ErrorIs(t, reclaimStaleLock(lockPath, cfg), ErrLockHeld)
+
+	leftovers, _ := filepath.Glob(filepath.Join(dir, ".lock.stale.*"))
+	assert.Empty(t, leftovers, "the refused path must not leak a staging file")
+
+	dead := fmt.Sprintf("%d\n%s\n%s\n", 999999, time.Now().Format(time.RFC3339), localHostname())
+	require.NoError(t, os.WriteFile(lockPath, []byte(dead), 0644))
+	require.NoError(t, reclaimStaleLock(lockPath, cfg))
+
+	leftovers, _ = filepath.Glob(filepath.Join(dir, ".lock.stale.*"))
+	assert.Empty(t, leftovers, "the success path must not leak a staging file")
+}
