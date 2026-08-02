@@ -257,7 +257,7 @@ func buildHomeSymlinkIndex(homeDir, repoDir string, selections []string) (map[st
 	for _, sel := range selections {
 		sel = filepath.Clean(sel)
 		rel, err := filepath.Rel(homeDir, sel)
-		if err != nil || strings.HasPrefix(rel, "..") {
+		if err != nil || escapesBase(rel) {
 			continue
 		}
 		parts := strings.Split(rel, string(filepath.Separator))
@@ -331,7 +331,7 @@ func isStowParent(dir string) bool {
 // derivePkgName auto-derives a package name from a selection path.
 func derivePkgName(sel, homeDir string) string {
 	rel, err := filepath.Rel(homeDir, sel)
-	if err != nil || strings.HasPrefix(rel, "..") {
+	if err != nil || escapesBase(rel) {
 		// Outside $HOME — use leaf name.
 		return filepath.Base(sel)
 	}
@@ -355,7 +355,7 @@ func derivePkgName(sel, homeDir string) string {
 // Files directly in $HOME go to "home".
 func derivePkgNameForFile(absPath, homeDir string) string {
 	rel, err := filepath.Rel(homeDir, absPath)
-	if err != nil || strings.HasPrefix(rel, "..") {
+	if err != nil || escapesBase(rel) {
 		return filepath.Base(filepath.Dir(absPath))
 	}
 	parts := strings.Split(rel, string(filepath.Separator))
@@ -456,10 +456,10 @@ func classifyFileInDir(absPath, selDir, pkgName, repoDir, homeDir string, homeIn
 	}
 
 	relPath, relErr := filepath.Rel(resolvedSelDir, resolvedAbs)
-	if relErr != nil || strings.HasPrefix(relPath, "..") {
+	if relErr != nil || escapesBase(relPath) {
 		// Fall back using unresolved paths.
 		relPath, relErr = filepath.Rel(selDir, absPath)
-		if relErr != nil || strings.HasPrefix(relPath, "..") {
+		if relErr != nil || escapesBase(relPath) {
 			// Last resort: use basename with a content hash prefix to avoid collisions
 			// when multiple files share the same name across subdirs.
 			relPath = filepath.Base(absPath)
@@ -507,7 +507,7 @@ func classifyFileInDir(absPath, selDir, pkgName, repoDir, homeDir string, homeIn
 	// Regular file. Determine classification by checking $HOME for a symlink
 	// that points to this file.
 	homeRel, err := filepath.Rel(homeDir, absPath)
-	if err == nil && !strings.HasPrefix(homeRel, "..") {
+	if err == nil && !escapesBase(homeRel) {
 		// File is inside $HOME.
 		homePath := filepath.Join(homeDir, homeRel)
 		if homePath == absPath {
@@ -621,6 +621,18 @@ func ExecuteClassification(plan *ClassificationPlan, toggles map[string]bool, re
 	}
 
 	return result, nil
+}
+
+// escapesBase reports whether a filepath.Rel result points outside the base
+// directory it was computed against.
+//
+// A plain strings.HasPrefix(rel, "..") also matches legitimate names that
+// merely start with two dots — "..foo/bar.conf" is a valid path *inside* the
+// base. Treating it as an escape made classification fall back to the bare
+// basename, which collides with any same-named file elsewhere in the
+// selection and silently maps two source files onto one repo destination.
+func escapesBase(rel string) bool {
+	return rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // resolvedDir returns the EvalSymlinks-resolved directory of a path, or the
