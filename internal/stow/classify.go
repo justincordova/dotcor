@@ -719,14 +719,20 @@ func relLinkTarget(linkPath, wantPath string) (string, error) {
 	return filepath.Rel(resolvedDir(linkPath), want)
 }
 
-// resolveForCompare fully resolves path for comparison, falling back to a
-// lexical clean when the path doesn't exist (EvalSymlinks fails on a dangling
-// link, which is exactly when we still want a best-effort compare).
+// resolveForCompare resolves path as far as possible so two paths naming the
+// same file compare equal.
+//
+// When the path itself does not exist, its PARENT is still resolved. A plain
+// lexical fallback made the comparison asymmetric: the link side always had
+// its parent resolved, while a not-yet-existing repo path did not. With a
+// symlinked $HOME (/home/u → /export/home/u, common on NFS/SSO setups) the
+// two sides could then never compare equal, and package discovery reported a
+// correctly-linked file as foreign — telling the user to adopt their own file.
 func resolveForCompare(path string) string {
 	if resolved, err := filepath.EvalSymlinks(path); err == nil {
 		return resolved
 	}
-	return filepath.Clean(path)
+	return filepath.Join(resolvedDir(path), filepath.Base(path))
 }
 
 // safeReadFile reads a regular file, refusing to load anything larger than

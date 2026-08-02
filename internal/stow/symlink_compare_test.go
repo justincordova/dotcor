@@ -108,3 +108,34 @@ func TestSymlinkTargetsPath_DanglingLink(t *testing.T) {
 
 	assert.True(t, symlinkTargetsPath(link, missingRepoFile))
 }
+
+// TestSymlinkTargetsPath_SymlinkedHomeWithMissingRepoFile pins the fix for an
+// asymmetric comparison.
+//
+// The link side always had its parent resolved, but a wantPath that does not
+// exist fell back to a purely lexical clean. With a symlinked $HOME
+// (/home/u → /export/home/u, common on NFS/SSO setups) the two sides could
+// never compare equal, so package discovery reported a correctly-linked file
+// as foreign and told the user to adopt their own file.
+func TestSymlinkTargetsPath_SymlinkedHomeWithMissingRepoFile(t *testing.T) {
+	tmp := t.TempDir()
+	realHome := filepath.Join(tmp, "export", "home", "u")
+	require.NoError(t, os.MkdirAll(realHome, 0755))
+
+	// /home/u is a symlink to the real location.
+	aliasParent := filepath.Join(tmp, "home")
+	require.NoError(t, os.MkdirAll(aliasParent, 0755))
+	aliasHome := filepath.Join(aliasParent, "u")
+	require.NoError(t, os.Symlink(realHome, aliasHome))
+
+	// A repo path that does not exist yet, named through the alias.
+	repoFile := filepath.Join(aliasHome, ".dotcor", "pkg", "x")
+	require.NoError(t, os.MkdirAll(filepath.Dir(repoFile), 0755))
+
+	// A link created against the resolved form, as the link phase would.
+	link := filepath.Join(realHome, ".x")
+	require.NoError(t, os.Symlink(filepath.Join(realHome, ".dotcor", "pkg", "x"), link))
+
+	assert.True(t, symlinkTargetsPath(link, repoFile),
+		"a link into the repo must be recognised even when the repo file is missing and $HOME is a symlink")
+}
