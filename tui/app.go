@@ -851,6 +851,9 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// into the next Add session. resetAddState clears all of that
 		// (and the browser state) so each Add starts clean.
 		m.resetAddState()
+		// Warm the browser memo here, on the update goroutine, so the first
+		// frame renders from cache instead of walking $HOME inside View.
+		m.buildBrowserItems()
 		return m, nil
 
 	case key.Matches(keyMsg, m.keys.Diff):

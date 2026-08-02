@@ -182,7 +182,7 @@ func renderAddStep0(m Model, footer string, errLine string) string {
 		b.WriteString("\n")
 	}
 
-	items := m.buildBrowserItems()
+	items := m.browserItemsForRender()
 
 	if len(items) == 0 {
 		b.WriteString("\n")
@@ -799,6 +799,9 @@ func isSymlink(path string) bool {
 	return info.Mode()&os.ModeSymlink != 0
 }
 
+// buildBrowserItems returns the flattened browser tree, memoising it on the
+// Model. Only call this from Update, where the returned Model is propagated —
+// the memo is otherwise written to a copy and thrown away.
 func (m *Model) buildBrowserItems() []browserItem {
 	if m.browserItems != nil {
 		return m.browserItems
@@ -806,6 +809,23 @@ func (m *Model) buildBrowserItems() []browserItem {
 	var items []browserItem
 	m.walkBrowserDir(m.homeDir, 0, &items)
 	m.browserItems = items
+	return items
+}
+
+// browserItemsForRender returns the browser tree for the view layer.
+//
+// View receives the Model by value, so calling buildBrowserItems there writes
+// the memo to a copy that is discarded when the function returns — the cache
+// never survived a frame and every render re-walked the home directory,
+// running Lstat and EvalSymlinks per entry to decide what is already managed.
+// Update populates the memo; this only reads it, and rebuilds solely as a
+// fallback for the first frame after the view opens.
+func (m Model) browserItemsForRender() []browserItem {
+	if m.browserItems != nil {
+		return m.browserItems
+	}
+	var items []browserItem
+	m.walkBrowserDir(m.homeDir, 0, &items)
 	return items
 }
 
