@@ -505,10 +505,11 @@ func TestEnsurePrivateDir_CreatesPrivateDirectory(t *testing.T) {
 	assert.Zero(t, info.Mode().Perm()&0o077)
 }
 
-// TestEnsureDir_RefusesSymlink pins the Lstat change: following a symlink
-// would apply the mode guarantee to a directory the caller never named, and
-// write backups through the link.
-func TestEnsureDir_RefusesSymlink(t *testing.T) {
+// TestEnsureDir_AcceptsSymlinkToDirectory pins a mainstream setup: ~/.dotcor
+// symlinked to another volume or a synced folder. Refusing symlinks outright
+// stopped dotcor from starting at all, because AcquireLock ensures the config
+// directory and treats any failure as fatal.
+func TestEnsureDir_AcceptsSymlinkToDirectory(t *testing.T) {
 	cfg := testConfig()
 	tmp := t.TempDir()
 	real := filepath.Join(tmp, "real")
@@ -516,10 +517,56 @@ func TestEnsureDir_RefusesSymlink(t *testing.T) {
 	link := filepath.Join(tmp, "link")
 	require.NoError(t, os.Symlink(real, link))
 
+	assert.NoError(t, EnsureDir(link, cfg))
+}
+
+// TestEnsurePrivateDir_TightensThroughSymlink keeps the mode guarantee: it
+// must apply to the directory the link actually resolves to.
+func TestEnsurePrivateDir_TightensThroughSymlink(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: permissions are not enforced")
+	}
+	cfg := testConfig()
+	tmp := t.TempDir()
+	real := filepath.Join(tmp, "real")
+	require.NoError(t, os.MkdirAll(real, 0755))
+	link := filepath.Join(tmp, "link")
+	require.NoError(t, os.Symlink(real, link))
+
+	require.NoError(t, EnsurePrivateDir(link, cfg))
+
+	info, err := os.Stat(real)
+	require.NoError(t, err)
+	assert.Zero(t, info.Mode().Perm()&0o077,
+		"the resolved directory must be tightened, got %v", info.Mode().Perm())
+}
+
+// TestEnsureDir_RefusesSymlinkToNonDirectory keeps the guard where it matters.
+func TestEnsureDir_RefusesSymlinkToNonDirectory(t *testing.T) {
+	cfg := testConfig()
+	tmp := t.TempDir()
+	file := filepath.Join(tmp, "file")
+	require.NoError(t, os.WriteFile(file, []byte("x"), 0644))
+	link := filepath.Join(tmp, "link")
+	require.NoError(t, os.Symlink(file, link))
+
 	err := EnsureDir(link, cfg)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "symlink")
+	assert.Contains(t, err.Error(), "non-directory")
+}
+
+// TestEnsureDir_RefusesBrokenSymlink covers the dangling case.
+func TestEnsureDir_RefusesBrokenSymlink(t *testing.T) {
+	cfg := testConfig()
+	tmp := t.TempDir()
+	link := filepath.Join(tmp, "link")
+	require.NoError(t, os.Symlink(filepath.Join(tmp, "missing"), link))
+
+	err := EnsureDir(link, cfg)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "broken symlink")
 }
 
 // TestEnsureDir_LeavesLooserModeAloneForPublicDirs ensures the tightening

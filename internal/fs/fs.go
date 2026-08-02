@@ -129,13 +129,30 @@ func ensureDirMode(path string, mode os.FileMode, cfg *config.Config) error {
 
 	cfg.Logger.Debug("ensuring directory exists", "path", path)
 
-	// Lstat, not Stat: a symlink at path would otherwise be followed, and
-	// the mode guarantee below would apply to a directory the caller never
-	// named while backups were written through the link.
+	// Lstat first so a symlink is recognised rather than silently followed.
 	info, err := os.Lstat(path)
 	if err == nil {
 		if info.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("path is a symlink, refusing to use it as a directory: %s", path)
+			// A symlink to a real directory is legitimate and common —
+			// ~/.dotcor pointed at another volume or a synced folder is a
+			// mainstream setup, and refusing it outright stopped dotcor
+			// from starting at all. Accept it, but apply the mode guarantee
+			// to the directory it actually resolves to.
+			target, statErr := os.Stat(path)
+			if statErr != nil {
+				return fmt.Errorf("path is a broken symlink: %s: %w", path, statErr)
+			}
+			if !target.IsDir() {
+				return fmt.Errorf("path is a symlink to a non-directory: %s", path)
+			}
+			if extra := target.Mode().Perm() &^ mode; extra != 0 {
+				if chmodErr := os.Chmod(path, mode); chmodErr != nil {
+					cfg.Logger.Warn("could not tighten directory permissions",
+						"path", path, "error", chmodErr)
+				}
+			}
+			cfg.Logger.Debug("directory already exists (via symlink)", "path", path)
+			return nil
 		}
 		if info.IsDir() {
 			// MkdirAll only applies the mode to directories it creates, so
