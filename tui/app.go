@@ -458,6 +458,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = nil
 			cmds = append(cmds, clearStatusAfter(3*time.Second))
 		}
+		// refreshAll reloads packages, git status and commits — not the
+		// backup list. Cleaning backups reports "Cleaned N backups" while
+		// the list underneath still shows every deleted entry with its size,
+		// and the only way to refresh it is to leave the pane and re-enter.
+		if m.settingsStep == settingsStepBackups {
+			cmds = append(cmds, m.loadBackups())
+		}
 		cmds = append(cmds, m.refreshAll())
 		return m, tea.Batch(cmds...)
 
@@ -869,7 +876,7 @@ func (m Model) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case key.Matches(keyMsg, m.keys.Settings):
 		m.clearErr()
 		m.activeView = SettingsView
-		m.settingsStep = 0
+		m.settingsStep = settingsStepMain
 	}
 
 	return m, nil

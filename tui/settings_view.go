@@ -12,6 +12,15 @@ import (
 	"github.com/justincordova/dotcor/internal/git"
 )
 
+// Settings pane steps. viewSettings and the update handlers dispatch on
+// these, and app.go needs the backups value to know when to reload the list.
+const (
+	settingsStepMain       = 0
+	settingsStepEditRemote = 1
+	settingsStepBackups    = 3
+	settingsStepAddPattern = 4
+)
+
 type settingsMsg struct {
 	msg string
 	err error
@@ -24,11 +33,11 @@ type backupsMsg struct {
 
 func viewSettings(m Model) string {
 	switch m.settingsStep {
-	case 1:
+	case settingsStepEditRemote:
 		return viewSettingsEditRemote(m)
-	case 3:
+	case settingsStepBackups:
 		return viewSettingsBackups(m)
-	case 4:
+	case settingsStepAddPattern:
 		return viewSettingsAddPattern(m)
 	default:
 		return viewSettingsMain(m)
@@ -172,19 +181,19 @@ func updateSettingsMain(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			m.activeView = DashboardView
-			m.settingsStep = 0
+			m.settingsStep = settingsStepMain
 			return m, nil
 		}
 
 		switch keyMsg.String() {
 		case "e":
-			m.settingsStep = 1
+			m.settingsStep = settingsStepEditRemote
 			m.settingsInput.SetValue(m.cfg.GitRemote)
 			m.settingsInput.Focus()
 			return m, textinput.Blink
 
 		case "b":
-			m.settingsStep = 3
+			m.settingsStep = settingsStepBackups
 			return m, m.loadBackups()
 
 		case "i":
@@ -200,7 +209,7 @@ func updateSettingsMain(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.settingsEditingIgnore {
 				m.settingsInput.SetValue("")
 				m.settingsInput.Focus()
-				m.settingsStep = 4
+				m.settingsStep = settingsStepAddPattern
 				return m, textinput.Blink
 			}
 
@@ -251,14 +260,14 @@ func updateSettingsEditRemote(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch {
 		case key.Matches(keyMsg, m.keys.Esc):
-			m.settingsStep = 0
+			m.settingsStep = settingsStepMain
 			m.settingsInput.Blur()
 			return m, nil
 
 		case key.Matches(keyMsg, m.keys.Enter):
 			newURL := strings.TrimSpace(m.settingsInput.Value())
 			m.settingsInput.Blur()
-			m.settingsStep = 0
+			m.settingsStep = settingsStepMain
 
 			// Apply to .git/config FIRST. If git rejects the URL (or the
 			// allowlist in ValidateRemoteURL does), abort before persisting
@@ -298,7 +307,7 @@ func updateSettingsBackups(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch {
 		case key.Matches(keyMsg, m.keys.Esc):
-			m.settingsStep = 0
+			m.settingsStep = settingsStepMain
 			m.backups = nil
 			return m, nil
 		case keyMsg.String() == "c":
@@ -324,12 +333,12 @@ func updateSettingsAddPattern(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			m.settingsInput.Blur()
-			m.settingsStep = 0
+			m.settingsStep = settingsStepMain
 			m.settingsEditingIgnore = false
 			return m, nil
 		case key.Matches(keyMsg, m.keys.Esc):
 			m.settingsInput.Blur()
-			m.settingsStep = 0
+			m.settingsStep = settingsStepMain
 			return m, nil
 		}
 	}
