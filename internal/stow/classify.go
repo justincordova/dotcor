@@ -376,7 +376,15 @@ func derivePkgNameForFile(absPath, homeDir string) string {
 // and skipped.
 func walkAndClassify(plan *ClassificationPlan, pkgIndex map[string]int, selDir, pkgName, repoDir, homeDir string, homeIndex map[string]string, ignorePatterns []string) error {
 	return filepath.WalkDir(selDir, func(path string, d fs.DirEntry, walkErr error) error {
+		// Unreadable entries are skipped rather than aborting the whole
+		// plan, but they must be surfaced. Silently dropping them meant an
+		// entire unreadable subtree (a 0700 dir owned by another uid after a
+		// restore, a stale mount) vanished from the preview and the user
+		// confirmed a plan that was quietly missing files.
 		if walkErr != nil {
+			plan.Warnings = append(plan.Warnings,
+				fmt.Sprintf("skipped %s: %v", path, walkErr))
+			slog.Default().Warn("classify: skipping unreadable entry", "path", path, "err", walkErr)
 			return nil
 		}
 
@@ -389,6 +397,9 @@ func walkAndClassify(plan *ClassificationPlan, pkgIndex map[string]int, selDir, 
 
 		lfi, err := os.Lstat(path)
 		if err != nil {
+			plan.Warnings = append(plan.Warnings,
+				fmt.Sprintf("skipped %s: %v", path, err))
+			slog.Default().Warn("classify: cannot stat entry", "path", path, "err", err)
 			return nil
 		}
 
@@ -410,6 +421,9 @@ func walkAndClassify(plan *ClassificationPlan, pkgIndex map[string]int, selDir, 
 
 		cf, err := classifyFileInDir(path, selDir, pkgName, repoDir, homeDir, homeIndex)
 		if err != nil {
+			plan.Warnings = append(plan.Warnings,
+				fmt.Sprintf("could not classify %s: %v", path, err))
+			slog.Default().Warn("classify: skipping unclassifiable file", "path", path, "err", err)
 			return nil
 		}
 

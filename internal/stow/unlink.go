@@ -81,7 +81,11 @@ func Unlink(repoDir, homeDir, packageName string) (*UnlinkResult, error) {
 	})
 
 	if err != nil {
-		return nil, err
+		// Return the partial result with the error. Every symlink removed
+		// before the walk aborted is already gone; discarding the count left
+		// the caller unable to tell the user what actually happened, and a
+		// re-run has no record of which half was done.
+		return result, err
 	}
 
 	sort.Sort(sort.Reverse(sort.StringSlice(targetDirs)))

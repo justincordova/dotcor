@@ -2,6 +2,7 @@ package stow
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -43,7 +44,12 @@ func Link(repoDir, homeDir, packageName string) (*LinkResult, error) {
 	})
 
 	if err != nil {
-		return nil, err
+		// Return what was actually done alongside the error. filepath.Walk
+		// aborts on the first callback failure, but every file before that
+		// point has already been linked — discarding the result left the
+		// caller reporting a bare failure for a package that is now
+		// half-linked, with no record of which half.
+		return result, err
 	}
 
 	// Previously this re-ran a full DiscoverPackages to find auto-detected
@@ -55,6 +61,12 @@ func Link(repoDir, homeDir, packageName string) (*LinkResult, error) {
 	// appendAutoDetected) and iterate its non-InRepo entries.
 	pkgFiles, err := discoverFiles(pkgDir, homeDir)
 	if err != nil {
+		// The repo-side links are already in place; only the auto-detect
+		// pass is lost. Log it rather than returning success silently — the
+		// previous `return result, nil` made a skipped phase indistinguishable
+		// from a clean run.
+		slog.Default().Warn("link: auto-detect pass skipped",
+			"package", packageName, "err", err)
 		return result, nil
 	}
 	pkgFiles = appendAutoDetected(pkgFiles, pkgDir, homeDir)
