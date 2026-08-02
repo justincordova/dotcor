@@ -41,17 +41,7 @@ func viewAdd(m Model) string {
 	var footer string
 
 	if m.addStep == addStepSelect {
-		footerHints := []string{
-			kbd("↑/k", "up"), kbd("↓/j", "down"),
-			kbd("pgup/pgdn", "page"), kbd("g/G", "top/bot"),
-			kbd("space", "select"), kbd("enter", "expand/confirm"),
-			kbd("h", "collapse"), kbd("/", "jump to path"),
-			kbd("esc", "cancel"),
-		}
-		if sc := selectionCount(m.browserSelected); sc != "" {
-			footerHints = append(footerHints, sc)
-		}
-		footer = plainFooter(innerW, footerHints...)
+		footer = plainFooter(innerW, browserFooterHints(m)...)
 		body := renderAddStep0(m, footer, errLine) + errLine
 		content := lipgloss.JoinVertical(lipgloss.Left,
 			renderAddStepper(innerW, m.addStep),
@@ -204,37 +194,10 @@ func renderAddStep0(m Model, footer string, errLine string) string {
 		return b.String()
 	}
 
-	cw := contentWidth(m.width)
-	innerW := cw - 4
-	stepper := renderAddStepper(innerW, m.addStep)
-	fixedContent := lipgloss.JoinVertical(lipgloss.Left,
-		stepper,
-		"", "",
-		footer,
-	)
-	fixedDialog := boxStyle.Width(cw - 2).Render(fixedContent)
-	fixedLines := strings.Count(fixedDialog, "\n") + 1
-	if errLine != "" {
-		fixedLines += 2
-	}
 
-	// fixedContent above models only the dialog chrome. This function also
-	// emits body lines of its own that must be counted, otherwise the dialog
-	// overflows the terminal and clampDialogHeight trims rows off the TOP of
-	// the item list — it preserves lines[:5] (border, stepper, path, rule)
-	// and drops from index 5, which is exactly where the items begin. The
-	// browser opened showing its fourth entry, with the cursor sitting
-	// invisibly on the first.
-	fixedLines += 2 // path header + horizontal rule
-	fixedLines++    // the "… N more" row emitted when the list overflows
-	if m.browserJumping {
-		fixedLines += 4 // blank, jump input, rule, and its trailing newline
-	}
-
-	ch := m.height - fixedLines - 1
-	if ch < 1 {
-		ch = 1
-	}
+	// Shared with browserAdjustScroll and the paging keys so the drawn
+	// viewport and the scroll maths can never disagree.
+	ch := browserContentHeight(m)
 
 	// Clamp start to a valid range. Downward navigation on an empty item
 	// list drives browserCursor to len-1 == -1, which browserAdjustScroll
@@ -668,6 +631,14 @@ func confirmContentHeight(m Model) int {
 	if m.err != nil {
 		fixedLines += 2
 	}
+	// The renderer emits TWO sticky bottom rows once the list overflows: the
+	// "%d-%d of %d" scroll indicator and the execute hint. fixedContent
+	// models only the hint, so the dialog came out exactly one line too tall
+	// and clampDialogHeight deleted lines[5] — the third visible body row.
+	// At any non-zero scroll offset that is a file row, so one entry in the
+	// list the user is being asked to approve was invisible, while the
+	// counter still reported the full range.
+	fixedLines++
 
 	h := m.height - fixedLines
 	if h < 3 {
@@ -926,9 +897,43 @@ func (m *Model) browserAdjustScroll() {
 	}
 }
 
+// browserContentHeight returns the number of browser rows that fit.
+//
+// It measures the chrome renderAddStep0 actually draws rather than using a
+// hardcoded constant. The two disagreed by two rows, so pgdown paged by less
+// than a screenful (re-showing rows) and maxScroll was computed against the
+// smaller number, leaving the bottom two rows of the viewport permanently
+// blank at the end of the list. Same class of defect as the one already
+// fixed for the confirm and preview steps.
 func browserContentHeight(m Model) int {
 	cw := contentWidth(m.width)
 	innerW := cw - 4
+
+	fixedContent := lipgloss.JoinVertical(lipgloss.Left,
+		renderAddStepper(innerW, addStepSelect),
+		"", "",
+		plainFooter(innerW, browserFooterHints(m)...),
+	)
+	fixedLines := strings.Count(boxStyle.Width(cw-2).Render(fixedContent), "\n") + 1
+	fixedLines += 2 // path header + horizontal rule
+	fixedLines++    // the "… N more" row emitted when the list overflows
+	if m.err != nil {
+		fixedLines += 2
+	}
+	if m.browserJumping {
+		fixedLines += 4 // blank, jump input, rule, and its trailing newline
+	}
+
+	ch := m.height - fixedLines - 1
+	if ch < 1 {
+		ch = 1
+	}
+	return ch
+}
+
+// browserFooterHints is the single source of the step-0 footer, shared by
+// viewAdd and browserContentHeight so the measurement matches what is drawn.
+func browserFooterHints(m Model) []string {
 	hints := []string{
 		kbd("↑/k", "up"), kbd("↓/j", "down"),
 		kbd("pgup/pgdn", "page"), kbd("g/G", "top/bot"),
@@ -939,17 +944,7 @@ func browserContentHeight(m Model) int {
 	if sc := selectionCount(m.browserSelected); sc != "" {
 		hints = append(hints, sc)
 	}
-	fl := footerLines(innerW, hints...)
-	ch := m.height - 11 - fl
-	if ch < 1 {
-		ch = 1
-	}
-	return ch
-}
-
-func footerLines(width int, hints ...string) int {
-	rendered := plainFooter(width, hints...)
-	return strings.Count(rendered, "\n") + 1
+	return hints
 }
 
 // previewContentHeight returns the number of rows available for the
@@ -1022,6 +1017,13 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if item.isDir {
 					m.browserExpanded[item.path] = !m.browserExpanded[item.path]
 					m.browserItems = nil
+					// Rebuild here, on the update goroutine. Leaving the memo
+					// cold pushes the $HOME walk into View, which runs on
+					// every message — and the program enables mouse cell
+					// motion, so every pixel of mouse travel would re-walk
+					// the tree. browserAdjustScroll also re-clamps the
+					// cursor for the new list size.
+					m.browserAdjustScroll()
 					return m, nil
 				}
 				return m.browserSelectAndClassify(item.path)
@@ -1372,6 +1374,9 @@ func (m Model) browserHandleJumpKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.browserCursor = 0
 		m.browserScroll = 0
 		m.err = nil
+		// Repopulate the memo so the first frame after the jump renders
+		// from cache instead of walking $HOME inside View.
+		m.buildBrowserItems()
 		return m, nil
 
 	case "esc":

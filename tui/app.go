@@ -365,7 +365,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stowResultMsg:
 		if msg.err != nil {
 			m.err = msg.err
-		} else if len(msg.conflicts) > 0 && !confirmModalIsVisible(m.activeView) {
+		} else if len(msg.conflicts) > 0 && !m.confirmModalIsReachable() {
 			// Only the dashboard and history views render confirmModal.
 			// Opening it from a view that neither draws nor consumes it left
 			// an invisible dialog armed: the user could return to the
@@ -472,10 +472,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.err = msg.err
 		} else {
-			// Only now that the write succeeded does the model adopt the
-			// value, so a rejected URL never shows as if it were configured.
+			// Only now that git accepted the URL does the model adopt it,
+			// so a rejected value never shows as if it were configured. The
+			// config write happens here, on the update goroutine, against
+			// current in-memory state — a snapshot taken before the git
+			// subprocesses ran would revert any edit made in the meantime.
 			if msg.gitRemote != nil && m.cfg != nil {
 				m.cfg.GitRemote = *msg.gitRemote
+				if saveErr := m.cfg.SaveConfig(); saveErr != nil {
+					m.err = fmt.Errorf("saving config: %w", saveErr)
+				}
 			}
 			m.statusMsg = msg.msg
 			m.err = nil
@@ -500,6 +506,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case logsLoadedMsg:
+		// The diff and logs views share one viewport. A load that lands
+		// after the user has navigated away would otherwise overwrite
+		// whatever is on screen now.
+		if m.activeView != LogsView {
+			m.logs = msg.lines
+			return m, nil
+		}
 		m.logs = msg.lines
 		m.viewport.SetContent(strings.Join(m.logs, "\n"))
 		m.viewport.GotoBottom()
@@ -545,11 +558,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m.updateDashboard(msg)
 }
 
-// confirmModalIsVisible reports whether the given view renders confirmModal
-// and routes enter/esc to confirmAccept. Keep this in sync with viewDashboard
-// and viewHistory.
-func confirmModalIsVisible(view View) bool {
-	return view == DashboardView || view == HistoryView
+// confirmModalIsReachable reports whether the modal would both be drawn AND
+// receive the user's enter/esc.
+//
+// Checking activeView alone is not enough: Update routes keys to updateInit
+// and updateSearch BEFORE the view switch, so with the init wizard open the
+// dashboard still renders the modal full-screen while enter is consumed by
+// the wizard — pressing enter on "3 conflicts detected" ran `git init` and
+// silently dropped the conflict resolution. Keep in sync with viewDashboard,
+// viewHistory, and the dispatch order in Update.
+func (m Model) confirmModalIsReachable() bool {
+	if m.initStep > 0 || m.searching {
+		return false
+	}
+	return m.activeView == DashboardView || m.activeView == HistoryView
 }
 
 // confirmAccept runs the pending confirmation and clears the modal.

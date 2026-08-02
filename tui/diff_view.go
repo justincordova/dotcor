@@ -49,6 +49,13 @@ func diffStatusRow(m Model) string {
 func (m Model) updateDiff(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case diffMsg:
+		// The diff and logs views share one viewport. `git diff` can take
+		// seconds, so a result that lands after the user has moved on would
+		// paint a colourised diff into the logs view — with the log header
+		// and line count still displayed around it.
+		if m.activeView != DiffView {
+			return m, nil
+		}
 		if msg.err != nil {
 			m.err = msg.err
 			return m, nil

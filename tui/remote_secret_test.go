@@ -24,10 +24,17 @@ func TestApplyGitRemote_NeverPersistsPassword(t *testing.T) {
 	m := NewModel(testCfg(), "test")
 	m.repoDir = dir
 
+	m.loading = false
+
 	msg := m.applyGitRemote("https://jc:ghp_SECRET_TOKEN@github.com/jc/dots.git")()
 	result, ok := msg.(settingsMsg)
 	require.True(t, ok, "expected a settingsMsg, got %T", msg)
 	require.NoError(t, result.err)
+
+	// The config write happens in the Update handler, against current
+	// in-memory state, so drive the message through it.
+	updated, _ := m.Update(result)
+	require.NoError(t, updated.(Model).err)
 
 	data, err := os.ReadFile(filepath.Join(dir, ".dotcorrc"))
 	require.NoError(t, err)
@@ -39,6 +46,38 @@ func TestApplyGitRemote_NeverPersistsPassword(t *testing.T) {
 
 	require.NotNil(t, result.gitRemote)
 	assert.NotContains(t, *result.gitRemote, "ghp_SECRET_TOKEN")
+	assert.Equal(t, *result.gitRemote, updated.(Model).cfg.GitRemote)
+}
+
+// TestApplyGitRemote_DoesNotRevertConcurrentPatternEdit pins the fix for a
+// silently lost setting. The command used to save a whole-file snapshot
+// captured before the git subprocesses ran, so an ignore-pattern edit made
+// while SetRemote was forking was reverted on disk with no error shown.
+func TestApplyGitRemote_DoesNotRevertConcurrentPatternEdit(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("DOTCOR_DIR", dir)
+	require.NoError(t, git.InitRepo(dir))
+
+	m := NewModel(testCfg(), "test")
+	m.loading = false
+	m.repoDir = dir
+
+	// The command is built and run while the pattern list is still empty.
+	msg := m.applyGitRemote("https://github.com/jc/dots.git")()
+	result := msg.(settingsMsg)
+	require.NoError(t, result.err)
+
+	// Meanwhile the user adds a pattern, which reaches the model.
+	m.cfg.IgnorePatterns = append(m.cfg.IgnorePatterns, "*.env")
+
+	updated, _ := m.Update(result)
+	require.NoError(t, updated.(Model).err)
+
+	data, err := os.ReadFile(filepath.Join(dir, ".dotcorrc"))
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "*.env",
+		"a pattern added while the remote was being applied must not be reverted")
+	assert.Contains(t, string(data), "https://github.com/jc/dots.git")
 }
 
 // TestSettingsRemote_NotAppliedOptimistically pins the fix for a display that

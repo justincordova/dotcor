@@ -8,7 +8,6 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/justincordova/dotcor/internal/config"
 	"github.com/justincordova/dotcor/internal/core"
 	"github.com/justincordova/dotcor/internal/git"
 )
@@ -353,14 +352,9 @@ func (m Model) applyGitRemote(newURL string) tea.Cmd {
 	repoDir := m.repoDir
 	// .dotcorrc lives inside the repository and is picked up by `git add -A`,
 	// so a remote entered as https://user:ghp_token@host would be committed
-	// and pushed, publishing the token. Persist the URL without its password;
+	// and pushed, publishing the token. Persist the URL without its secret;
 	// .git/config keeps exactly what the user typed and is never staged.
 	stored := git.StripURLPassword(newURL)
-	snapshot := &config.Config{
-		Logger:         m.cfg.Logger,
-		GitRemote:      stored,
-		IgnorePatterns: append([]string(nil), m.cfg.IgnorePatterns...),
-	}
 
 	return func() tea.Msg {
 		// Apply to .git/config FIRST. If git rejects the URL, abort before
@@ -381,9 +375,11 @@ func (m Model) applyGitRemote(newURL string) tea.Cmd {
 			return settingsMsg{err: err}
 		}
 
-		if err := snapshot.SaveConfig(); err != nil {
-			return settingsMsg{err: err}
-		}
+		// Report the value; the Update handler adopts it and writes the
+		// config on the update goroutine. Saving a snapshot captured before
+		// the git subprocesses ran would blind-write the whole file and
+		// silently revert an ignore-pattern edit made in the meantime —
+		// losing a security-relevant setting with no error shown.
 		return settingsMsg{msg: "Remote saved", gitRemote: &stored}
 	}
 }
