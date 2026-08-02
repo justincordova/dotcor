@@ -150,14 +150,34 @@ func stepWriteFile(dst string, data []byte, perm os.FileMode) fileStep {
 			if err := os.MkdirAll(parent, 0755); err != nil {
 				return fmt.Errorf("mkdir %s: %w", parent, err)
 			}
-			if err := os.WriteFile(dst, data, perm); err != nil {
+
+			// Stage into a temporary file and rename it into place, rather
+			// than writing dst directly.
+			//
+			// os.WriteFile opens with O_TRUNC, so the prior contents are
+			// gone the instant it is entered. A failure after that point —
+			// ENOSPC, EIO — leaves dst truncated, and fileTxn.run only
+			// appends a step to the rollback list AFTER do() succeeds, so
+			// this step's own undo never runs and the snapshot taken above
+			// is discarded. The repo copy would be left zero-length with no
+			// way back. Rename replaces dst atomically or not at all, which
+			// makes a failing do() a genuine no-op.
+			tmp := dst + ".dotcor-tmp"
+			_ = os.Remove(tmp) // clear any leftover from a crashed prior run
+			if err := os.WriteFile(tmp, data, perm); err != nil {
 				return err
 			}
-			// WriteFile passes perm to open(2), which ignores it when the
-			// file already exists. Without this an existing repo copy keeps
-			// whatever mode it had — re-adding a 0600 ~/.ssh/config over a
-			// 0644 copy left the repo copy world-readable.
-			return os.Chmod(dst, perm)
+			// open(2) applies perm only when it creates the file, and the
+			// process umask may have cleared bits; set the mode explicitly.
+			if err := os.Chmod(tmp, perm); err != nil {
+				_ = os.Remove(tmp)
+				return err
+			}
+			if err := os.Rename(tmp, dst); err != nil {
+				_ = os.Remove(tmp)
+				return err
+			}
+			return nil
 		},
 		undo: func() error {
 			if priorExisted {

@@ -26,7 +26,7 @@ func TestLinkWithBackup_BackupDirsArePrivate(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".ssh", "config"), []byte("repo"), 0600))
 	require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".ssh", "config"), []byte("original"), 0600))
 
-	result, err := LinkWithBackup(repoDir, homeDir, "ssh", backupDir)
+	result, err := LinkWithBackup(repoDir, homeDir, "ssh", backupDir, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, result.Resolved, "the conflict must have been backed up")
 

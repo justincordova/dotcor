@@ -27,7 +27,7 @@ func TestUnlink_ReturnsPartialResultOnWalkError(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, "a.conf"), []byte("a"), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, "blocked", "b.conf"), []byte("b"), 0644))
 
-	_, err := Link(repoDir, homeDir, "cfg")
+	_, err := Link(repoDir, homeDir, "cfg", nil)
 	require.NoError(t, err)
 
 	blockedHome := filepath.Join(homeDir, "blocked")

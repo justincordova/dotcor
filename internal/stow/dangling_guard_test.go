@@ -35,7 +35,7 @@ func TestLinkWithBackup_RefusesToLinkAtMissingRepoFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(pkgSub, "tracked.conf"), []byte("tracked"), 0644))
 	require.NoError(t, os.MkdirAll(homeDir, 0755))
 
-	_, err := Link(repoDir, homeDir, "cfg")
+	_, err := Link(repoDir, homeDir, "cfg", nil)
 	require.NoError(t, err)
 
 	// An untracked $HOME file the auto-detect pass will try to copy in.
@@ -46,7 +46,7 @@ func TestLinkWithBackup_RefusesToLinkAtMissingRepoFile(t *testing.T) {
 	require.NoError(t, os.Chmod(pkgSub, 0500))
 	t.Cleanup(func() { _ = os.Chmod(pkgSub, 0755) })
 
-	result, err := LinkWithBackup(repoDir, homeDir, "cfg", backupDir)
+	result, err := LinkWithBackup(repoDir, homeDir, "cfg", backupDir, nil)
 	require.NoError(t, err)
 
 	repoCopy := filepath.Join(pkgSub, "untracked.conf")
@@ -81,7 +81,7 @@ func TestLinkWithBackup_StillResolvesWhenRepoFileExists(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".bashrc"), []byte("repo"), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".bashrc"), []byte("home"), 0644))
 
-	result, err := LinkWithBackup(repoDir, homeDir, "cfg", backupDir)
+	result, err := LinkWithBackup(repoDir, homeDir, "cfg", backupDir, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Resolved)

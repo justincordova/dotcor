@@ -254,7 +254,7 @@ func TestFullMigration_V1ToV2(t *testing.T) {
 	assert.Equal(t, filepath.Join(".config", "nvim", "init.lua"), pkgMap["nvim"].Files[0].RelPath)
 
 	// Act - link a package after migration
-	linkResult, err := Link(repoDir, homeDir, "shell")
+	linkResult, err := Link(repoDir, homeDir, "shell", nil)
 	require.NoError(t, err)
 	assert.Equal(t, 1, linkResult.Linked)
 

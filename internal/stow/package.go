@@ -48,6 +48,10 @@ type LinkResult struct {
 	// did get linked) but Resolved lets the UI distinguish a clean link
 	// from a conflict-resolution link, e.g. "linked 3 (resolved 2 conflicts)".
 	Resolved int
+	// Ignored lists files the auto-detect pass skipped because they matched
+	// an ignore pattern. Surfaced so a user who expects a file to be picked
+	// up can see why it was not.
+	Ignored []string
 	// RestoreFailures lists conflicts where the symlink swap failed AND
 	// the rollback to the original file also failed. These are the most
 	// dangerous cases — the original file may be missing from $HOME with

@@ -27,7 +27,7 @@ func TestAdopt_ForeignSymlink_ReparentsToRepo(t *testing.T) {
 		filepath.Join(homeDir, ".config", "nvim", "options.lua"),
 	))
 
-	_, err := Link(repoDir, homeDir, "nvim")
+	_, err := Link(repoDir, homeDir, "nvim", nil)
 	require.NoError(t, err)
 
 	result, err := Adopt(repoDir, homeDir, "nvim")
@@ -61,7 +61,7 @@ func TestAdopt_NoForeignSymlinks_SkipsAll(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(homeDir, ".config", "nvim"), 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".config", "nvim", "init.lua"), []byte("cfg"), 0644))
 
-	_, err := Link(repoDir, homeDir, "nvim")
+	_, err := Link(repoDir, homeDir, "nvim", nil)
 	require.NoError(t, err)
 
 	result, err := Adopt(repoDir, homeDir, "nvim")
@@ -82,7 +82,7 @@ func TestAdopt_BrokenSymlink_Skips(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".config", "nvim", "init.lua"), []byte("cfg"), 0644))
 	require.NoError(t, os.Symlink("/nonexistent/file", filepath.Join(homeDir, ".config", "nvim", "broken.lua")))
 
-	_, err := Link(repoDir, homeDir, "nvim")
+	_, err := Link(repoDir, homeDir, "nvim", nil)
 	require.NoError(t, err)
 
 	result, err := Adopt(repoDir, homeDir, "nvim")
@@ -129,7 +129,7 @@ func TestAdopt_MultipleForeignSymlinks(t *testing.T) {
 		filepath.Join(homeDir, ".config", "nvim", "lua", "keys.lua"),
 	))
 
-	_, err := Link(repoDir, homeDir, "nvim")
+	_, err := Link(repoDir, homeDir, "nvim", nil)
 	require.NoError(t, err)
 
 	result, err := Adopt(repoDir, homeDir, "nvim")
@@ -156,7 +156,7 @@ func TestAdopt_RegularFileNotSymlink_NotAdopted(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".config", "nvim", "init.lua"), []byte("init"), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".config", "nvim", "regular.lua"), []byte("regular"), 0644))
 
-	_, err := Link(repoDir, homeDir, "nvim")
+	_, err := Link(repoDir, homeDir, "nvim", nil)
 	require.NoError(t, err)
 
 	result, err := Adopt(repoDir, homeDir, "nvim")

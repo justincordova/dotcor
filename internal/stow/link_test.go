@@ -20,7 +20,7 @@ func TestLink_SingleFile_CreatesSymlink(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".zshrc"), []byte("zsh config"), 0644))
 
 	// Act
-	result, err := Link(repoDir, homeDir, "zsh")
+	result, err := Link(repoDir, homeDir, "zsh", nil)
 
 	// Assert
 	require.NoError(t, err)
@@ -49,7 +49,7 @@ func TestLink_NestedFile_CreatesParentDirs(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".config", "nvim", "init.lua"), []byte("lua"), 0644))
 
 	// Act
-	result, err := Link(repoDir, homeDir, "nvim")
+	result, err := Link(repoDir, homeDir, "nvim", nil)
 
 	// Assert
 	require.NoError(t, err)
@@ -85,7 +85,7 @@ func TestLink_AlreadyLinked_Skips(t *testing.T) {
 	require.NoError(t, os.Symlink(relLink, targetPath))
 
 	// Act
-	result, err := Link(repoDir, homeDir, "zsh")
+	result, err := Link(repoDir, homeDir, "zsh", nil)
 
 	// Assert
 	require.NoError(t, err)
@@ -106,7 +106,7 @@ func TestLink_ConflictRegularFile_SkipsAndReports(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".zshrc"), []byte("existing"), 0644))
 
 	// Act
-	result, err := Link(repoDir, homeDir, "zsh")
+	result, err := Link(repoDir, homeDir, "zsh", nil)
 
 	// Assert
 	require.NoError(t, err)
@@ -138,7 +138,7 @@ func TestLink_ConflictWrongSymlink_SkipsAndReports(t *testing.T) {
 	require.NoError(t, os.Symlink(relLink, targetPath))
 
 	// Act
-	result, err := Link(repoDir, homeDir, "zsh")
+	result, err := Link(repoDir, homeDir, "zsh", nil)
 
 	// Assert
 	require.NoError(t, err)
@@ -156,7 +156,7 @@ func TestLink_PackageNotFound_ReturnsError(t *testing.T) {
 	require.NoError(t, os.MkdirAll(homeDir, 0755))
 
 	// Act
-	_, err := Link(repoDir, homeDir, "nonexistent")
+	_, err := Link(repoDir, homeDir, "nonexistent", nil)
 
 	// Assert
 	assert.Error(t, err)
@@ -175,7 +175,7 @@ func TestLink_MultipleFiles_LinksAll(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".tmux.theme.conf"), []byte("theme"), 0644))
 
 	// Act
-	result, err := Link(repoDir, homeDir, "tmux")
+	result, err := Link(repoDir, homeDir, "tmux", nil)
 
 	// Assert
 	require.NoError(t, err)
@@ -200,7 +200,7 @@ func TestLink_MixedConflictAndClean(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".tmux.conf"), []byte("existing"), 0644))
 
 	// Act
-	result, err := Link(repoDir, homeDir, "tmux")
+	result, err := Link(repoDir, homeDir, "tmux", nil)
 
 	// Assert
 	require.NoError(t, err)
@@ -220,7 +220,7 @@ func TestLink_EmptyPackage_LinksNothing(t *testing.T) {
 	require.NoError(t, os.MkdirAll(homeDir, 0755))
 
 	// Act
-	result, err := Link(repoDir, homeDir, "empty")
+	result, err := Link(repoDir, homeDir, "empty", nil)
 
 	// Assert
 	require.NoError(t, err)
@@ -238,7 +238,7 @@ func TestLink_RelativeSymlinkPath(t *testing.T) {
 	require.NoError(t, os.MkdirAll(homeDir, 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".config", "nvim", "init.lua"), []byte("lua"), 0644))
 
-	result, err := Link(repoDir, homeDir, "nvim")
+	result, err := Link(repoDir, homeDir, "nvim", nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Linked)
@@ -261,7 +261,7 @@ func TestLinkWithBackup_ConflictRegularFile_BacksUpAndLinks(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".zshrc"), []byte("repo"), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".zshrc"), []byte("existing"), 0600))
 
-	result, err := LinkWithBackup(repoDir, homeDir, "zsh", backupDir)
+	result, err := LinkWithBackup(repoDir, homeDir, "zsh", backupDir, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Linked)
@@ -286,7 +286,7 @@ func TestLinkWithBackup_NoConflicts_ReturnsOriginalResult(t *testing.T) {
 	require.NoError(t, os.MkdirAll(homeDir, 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".zshrc"), []byte("repo"), 0644))
 
-	result, err := LinkWithBackup(repoDir, homeDir, "zsh", backupDir)
+	result, err := LinkWithBackup(repoDir, homeDir, "zsh", backupDir, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Linked)
@@ -311,7 +311,7 @@ func TestLinkWithBackup_MixedConflictAndClean(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".tmux.theme.conf"), []byte("theme"), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".tmux.conf"), []byte("existing"), 0644))
 
-	result, err := LinkWithBackup(repoDir, homeDir, "tmux", backupDir)
+	result, err := LinkWithBackup(repoDir, homeDir, "tmux", backupDir, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, 2, result.Linked)
@@ -329,7 +329,7 @@ func TestLink_AutoDetectedFiles_CopiesToRepoAndLinks(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".config", "nvim", "init.lua"), []byte("init"), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".config", "nvim", "lua", "plugins", "telescope.lua"), []byte("tel"), 0644))
 
-	result, err := Link(repoDir, homeDir, "nvim")
+	result, err := Link(repoDir, homeDir, "nvim", nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, 2, result.Linked)
@@ -372,7 +372,7 @@ func TestLink_ForeignSymlink_SurfacedNotAdopted(t *testing.T) {
 	foreignLink := filepath.Join(homeDir, ".config", "nvim", "lua", "plugins", "telescope.lua")
 	require.NoError(t, os.Symlink(externalFile, foreignLink))
 
-	result, err := Link(repoDir, homeDir, "nvim")
+	result, err := Link(repoDir, homeDir, "nvim", nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Linked, "init.lua should still link")
@@ -418,7 +418,7 @@ func TestLinkWithBackup_RejectsForeignSymlinkConflict(t *testing.T) {
 	// (foreign symlinks were classified as Conflicts before the fix). The
 	// current Link surfaces them via Foreign, but LinkWithBackup must also
 	// defend itself when handed such a list directly.
-	_, err := LinkWithBackup(repoDir, homeDir, "zsh", backupDir)
+	_, err := LinkWithBackup(repoDir, homeDir, "zsh", backupDir, nil)
 	require.NoError(t, err)
 
 	// External file must be untouched.

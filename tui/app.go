@@ -1269,6 +1269,17 @@ func (m Model) initRepo() tea.Cmd {
 	}
 }
 
+// ignorePatternsSnapshot copies the configured ignore patterns for handing to
+// a command goroutine. The settings view edits the slice in place, so sharing
+// the backing array would let a stow read a pattern mid-shuffle — and these
+// are the rules that decide whether a private key enters the repository.
+func (m Model) ignorePatternsSnapshot() []string {
+	if m.cfg == nil {
+		return nil
+	}
+	return append([]string(nil), m.cfg.IgnorePatterns...)
+}
+
 func (m Model) refreshAll() tea.Cmd {
 	return tea.Batch(
 		discoverPackages(m.repoDir, m.homeDir),
@@ -1298,8 +1309,11 @@ func (m Model) stowPackage(name string) tea.Cmd {
 		}
 	}
 	repoDir, homeDir := m.repoDir, m.homeDir
+	// Snapshot the patterns before they cross the goroutine boundary; the
+	// settings view edits the slice in place.
+	ignorePatterns := m.ignorePatternsSnapshot()
 	return func() tea.Msg {
-		result, err := stow.Link(repoDir, homeDir, pkg.Name)
+		result, err := stow.Link(repoDir, homeDir, pkg.Name, ignorePatterns)
 		if err != nil {
 			return stowResultMsg{err: err}
 		}
@@ -1325,8 +1339,9 @@ func (m Model) resolveConflicts(pkgName string) tea.Cmd {
 	repoDir := m.repoDir
 	homeDir := m.homeDir
 	backupDir := filepath.Join(repoDir, "backups")
+	ignorePatterns := m.ignorePatternsSnapshot()
 	return func() tea.Msg {
-		result, err := stow.LinkWithBackup(repoDir, homeDir, pkgName, backupDir)
+		result, err := stow.LinkWithBackup(repoDir, homeDir, pkgName, backupDir, ignorePatterns)
 		if err != nil {
 			return stowResultMsg{err: err}
 		}
@@ -1403,6 +1418,7 @@ func (m Model) stowAllPackages() tea.Cmd {
 	homeDir := m.homeDir
 	packages := m.packages
 	logger := m.cfg.Logger
+	ignorePatterns := m.ignorePatternsSnapshot()
 
 	return func() tea.Msg {
 		var toStow []stow.Package
@@ -1418,7 +1434,7 @@ func (m Model) stowAllPackages() tea.Cmd {
 		var totalLinked, totalSkipped, totalForeign int
 		var stowedNames []string
 		for _, pkg := range toStow {
-			result, err := stow.Link(repoDir, homeDir, pkg.Name)
+			result, err := stow.Link(repoDir, homeDir, pkg.Name, ignorePatterns)
 			if err != nil {
 				if logger != nil {
 					logger.Warn("stow all: failed to stow package", "name", pkg.Name, "error", err)

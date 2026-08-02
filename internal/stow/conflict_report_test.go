@@ -27,7 +27,7 @@ func TestLinkWithBackup_ResolvedCountsOnlyConflicts(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".zprofile"), []byte("repo zprofile"), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".zprofile"), []byte("home zprofile"), 0644))
 
-	result, err := LinkWithBackup(repoDir, homeDir, "zsh", backupDir)
+	result, err := LinkWithBackup(repoDir, homeDir, "zsh", backupDir, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Resolved, "only the conflicting file was resolved")

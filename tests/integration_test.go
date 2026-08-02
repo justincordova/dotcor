@@ -20,7 +20,7 @@ func TestFullStowWorkflow(t *testing.T) {
 	content := []byte("# zshrc content\nexport PATH=/usr/bin\n")
 	require.NoError(t, os.WriteFile(filepath.Join(repoDir, "zsh", ".zshrc"), content, 0644))
 
-	result, err := stow.Link(repoDir, homeDir, "zsh")
+	result, err := stow.Link(repoDir, homeDir, "zsh", nil)
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Linked)
 	assert.Empty(t, result.Conflicts)
@@ -67,7 +67,7 @@ func TestNestedFileStow(t *testing.T) {
 	content := []byte("local o = vim.o")
 	require.NoError(t, os.WriteFile(filepath.Join(repoDir, "nvim", ".config", "nvim", "init.lua"), content, 0644))
 
-	result, err := stow.Link(repoDir, homeDir, "nvim")
+	result, err := stow.Link(repoDir, homeDir, "nvim", nil)
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Linked)
 
@@ -100,7 +100,7 @@ func TestConflictDetection(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(repoDir, "zsh", ".zshrc"), []byte("new"), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(homeDir, ".zshrc"), []byte("existing"), 0644))
 
-	result, err := stow.Link(repoDir, homeDir, "zsh")
+	result, err := stow.Link(repoDir, homeDir, "zsh", nil)
 	require.NoError(t, err)
 	assert.Equal(t, 0, result.Linked)
 	assert.Equal(t, 1, result.Skipped)
@@ -125,7 +125,7 @@ func TestMultiplePackages(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(repoDir, "git", ".gitconfig"), []byte("g"), 0644))
 
 	for _, pkg := range []string{"zsh", "nvim", "git"} {
-		result, err := stow.Link(repoDir, homeDir, pkg)
+		result, err := stow.Link(repoDir, homeDir, pkg, nil)
 		require.NoError(t, err)
 		assert.Equal(t, 1, result.Linked)
 	}
@@ -195,7 +195,7 @@ func TestEmptyDirCleanup(t *testing.T) {
 	require.NoError(t, os.MkdirAll(homeDir, 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(repoDir, "app", ".config", "app", "settings.json"), []byte("{}"), 0644))
 
-	result, err := stow.Link(repoDir, homeDir, "app")
+	result, err := stow.Link(repoDir, homeDir, "app", nil)
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Linked)
 

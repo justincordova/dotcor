@@ -8,7 +8,14 @@ import (
 	"time"
 )
 
-func Link(repoDir, homeDir, packageName string) (*LinkResult, error) {
+// Link creates the $HOME symlinks for a package.
+//
+// ignorePatterns filters the auto-detect pass, which sweeps untracked files
+// found under the package's managed $HOME subtree into the repo. Without it a
+// plain "stow this package" keypress copied ~/.ssh/id_rsa, .env and *.pem
+// into a repository that is then committed and pushed. Pass nil only when
+// there is genuinely no configuration to honour.
+func Link(repoDir, homeDir, packageName string, ignorePatterns []string) (*LinkResult, error) {
 	pkgDir := filepath.Join(repoDir, packageName)
 
 	info, err := os.Stat(pkgDir)
@@ -72,6 +79,15 @@ func Link(repoDir, homeDir, packageName string) (*LinkResult, error) {
 	pkgFiles = appendAutoDetected(pkgFiles, pkgDir, homeDir)
 	for _, f := range pkgFiles {
 		if f.InRepo {
+			continue
+		}
+		// Honour the ignore list here, not just on the Add/Adopt path. This
+		// pass pulls arbitrary untracked $HOME files into the repo, so it is
+		// the one place a secret is most likely to slip in unnoticed.
+		if matched, pattern := matchIgnore(f.TargetPath, ignorePatterns); matched {
+			result.Ignored = append(result.Ignored, f.RelPath)
+			slog.Default().Debug("link: skipping ignored file",
+				"path", f.TargetPath, "pattern", pattern)
 			continue
 		}
 		linkAutoDetectedFile(result, pkgDir, homeDir, f)
@@ -227,8 +243,8 @@ func (r *LinkResult) linkFile(path, relPath, targetPath string) {
 //
 // Issue #22 fix: result.Resolved is bumped (not just Linked) so the UI
 // can distinguish "linked cleanly" from "linked after backup".
-func LinkWithBackup(repoDir, homeDir, packageName, backupDir string) (*LinkResult, error) {
-	result, err := Link(repoDir, homeDir, packageName)
+func LinkWithBackup(repoDir, homeDir, packageName, backupDir string, ignorePatterns []string) (*LinkResult, error) {
+	result, err := Link(repoDir, homeDir, packageName, ignorePatterns)
 	if err != nil {
 		// Link returns what it managed to do alongside the error; pass that
 		// through rather than reinstating a bare failure with no counts.

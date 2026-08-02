@@ -38,7 +38,7 @@ func TestLinkStatus_AgreesThroughSymlinkedHomeAncestor(t *testing.T) {
 	require.NoError(t, os.WriteFile(repoFile, []byte("vim.opt.number = true"), 0644))
 
 	// Link through the symlinked ancestor.
-	result, err := Link(repoDir, homeDir, "nvim")
+	result, err := Link(repoDir, homeDir, "nvim", nil)
 	require.NoError(t, err)
 	require.Empty(t, result.Conflicts, "first link should be clean")
 	require.Equal(t, 1, result.Linked)
@@ -51,7 +51,7 @@ func TestLinkStatus_AgreesThroughSymlinkedHomeAncestor(t *testing.T) {
 	assert.Equal(t, wantResolved, resolved, "the link must actually reach the repo file")
 
 	// Re-linking must recognise its own work, not report a conflict.
-	again, err := Link(repoDir, homeDir, "nvim")
+	again, err := Link(repoDir, homeDir, "nvim", nil)
 	require.NoError(t, err)
 	assert.Empty(t, again.Conflicts, "Link must recognise a link it created")
 	assert.Empty(t, again.Foreign, "Link must not call its own link foreign")

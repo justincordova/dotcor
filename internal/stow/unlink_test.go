@@ -250,7 +250,7 @@ func TestLinkThenUnlink_RoundTrip(t *testing.T) {
 	require.NoError(t, os.MkdirAll(homeDir, 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, ".zshrc"), []byte("cfg"), 0644))
 
-	linkResult, err := Link(repoDir, homeDir, "zsh")
+	linkResult, err := Link(repoDir, homeDir, "zsh", nil)
 	require.NoError(t, err)
 	assert.Equal(t, 1, linkResult.Linked)
 
