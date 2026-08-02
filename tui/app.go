@@ -278,6 +278,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case spinner.TickMsg:
+		// The spinner is only rendered while loading, but spinner.Update
+		// re-issues its tick unconditionally. Left unguarded that keeps a
+		// full View() re-render running at spinner FPS for the entire
+		// process lifetime — which, since the Add view's renderer walks the
+		// home directory tree, means re-walking $HOME continuously.
+		if !m.loading {
+			return m, nil
+		}
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
