@@ -38,3 +38,26 @@ func TestHistoryDKey_NoOpWithoutCommits(t *testing.T) {
 	assert.Equal(t, HistoryView, asModel.activeView, "no-op should leave activeView unchanged")
 	assert.Nil(t, cmd, "no-op should return nil cmd")
 }
+
+// TestHistoryPgDown_EmptyListKeepsCursorNonNegative pins the fix for a crash:
+// pgdown clamped the cursor to len(commits)-1, which is -1 on an empty list.
+// The `< len(m.commits)` guards on enter/D then passed and panicked on index.
+func TestHistoryPgDown_EmptyListKeepsCursorNonNegative(t *testing.T) {
+	m := defaultModel()
+	m.activeView = HistoryView
+	m.commits = nil
+	m.selectedCommit = 0
+
+	updated, _ := m.updateHistory(tea.KeyMsg{Type: tea.KeyPgDown})
+	asModel := updated.(Model)
+
+	assert.GreaterOrEqual(t, asModel.selectedCommit, 0, "cursor must never go negative")
+
+	// Enter and D must not panic with the (previously negative) cursor.
+	assert.NotPanics(t, func() {
+		_, _ = asModel.updateHistory(tea.KeyMsg{Type: tea.KeyEnter})
+	})
+	assert.NotPanics(t, func() {
+		_, _ = asModel.updateHistory(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'D'}})
+	})
+}

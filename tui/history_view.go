@@ -137,9 +137,14 @@ func (m Model) updateHistory(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case msg.String() == "pgdown" || msg.String() == "ctrl+f":
-			m.selectedCommit += 5
-			if m.selectedCommit > len(m.commits)-1 {
-				m.selectedCommit = len(m.commits) - 1
+			// Clamping to len-1 on an empty list yields -1, which then
+			// passes the `< len(m.commits)` guards below and panics on
+			// index. Only move the cursor when there is something to move to.
+			if len(m.commits) > 0 {
+				m.selectedCommit += 5
+				if m.selectedCommit > len(m.commits)-1 {
+					m.selectedCommit = len(m.commits) - 1
+				}
 			}
 
 		case msg.String() == "g" || msg.String() == "home":
@@ -151,7 +156,7 @@ func (m Model) updateHistory(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case key.Matches(msg, m.keys.Enter):
-			if m.selectedCommit < len(m.commits) {
+			if m.selectedCommit >= 0 && m.selectedCommit < len(m.commits) {
 				c := m.commits[m.selectedCommit]
 				m.confirmOpen = true
 				m.confirmAction = "restore"
@@ -167,7 +172,7 @@ func (m Model) updateHistory(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case msg.String() == "D":
-			if m.selectedCommit < len(m.commits) {
+			if m.selectedCommit >= 0 && m.selectedCommit < len(m.commits) {
 				// Switch to DiffView before the diff content arrives so the
 				// user sees the transition immediately. The diffMsg handler
 				// populates the viewport without changing views.
