@@ -90,11 +90,36 @@ func (t *fileTxn) rollback() error {
 
 // ─── Reusable steps ─────────────────────────────────────────────────────────
 
-// stepWriteFile writes data+perm to dst. Undo removes the file (and the
-// parent dir if newly created and now empty).
+// stepWriteFile writes data+perm to dst.
+//
+// Undo restores dst to exactly what was there before the step ran: the prior
+// bytes and mode if the file already existed, otherwise removal. Capturing
+// the prior contents matters because dst is a repo path that may already be
+// tracked — re-adding a file whose $HOME copy was replaced by a package
+// installer overwrites the curated repo copy, and an undo that merely removed
+// dst would leave the user with neither version. A rollback must never end in
+// a worse state than not rolling back at all.
+//
+// Directories created by MkdirAll are removed back up to the deepest
+// pre-existing ancestor, stopping at the first non-empty one. Removing only
+// the immediate parent left orphaned directory chains behind, which
+// DiscoverPackages then reports as empty packages.
 func stepWriteFile(dst string, data []byte, perm os.FileMode) fileStep {
 	parent := filepath.Dir(dst)
-	parentExisted := pathExists(parent)
+	deepestExisting := deepestExistingDir(parent)
+
+	// Capture prior state at construction time, before any step runs.
+	var priorData []byte
+	var priorPerm os.FileMode
+	priorExisted := false
+	if info, err := os.Lstat(dst); err == nil && info.Mode().IsRegular() {
+		if b, rerr := os.ReadFile(dst); rerr == nil {
+			priorData = b
+			priorPerm = info.Mode().Perm()
+			priorExisted = true
+		}
+	}
+
 	return fileStep{
 		desc: "write " + dst,
 		do: func() error {
@@ -104,17 +129,34 @@ func stepWriteFile(dst string, data []byte, perm os.FileMode) fileStep {
 			return os.WriteFile(dst, data, perm)
 		},
 		undo: func() error {
+			if priorExisted {
+				return os.WriteFile(dst, priorData, priorPerm)
+			}
 			if err := os.Remove(dst); err != nil && !os.IsNotExist(err) {
 				return err
 			}
-			// Best-effort: if we created the parent, try to remove it
-			// (only succeeds if empty). Don't propagate failure.
-			if !parentExisted {
-				_ = os.Remove(parent)
+			// Best-effort: unwind directories we created. Each Remove only
+			// succeeds on an empty dir, so anything the user owns survives.
+			for dir := parent; dir != deepestExisting && dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
+				if err := os.Remove(dir); err != nil {
+					break
+				}
 			}
 			return nil
 		},
 	}
+}
+
+// deepestExistingDir walks up from dir and returns the first component that
+// already exists, i.e. the boundary MkdirAll would not have created.
+func deepestExistingDir(dir string) string {
+	for dir != filepath.Dir(dir) {
+		if pathExists(dir) {
+			return dir
+		}
+		dir = filepath.Dir(dir)
+	}
+	return dir
 }
 
 // stepReplaceFileWithSymlink replaces the regular file at srcPath with a
