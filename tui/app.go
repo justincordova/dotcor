@@ -361,7 +361,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stowResultMsg:
 		if msg.err != nil {
 			m.err = msg.err
+		} else if len(msg.conflicts) > 0 && !confirmModalIsVisible(m.activeView) {
+			// Only the dashboard and history views render confirmModal.
+			// Opening it from a view that neither draws nor consumes it left
+			// an invisible dialog armed: the user could return to the
+			// dashboard later and find a stale prompt, or press enter in a
+			// view that dispatches a different action entirely. Report it as
+			// a status line instead and let the user re-run the stow.
+			m.statusMsg = fmt.Sprintf("%s: %d conflicts — press s on the dashboard to resolve",
+				msg.pkgName, len(msg.conflicts))
+			cmds = append(cmds, clearStatusAfter(5*time.Second))
 		} else if len(msg.conflicts) > 0 {
+			// Reset any dialog already on screen before repurposing the
+			// fields, so a stale restore ref or file path can't leak into
+			// this action.
+			m.clearConfirm()
 			m.confirmOpen = true
 			m.confirmAction = "resolve-conflicts"
 			m.confirmTarget = msg.pkgName
@@ -492,6 +506,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// ctrl+c must work from every view, including the ones with a focused
+	// text input. Bubble Tea has no built-in handler for it, and it puts the
+	// terminal in raw mode so SIGINT is never delivered either — the binding
+	// was only matched in the dashboard, help and logs views, leaving the
+	// Add wizard, Settings, Diff, History and the init flow with no way out.
+	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.Type == tea.KeyCtrlC {
+		return m, tea.Quit
+	}
+
 	if m.searching {
 		return m.updateSearch(msg)
 	}
@@ -516,6 +539,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m.updateDashboard(msg)
+}
+
+// confirmModalIsVisible reports whether the given view renders confirmModal
+// and routes enter/esc to confirmAccept. Keep this in sync with viewDashboard
+// and viewHistory.
+func confirmModalIsVisible(view View) bool {
+	return view == DashboardView || view == HistoryView
 }
 
 // confirmAccept runs the pending confirmation and clears the modal.
