@@ -16,7 +16,18 @@ import (
 
 var version = "dev"
 
+// main keeps os.Exit confined to a single place so that run()'s deferred
+// cleanup always executes.
+//
+// os.Exit does not run deferred functions. Calling it from the body that owns
+// the `defer core.ReleaseLock` and `defer logCloser.Close` meant a TUI crash
+// left ~/.dotcor/.lock behind AND discarded unflushed log output — precisely
+// the diagnostic data needed to work out why it crashed.
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	debug := false
 	logLevel := "warn"
 
@@ -24,7 +35,7 @@ func main() {
 		switch arg {
 		case "--version":
 			fmt.Printf("dotcor %s\n", version)
-			return
+			return 0
 		case "--debug":
 			debug = true
 			logLevel = "debug"
@@ -46,7 +57,7 @@ func main() {
 		cfg, err = config.NewDefaultConfig()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
-			os.Exit(1)
+			return 1
 		}
 	}
 	// NewWithCloser returns the underlying log file so we can flush and
@@ -60,7 +71,7 @@ func main() {
 	configDir, err := config.GetConfigDir()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 
 	if _, err := os.Stat(configDir); os.IsNotExist(err) {
@@ -68,11 +79,11 @@ func main() {
 		var response string
 		_, _ = fmt.Scanln(&response)
 		if strings.ToLower(response) != "y" {
-			return
+			return 0
 		}
 		if err := os.MkdirAll(configDir, 0755); err != nil {
 			fmt.Fprintf(os.Stderr, "error creating directory: %v\n", err)
-			os.Exit(1)
+			return 1
 		}
 		if err := git.InitRepo(configDir); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: git init failed: %v\n", err)
@@ -91,11 +102,11 @@ func main() {
 			steps, err := stow.PlanMigration(configDir)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "error planning migration: %v\n", err)
-				os.Exit(1)
+				return 1
 			}
 			if err := stow.ExecuteMigration(configDir, steps); err != nil {
 				fmt.Fprintf(os.Stderr, "error executing migration: %v\n", err)
-				os.Exit(1)
+				return 1
 			}
 			fmt.Println("Migration complete")
 		}
@@ -115,7 +126,7 @@ func main() {
 	// already includes the doctor hint for the contended case.
 	if err := core.AcquireLock(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 	defer func() {
 		if err := core.ReleaseLock(cfg); err != nil {
@@ -132,6 +143,8 @@ func main() {
 
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
+
+	return 0
 }
