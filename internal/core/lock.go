@@ -53,7 +53,10 @@ func AcquireLock(cfg *config.Config) error {
 		}
 
 		// Ensure config directory exists
-		if err := fs.EnsureDir(filepath.Dir(lockPath), cfg); err != nil {
+		// EnsurePrivateDir also tightens an existing 0755 directory, so a
+		// repository created by an earlier build becomes private on the next
+		// run rather than staying world-traversable forever.
+		if err := fs.EnsurePrivateDir(filepath.Dir(lockPath), cfg); err != nil {
 			cfg.Logger.Error("failed to create config directory", "error", err)
 			return fmt.Errorf("failed to create lock directory at %s: %w", filepath.Dir(lockPath), err)
 		}

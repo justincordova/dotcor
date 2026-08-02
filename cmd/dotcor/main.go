@@ -81,7 +81,11 @@ func run() int {
 		if strings.ToLower(response) != "y" {
 			return 0
 		}
-		if err := os.MkdirAll(configDir, 0755); err != nil {
+		// 0700: this directory holds the user's dotfiles, which routinely
+		// include ~/.ssh, ~/.gnupg and ~/.aws material. Keeping the root
+		// private means no other user can traverse into any package
+		// subdirectory, whatever mode those happen to carry.
+		if err := os.MkdirAll(configDir, 0700); err != nil {
 			fmt.Fprintf(os.Stderr, "error creating directory: %v\n", err)
 			return 1
 		}

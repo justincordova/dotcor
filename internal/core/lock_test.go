@@ -443,3 +443,29 @@ func TestReclaimStaleLock_LeavesNoStagingArtefacts(t *testing.T) {
 	leftovers, _ = filepath.Glob(filepath.Join(dir, ".lock.stale.*"))
 	assert.Empty(t, leftovers, "the success path must not leak a staging file")
 }
+
+// TestAcquireLock_MakesRepositoryPrivate pins the fix for a world-traversable
+// repository root. ~/.dotcor holds the user's dotfiles, routinely including
+// ~/.ssh, ~/.gnupg and ~/.aws material; a private root means no other user
+// can traverse into any package subdirectory whatever mode it carries.
+//
+// It must also tighten a directory an earlier build created at 0755, rather
+// than leaving it open forever.
+func TestAcquireLock_MakesRepositoryPrivate(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: permissions are not enforced")
+	}
+
+	dir := filepath.Join(t.TempDir(), "dotcor")
+	require.NoError(t, os.MkdirAll(dir, 0755))
+	t.Setenv("DOTCOR_DIR", dir)
+	cfg := testConfig()
+
+	require.NoError(t, AcquireLock(cfg))
+	t.Cleanup(func() { _ = ReleaseLock(cfg) })
+
+	info, err := os.Stat(dir)
+	require.NoError(t, err)
+	assert.Zero(t, info.Mode().Perm()&0o077,
+		"the repository root must be private, got %v", info.Mode().Perm())
+}

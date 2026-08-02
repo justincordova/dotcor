@@ -140,7 +140,9 @@ func (c *Config) SaveConfig() error {
 	}
 
 	configDir := filepath.Dir(configPath)
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	// 0700 to match the repository root created at init: the config file
+	// itself is already 0600 and the directory holds the user's dotfiles.
+	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
 
