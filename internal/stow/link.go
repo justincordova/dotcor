@@ -223,7 +223,9 @@ func (r *LinkResult) linkFile(path, relPath, targetPath string) {
 func LinkWithBackup(repoDir, homeDir, packageName, backupDir string) (*LinkResult, error) {
 	result, err := Link(repoDir, homeDir, packageName)
 	if err != nil {
-		return nil, err
+		// Link returns what it managed to do alongside the error; pass that
+		// through rather than reinstating a bare failure with no counts.
+		return result, err
 	}
 
 	if len(result.Conflicts) == 0 {
@@ -237,6 +239,18 @@ func LinkWithBackup(repoDir, homeDir, packageName, backupDir string) (*LinkResul
 	for _, relPath := range result.Conflicts {
 		targetPath := filepath.Join(homeDir, relPath)
 		repoPath := filepath.Join(pkgDir, relPath)
+
+		// The repo copy must already exist before we point $HOME at it.
+		// Not every conflict comes from the repo walk: linkAutoDetectedFile
+		// records a conflict precisely when it FAILED to create the repo
+		// copy (read-only mount, ENOSPC, a root-owned package dir). Swapping
+		// in a symlink then succeeds — creating a link needs no repo write —
+		// and leaves the user with a dangling symlink whose content survives
+		// only in the backup tree, reported as a success.
+		if _, statErr := os.Lstat(repoPath); statErr != nil {
+			remaining = append(remaining, relPath)
+			continue
+		}
 
 		// Never follow a symlink at the conflict target — doing so would
 		// read+copy whatever is on the other end, silently adopting a
