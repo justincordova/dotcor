@@ -1241,7 +1241,28 @@ func (m Model) resolveConflicts(pkgName string) tea.Cmd {
 		if err != nil {
 			return stowResultMsg{err: err}
 		}
-		msg := fmt.Sprintf("Resolved %d conflicts in %s", result.Linked, pkgName)
+
+		// RestoreFailures means the symlink swap failed AND the rollback to
+		// the original file also failed: the file may be missing from $HOME
+		// with only the backup to recover from. That is the single most
+		// dangerous outcome this command can produce, so it is reported as
+		// an error rather than folded into a status line.
+		if n := len(result.RestoreFailures); n > 0 {
+			return stowResultMsg{err: fmt.Errorf(
+				"%d file(s) may be missing from $HOME — recover from the backup dir: %s",
+				n, strings.Join(result.RestoreFailures, ", "))}
+		}
+
+		// Report Resolved, not Linked. Linked also counts files that were
+		// already linked cleanly by the preceding Link pass, so using it
+		// overstated how many conflicts were actually dealt with.
+		msg := fmt.Sprintf("Resolved %d conflicts in %s", result.Resolved, pkgName)
+		if n := len(result.Conflicts); n > 0 {
+			msg += fmt.Sprintf(" (%d unresolved)", n)
+		}
+		if n := len(result.Foreign); n > 0 {
+			msg += fmt.Sprintf(", %d foreign — use 'o' to adopt", n)
+		}
 		return stowResultMsg{msg: msg}
 	}
 }

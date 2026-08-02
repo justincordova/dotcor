@@ -258,7 +258,7 @@ func LinkWithBackup(repoDir, homeDir, packageName, backupDir string) (*LinkResul
 
 		backupPath := filepath.Join(backupDir, ts, relPath)
 
-		if err := resolveOneConflict(result, targetPath, backupPath, relSymlink, srcData, srcPerm); err != nil {
+		if err := resolveOneConflict(result, homeDir, targetPath, backupPath, relSymlink, srcData, srcPerm); err != nil {
 			remaining = append(remaining, relPath)
 			continue
 		}
@@ -277,7 +277,7 @@ func LinkWithBackup(repoDir, homeDir, packageName, backupDir string) (*LinkResul
 // backup is preserved (it's the user's only recovery copy) but the
 // rollback restores the original file. If the restore itself fails, the
 // file is appended to result.RestoreFailures so the caller can warn.
-func resolveOneConflict(result *LinkResult, targetPath, backupPath, relSymlink string, srcData []byte, srcPerm os.FileMode) error {
+func resolveOneConflict(result *LinkResult, homeDir, targetPath, backupPath, relSymlink string, srcData []byte, srcPerm os.FileMode) error {
 	// Step 1: write backup. We DO NOT roll this back on later failure —
 	// the backup is the user's only safety net if anything else goes
 	// wrong, and removing it on failure would leave them stranded.
@@ -298,8 +298,12 @@ func resolveOneConflict(result *LinkResult, targetPath, backupPath, relSymlink s
 		// But to be defensive, attempt restore and surface any failure.
 		if _, statErr := os.Lstat(targetPath); statErr != nil && os.IsNotExist(statErr) {
 			if writeErr := os.WriteFile(targetPath, srcData, srcPerm); writeErr != nil {
-				rel, _ := filepath.Rel(filepath.Dir(filepath.Dir(backupPath)), targetPath)
-				if rel == "" {
+				// Report the path relative to $HOME. The previous
+				// computation used the backup directory as the base, which
+				// produced a meaningless "../../../.." string for a path
+				// that lives under $HOME.
+				rel, relErr := filepath.Rel(homeDir, targetPath)
+				if relErr != nil {
 					rel = targetPath
 				}
 				result.RestoreFailures = append(result.RestoreFailures, fmt.Sprintf("%s (backup at %s)", rel, backupPath))
