@@ -518,17 +518,21 @@ func classifyFileInDir(absPath, selDir, pkgName, repoDir, homeDir string, homeIn
 		return cf, nil
 	}
 
-	// Regular file. Determine classification by checking $HOME for a symlink
-	// that points to this file.
-	homeRel, err := filepath.Rel(homeDir, absPath)
-	if err == nil && !escapesBase(homeRel) {
-		// File is inside $HOME.
-		homePath := filepath.Join(homeDir, homeRel)
-		if homePath == absPath {
-			// File IS a direct $HOME file.
-			cf.Class = ClassAdd
-			return cf, nil
-		}
+	// Regular file. A file sitting directly in $HOME is an Add: there is
+	// nothing to adopt because $HOME is where it already belongs.
+	//
+	// The depth test has to be an actual depth test. Comparing
+	// filepath.Join(homeDir, filepath.Rel(homeDir, absPath)) against absPath
+	// is a tautology for any cleaned path under $HOME — both sides are just
+	// Clean(absPath) — so every in-$HOME file took this branch and the
+	// homeIndex lookup below was unreachable. The common layout
+	// ~/dotfiles/zshrc with ~/.zshrc → ~/dotfiles/zshrc therefore classified
+	// as Add instead of Adopt: the $HOME symlink was never repointed at the
+	// repo, leaving a two-hop chain that breaks silently if ~/dotfiles goes
+	// away.
+	if filepath.Dir(absPath) == homeDir || filepath.Dir(resolvedAbs) == homeDir {
+		cf.Class = ClassAdd
+		return cf, nil
 	}
 
 	// Check the pre-built index: does any $HOME symlink point at this file?
