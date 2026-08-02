@@ -144,6 +144,11 @@ type Model struct {
 	confirmScroll int
 
 	classifyResult *stow.ClassificationResult
+	// classifying is set while ExecuteClassification runs, so a second
+	// enter on the confirm step cannot start a concurrent execution over
+	// the same plan. Both runs would race on the same *.dotcor-tmp staging
+	// paths and on each other's symlink swaps.
+	classifying bool
 
 	browserEntries  map[string][]os.DirEntry
 	browserExpanded map[string]bool
@@ -437,9 +442,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.err = msg.err
 			m.addStep = addStepConfirm
+			m.classifying = false
 		} else {
+			m.classifying = false
 			m.classifyResult = msg.result
-			m.activeView = DashboardView
+			// Only pull the user back to the dashboard if they are still in
+			// the Add wizard. ExecuteClassification takes seconds on a large
+			// tree, and the confirm step shows no in-flight indicator, so a
+			// user who assumes nothing happened may have navigated away —
+			// yanking them out of Settings mid-edit is worse than landing
+			// them where they already are.
+			if m.activeView == AddView {
+				m.activeView = DashboardView
+			}
 			m.err = nil
 			r := msg.result
 			parts := classifyResultParts(r)
@@ -477,14 +492,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// config write happens here, on the update goroutine, against
 			// current in-memory state — a snapshot taken before the git
 			// subprocesses ran would revert any edit made in the meantime.
+			m.err = nil
 			if msg.gitRemote != nil && m.cfg != nil {
 				m.cfg.GitRemote = *msg.gitRemote
 				if saveErr := m.cfg.SaveConfig(); saveErr != nil {
+					// Clear the error BEFORE this, never after: reporting
+					// success here would leave .git/config holding the new
+					// remote while .dotcorrc still held the old one, and the
+					// user would see a green "Remote saved" for a write that
+					// did not happen.
 					m.err = fmt.Errorf("saving config: %w", saveErr)
+					return m, tea.Batch(cmds...)
 				}
 			}
 			m.statusMsg = msg.msg
-			m.err = nil
 			cmds = append(cmds, clearStatusAfter(3*time.Second))
 		}
 		// refreshAll reloads packages, git status and commits — not the
@@ -1216,6 +1237,7 @@ func (m Model) nextSortedPkg() int {
 
 func (m *Model) resetAddState() {
 	m.addStep = addStepSelect
+	m.classifying = false
 	m.browserExpanded = make(map[string]bool)
 	m.browserCursor = 0
 	m.browserScroll = 0

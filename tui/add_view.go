@@ -1038,9 +1038,13 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 
 			case addStepConfirm:
-				if m.previewPlan == nil {
+				if m.previewPlan == nil || m.classifying {
+					// Already running: a second enter would start a
+					// concurrent execution over the same plan, racing on the
+					// same staging paths and symlink swaps.
 					return m, nil
 				}
+				m.classifying = true
 				return m, runClassification(m.previewPlan, stow.CopyToggles(m.previewToggles), m.repoDir, m.homeDir)
 			}
 

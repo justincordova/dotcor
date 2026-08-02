@@ -2,11 +2,15 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/justincordova/dotcor/internal/stow"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestConfirmStep_NoRowHiddenAtAnyScroll pins the fix for a file silently
@@ -152,4 +156,81 @@ func TestBrowserContentHeight_MatchesWhatIsRendered(t *testing.T) {
 				"the scroll maths must use the number of rows actually drawn")
 		})
 	}
+}
+
+// TestSettingsMsg_ReportsConfigSaveFailure pins the fix for a success message
+// covering a failed write. The error set when SaveConfig failed was cleared
+// two lines later, so the user saw a green "Remote saved" while .git/config
+// held the new remote and .dotcorrc still held the old one.
+func TestSettingsMsg_ReportsConfigSaveFailure(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: directory permissions are not enforced")
+	}
+
+	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0500))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0700) })
+	t.Setenv("DOTCOR_DIR", dir)
+
+	m := NewModel(testCfg(), "test")
+	m.loading = false
+
+	saved := "https://github.com/new/repo.git"
+	updated, _ := m.Update(settingsMsg{msg: "Remote saved", gitRemote: &saved})
+	asModel := updated.(Model)
+
+	if _, err := os.Stat(filepath.Join(dir, ".dotcorrc")); err == nil {
+		t.Skip("filesystem allowed the write; the failure path was not exercised")
+	}
+
+	require.Error(t, asModel.err, "a failed config write must be reported")
+	assert.Contains(t, asModel.err.Error(), "saving config")
+	assert.Empty(t, asModel.statusMsg, "a failed write must not also claim success")
+}
+
+// TestClassifyResult_DoesNotYankUserOutOfAnotherView pins the guard added for
+// diffMsg and logsLoadedMsg but missed here. ExecuteClassification takes
+// seconds on a large tree and the confirm step shows no in-flight indicator,
+// so the user may well have navigated away.
+func TestClassifyResult_DoesNotYankUserOutOfAnotherView(t *testing.T) {
+	m := NewModel(testCfg(), "test")
+	m.loading = false
+	m.activeView = SettingsView
+
+	updated, _ := m.Update(classifyResultMsg{result: &stow.ClassificationResult{Added: 2}})
+
+	assert.Equal(t, SettingsView, updated.(Model).activeView,
+		"a late classification result must not change the active view")
+}
+
+// TestClassifyResult_ReturnsToDashboardFromAddView keeps the normal flow.
+func TestClassifyResult_ReturnsToDashboardFromAddView(t *testing.T) {
+	m := NewModel(testCfg(), "test")
+	m.loading = false
+	m.activeView = AddView
+
+	updated, _ := m.Update(classifyResultMsg{result: &stow.ClassificationResult{Added: 2}})
+
+	assert.Equal(t, DashboardView, updated.(Model).activeView)
+}
+
+// TestConfirmStep_SecondEnterDoesNotStartConcurrentRun pins the in-flight
+// guard. Two concurrent ExecuteClassification runs over the same plan would
+// race on the same *.dotcor-tmp staging paths and on each other's symlink
+// swaps.
+func TestConfirmStep_SecondEnterDoesNotStartConcurrentRun(t *testing.T) {
+	m := addModelWithPlan(5, 40)
+	m.addStep = addStepConfirm
+	m.repoDir = t.TempDir()
+
+	first, cmd1 := m.updateAdd(tea.KeyMsg{Type: tea.KeyEnter})
+	require.NotNil(t, cmd1, "the first enter must start the run")
+	assert.True(t, first.(Model).classifying)
+
+	_, cmd2 := first.(Model).updateAdd(tea.KeyMsg{Type: tea.KeyEnter})
+	assert.Nil(t, cmd2, "a second enter must not start a concurrent run")
+
+	// The flag clears when the result lands, so a later Add works.
+	done, _ := first.(Model).Update(classifyResultMsg{result: &stow.ClassificationResult{}})
+	assert.False(t, done.(Model).classifying)
 }
