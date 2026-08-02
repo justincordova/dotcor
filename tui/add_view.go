@@ -208,6 +208,19 @@ func renderAddStep0(m Model, footer string, errLine string) string {
 		fixedLines += 2
 	}
 
+	// fixedContent above models only the dialog chrome. This function also
+	// emits body lines of its own that must be counted, otherwise the dialog
+	// overflows the terminal and clampDialogHeight trims rows off the TOP of
+	// the item list — it preserves lines[:5] (border, stepper, path, rule)
+	// and drops from index 5, which is exactly where the items begin. The
+	// browser opened showing its fourth entry, with the cursor sitting
+	// invisibly on the first.
+	fixedLines += 2 // path header + horizontal rule
+	fixedLines++    // the "… N more" row emitted when the list overflows
+	if m.browserJumping {
+		fixedLines += 4 // blank, jump input, rule, and its trailing newline
+	}
+
 	ch := m.height - fixedLines - 1
 	if ch < 1 {
 		ch = 1
@@ -867,11 +880,31 @@ func (m *Model) browserAdjustScroll() {
 		ch = 1
 	}
 
+	// Clamp the cursor to the current list first. Collapsing an ancestor
+	// removes every descendant row, so the tree can shrink far below where
+	// the cursor was — and with cursor and scroll both past the end the
+	// renderer's loop never runs and the browser goes completely blank, with
+	// j/G appearing dead because they are gated on len(items)-1.
+	items := m.buildBrowserItems()
+	if m.browserCursor > len(items)-1 {
+		m.browserCursor = len(items) - 1
+	}
+	if m.browserCursor < 0 {
+		m.browserCursor = 0
+	}
+
 	if m.browserCursor < m.browserScroll {
 		m.browserScroll = m.browserCursor
 	}
 	if m.browserCursor >= m.browserScroll+ch {
 		m.browserScroll = m.browserCursor - ch + 1
+	}
+	// Never scroll further than the last full window. When the tree shrinks
+	// under the cursor, following the cursor alone leaves the offset high
+	// and the viewport shows a handful of trailing rows with empty space
+	// below, instead of the whole (now short) list.
+	if maxScroll := len(items) - ch; m.browserScroll > maxScroll {
+		m.browserScroll = maxScroll
 	}
 	// An empty item list drives browserCursor to -1 (len-1), which would
 	// otherwise leave browserScroll negative. Keep it non-negative.
@@ -1226,14 +1259,19 @@ func (m Model) browserHandleKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.browserExpanded[item.path] = false
 				delete(m.browserEntries, item.path)
 				m.browserItems = nil
+				// Rebuild and re-clamp: the tree just shrank, and the cursor
+				// may now point past its end.
+				m.browserAdjustScroll()
 				return m, nil
 			}
-			// Find the nearest (deepest) expanded ancestor.
+			// Find the nearest (deepest) expanded ancestor. Collapsing it
+			// removes every descendant row, so the shrink can be large.
 			nearest := m.nearestExpandedAncestor(item.path)
 			if nearest != "" {
 				m.browserExpanded[nearest] = false
 				delete(m.browserEntries, nearest)
 				m.browserItems = nil
+				m.browserAdjustScroll()
 				return m, nil
 			}
 		}
