@@ -563,14 +563,43 @@ func wrapGitError(what, stderr string, err error) error {
 	return fmt.Errorf("%s failed: %s: %w", what, msg, err)
 }
 
-// credentialInURL matches the userinfo section of a URL: scheme://user:secret@
-// Group 1 is the scheme, group 2 is the username.
-var credentialInURL = regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*://)([^:/@\s]*):[^/@\s]*@`)
+// credentialInURL matches the userinfo section of a URL. The password is
+// optional, because the single-value form — https://<token>@host — is what
+// GitHub and GitLab document for personal access tokens and is the most
+// common way a secret ends up in a remote URL. Requiring the colon meant that
+// form was neither redacted nor stripped.
+//
+// Group 1 is the scheme, group 2 the username/token, group 3 the password
+// (empty when the colon-less form is used).
+var credentialInURL = regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*://)([^:/@\s]*)(?::([^/@\s]*))?@`)
+
+// schemeCarriesSecretUserinfo reports whether a colon-less userinfo under
+// this scheme should be treated as a secret.
+//
+// Over http/https a bare userinfo is almost always a token. Over ssh and git
+// it is a login name — "git@github.com" is the conventional form and carries
+// no secret — so it must be preserved or every ssh remote would be mangled.
+func schemeCarriesSecretUserinfo(scheme string) bool {
+	switch strings.ToLower(scheme) {
+	case "http://", "https://":
+		return true
+	default:
+		return false
+	}
+}
 
 // RedactURLCredentials strips passwords and tokens from any URL in s so git
 // output can be shown to the user or written to the log safely.
 func RedactURLCredentials(s string) string {
-	return credentialInURL.ReplaceAllString(s, "${1}***:***@")
+	return replaceURLUserinfo(s, func(scheme, user, password string, hasPassword bool) string {
+		if hasPassword {
+			return scheme + "***:***@"
+		}
+		if schemeCarriesSecretUserinfo(scheme) {
+			return scheme + "***@"
+		}
+		return scheme + user + "@"
+	})
 }
 
 // StripURLPassword removes the password/token from a URL's userinfo, keeping
@@ -583,7 +612,34 @@ func RedactURLCredentials(s string) string {
 // copy of the URL lives in .git/config, which is never staged, so stripping
 // the secret here costs nothing operationally.
 func StripURLPassword(remoteURL string) string {
-	return credentialInURL.ReplaceAllString(remoteURL, "${1}${2}@")
+	return replaceURLUserinfo(remoteURL, func(scheme, user, password string, hasPassword bool) string {
+		if hasPassword {
+			// Keep the username; it identifies the account and is not secret.
+			return scheme + user + "@"
+		}
+		if schemeCarriesSecretUserinfo(scheme) {
+			// Colon-less userinfo over http/https is almost certainly a
+			// token. Drop it entirely — git's credential helper supplies
+			// the real credential at push time.
+			return scheme
+		}
+		return scheme + user + "@"
+	})
+}
+
+// replaceURLUserinfo rewrites every URL userinfo section in s using rewrite.
+func replaceURLUserinfo(s string, rewrite func(scheme, user, password string, hasPassword bool) string) string {
+	return credentialInURL.ReplaceAllStringFunc(s, func(match string) string {
+		groups := credentialInURL.FindStringSubmatch(match)
+		if groups == nil {
+			return match
+		}
+		// A password group is only present when the source had a colon;
+		// FindStringSubmatch cannot distinguish "absent" from "empty", so
+		// re-check the raw match.
+		hasPassword := strings.Contains(strings.TrimSuffix(match, "@")[len(groups[1]):], ":")
+		return rewrite(groups[1], groups[2], groups[3], hasPassword)
+	})
 }
 
 // HasChanges checks if working tree has uncommitted changes

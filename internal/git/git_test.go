@@ -1512,6 +1512,16 @@ func TestRedactURLCredentials(t *testing.T) {
 			in:   "Updates were rejected because the remote contains work",
 			want: "Updates were rejected because the remote contains work",
 		},
+		{
+			name: "https bare token is redacted",
+			in:   "fatal: unable to access 'https://ghp_secret123@github.com/o/r.git/'",
+			want: "fatal: unable to access 'https://***@github.com/o/r.git/'",
+		},
+		{
+			name: "ssh login name is not a secret",
+			in:   "fatal: could not read from 'ssh://git@github.com/o/r.git'",
+			want: "fatal: could not read from 'ssh://git@github.com/o/r.git'",
+		},
 	}
 
 	for _, tc := range cases {
@@ -1710,9 +1720,15 @@ func TestRemoveRemote_MissingRemoteIsSuccess(t *testing.T) {
 func TestStripURLPassword(t *testing.T) {
 	cases := []struct{ name, in, want string }{
 		{"https token", "https://jc:ghp_secret@github.com/jc/dots.git", "https://jc@github.com/jc/dots.git"},
+		// The colon-less form is what GitHub and GitLab document for personal
+		// access tokens; it must be dropped, not preserved as a "username".
+		{"https bare token", "https://ghp_secret@github.com/jc/dots.git", "https://github.com/jc/dots.git"},
+		{"http bare token", "http://ghp_secret@example.com/jc/dots.git", "http://example.com/jc/dots.git"},
 		{"no password", "https://github.com/jc/dots.git", "https://github.com/jc/dots.git"},
 		{"ssh scp form untouched", "git@github.com:jc/dots.git", "git@github.com:jc/dots.git"},
+		// Over ssh a bare userinfo is a login name, not a secret.
 		{"ssh scheme user only", "ssh://git@github.com/jc/dots.git", "ssh://git@github.com/jc/dots.git"},
+		{"git scheme user only", "git://git@example.com/jc/dots.git", "git://git@example.com/jc/dots.git"},
 		{"ssh scheme with password", "ssh://git:pw@github.com/jc/dots.git", "ssh://git@github.com/jc/dots.git"},
 		{"empty", "", ""},
 	}
