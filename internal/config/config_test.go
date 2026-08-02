@@ -203,3 +203,70 @@ func TestLoadConfig_NoFile_ReturnsDefault(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, cfg)
 }
+
+// TestLoadConfig_BackfillsIgnorePatterns pins the fix for a silent loss of
+// secret filtering. A .dotcorrc written before ignore_patterns existed — or
+// hand-edited to drop the key — unmarshalled to a nil list, and an empty list
+// disables filtering entirely, so ~/.ssh/id_rsa and .env would be swept into
+// the repo and pushed.
+func TestLoadConfig_BackfillsIgnorePatterns(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("DOTCOR_DIR", dir)
+	require.NoError(t, os.WriteFile(
+		filepath.Join(dir, ".dotcorrc"),
+		[]byte("git_remote: git@github.com:u/dots.git\n"),
+		0600,
+	))
+
+	cfg, err := LoadConfig()
+
+	require.NoError(t, err)
+	assert.NotEmpty(t, cfg.IgnorePatterns, "an absent ignore_patterns key must fall back to the defaults")
+	assert.Equal(t, GetDefaultIgnorePatterns(), cfg.IgnorePatterns)
+	assert.Equal(t, "git@github.com:u/dots.git", cfg.GitRemote)
+}
+
+// TestLoadConfig_RespectsExplicitEmptyList keeps "filter nothing" available
+// as a deliberate choice, distinct from the key being absent.
+func TestLoadConfig_RespectsExplicitEmptyList(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("DOTCOR_DIR", dir)
+	require.NoError(t, os.WriteFile(
+		filepath.Join(dir, ".dotcorrc"),
+		[]byte("ignore_patterns: []\n"),
+		0600,
+	))
+
+	cfg, err := LoadConfig()
+
+	require.NoError(t, err)
+	assert.Empty(t, cfg.IgnorePatterns, "an explicitly empty list must be honoured")
+	assert.NotNil(t, cfg.IgnorePatterns, "an explicit empty list is not the same as absent")
+}
+
+// TestLoadConfig_PreservesConfiguredPatterns guards against clobbering.
+func TestLoadConfig_PreservesConfiguredPatterns(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("DOTCOR_DIR", dir)
+	require.NoError(t, os.WriteFile(
+		filepath.Join(dir, ".dotcorrc"),
+		[]byte("ignore_patterns:\n  - \"*.secret\"\n"),
+		0600,
+	))
+
+	cfg, err := LoadConfig()
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"*.secret"}, cfg.IgnorePatterns)
+}
+
+// TestLoadConfigFromPath_BackfillsIgnorePatterns covers the other loader.
+func TestLoadConfigFromPath_BackfillsIgnorePatterns(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".dotcorrc")
+	require.NoError(t, os.WriteFile(path, []byte("git_remote: \"\"\n"), 0600))
+
+	cfg, err := LoadConfigFromPath(path)
+
+	require.NoError(t, err)
+	assert.Equal(t, GetDefaultIgnorePatterns(), cfg.IgnorePatterns)
+}

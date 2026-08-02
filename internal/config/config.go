@@ -82,17 +82,31 @@ func LoadConfig() (*Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parsing config file: %w", err)
 	}
+	applyDefaults(&cfg)
 
-	// Always provide a non-nil logger. main.go overrides this with a real
-	// file-backed logger after LoadConfig returns, but several callers in
-	// internal/core (hooks, backup, templates) call cfg.Logger.X without a
-	// nil guard. Initialise to a discard logger so a partial init never
-	// panics.
+	return &cfg, nil
+}
+
+// applyDefaults backfills fields a config file may not carry.
+//
+// ignore_patterns is the important one. A config written before the key
+// existed, or hand-edited to drop it, unmarshals to nil — and an empty
+// pattern list disables filtering entirely, so ~/.ssh/id_rsa, .env and *.pem
+// get swept into the repo and pushed to the remote. Absence must mean "use
+// the defaults"; only an explicitly empty list means "filter nothing", which
+// yaml distinguishes for us (`ignore_patterns: []` decodes to a non-nil
+// empty slice).
+//
+// The logger default exists because several callers in internal/core call
+// cfg.Logger.X with no nil guard; main.go replaces it with the real
+// file-backed logger after LoadConfig returns.
+func applyDefaults(cfg *Config) {
+	if cfg.IgnorePatterns == nil {
+		cfg.IgnorePatterns = GetDefaultIgnorePatterns()
+	}
 	if cfg.Logger == nil {
 		cfg.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
-
-	return &cfg, nil
 }
 
 func LoadConfigFromPath(path string) (*Config, error) {
@@ -105,10 +119,7 @@ func LoadConfigFromPath(path string) (*Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parsing config file: %w", err)
 	}
-
-	if cfg.Logger == nil {
-		cfg.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
-	}
+	applyDefaults(&cfg)
 
 	return &cfg, nil
 }
