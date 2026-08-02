@@ -1702,3 +1702,42 @@ func TestInitRepo_IgnoresBackupsDirectory(t *testing.T) {
 	assert.NotContains(t, string(out), "id_rsa", "backed-up private material must never be staged")
 	assert.NotContains(t, string(out), "backups/")
 }
+
+// TestSyncDetailed_ReportsRemoteLookupFailure pins the fix for a silent
+// no-op. GetRemoteURL distinguishes "no remote configured" from a real
+// failure, but discarding its error at the call site reinstated the bug: a
+// failed lookup skipped the push and still reported success.
+func TestSyncDetailed_ReportsRemoteLookupFailure(t *testing.T) {
+	if !IsGitInstalled() {
+		t.Skip("git not installed")
+	}
+	// Not a repository: every git call fails, including the remote lookup.
+	_, err := SyncDetailed(t.TempDir(), slog.Default())
+
+	assert.Error(t, err, "a failed remote lookup must not be reported as a successful sync")
+}
+
+// TestSync_ReportsRemoteLookupFailure covers the other entry point.
+func TestSync_ReportsRemoteLookupFailure(t *testing.T) {
+	if !IsGitInstalled() {
+		t.Skip("git not installed")
+	}
+	err := Sync(t.TempDir(), slog.Default())
+
+	assert.Error(t, err, "a failed remote lookup must not be reported as a successful sync")
+}
+
+// TestSyncDetailed_NoRemoteIsStillSuccess keeps the legitimate skip working.
+func TestSyncDetailed_NoRemoteIsStillSuccess(t *testing.T) {
+	if !IsGitInstalled() {
+		t.Skip("git not installed")
+	}
+	repo := t.TempDir()
+	require.NoError(t, InitRepo(repo))
+	stageInitialCommit(t, repo)
+
+	result, err := SyncDetailed(repo, slog.Default())
+
+	require.NoError(t, err, "a repository with no remote syncs locally without error")
+	assert.False(t, result.Pushed)
+}

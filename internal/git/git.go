@@ -382,7 +382,14 @@ func SyncDetailed(repoPath string, logger *slog.Logger) (SyncResult, error) {
 		result.FilesChanged = len(status.ChangedFiles)
 	}
 
-	remoteURL, _ := GetRemoteURL(repoPath)
+	// Propagate the error rather than discarding it. GetRemoteURL now
+	// distinguishes "no remote configured" (exit 2) from a real failure, but
+	// swallowing the error here reinstates the silent no-op it was fixed for:
+	// a timed-out lookup would skip the push and still report success.
+	remoteURL, err := GetRemoteURL(repoPath)
+	if err != nil {
+		return result, fmt.Errorf("checking remote: %w", err)
+	}
 	if remoteURL == "" {
 		return result, nil
 	}
@@ -421,9 +428,14 @@ func Sync(repoPath string, logger *slog.Logger) error {
 		return err
 	}
 
-	// Check if remote exists
+	// Only an absent remote is a reason to skip the push. Treating every
+	// failure as "no remote" made Sync a silent no-op that still reported
+	// success while nothing had been pushed.
 	remoteURL, err := GetRemoteURL(repoPath)
-	if err != nil || remoteURL == "" {
+	if err != nil {
+		return fmt.Errorf("checking remote: %w", err)
+	}
+	if remoteURL == "" {
 		return nil // No remote configured, skip push
 	}
 
