@@ -332,10 +332,15 @@ func buildHomeSymlinkIndex(homeDir, repoDir string, selections []string) (map[st
 // bare "init.lua", which broke the repo↔$HOME mapping and let two selections
 // claim one destination.
 //
-// The distinguishing evidence is that a Stow package's entries correspond to
-// real $HOME paths: ~/dotfiles/zsh/.zshrc goes with an existing ~/.zshrc,
-// whereas ~/.config/nvim/init.lua has no ~/init.lua. Only depth-1 entries are
-// checked, so this costs one Lstat per package entry.
+// The evidence required is a $HOME entry that is a SYMLINK RESOLVING INTO the
+// package — ~/.zshrc → ~/dotfiles/zsh/.zshrc. That is what stowing actually
+// creates, and nothing else produces it.
+//
+// A mere name match is far too weak: $HOME's depth-1 namespace is full of
+// generic names, so "~/.local/pipx/.cache matches ~/.cache" or
+// "~/.config/emacs/bin matches ~/bin" would flip the base for every package in
+// the selection, scattering symlinks at $HOME root and into unrelated
+// directories.
 //
 // A Stow repo that has never been linked shows no evidence and is treated as
 // an ordinary $HOME subtree. That mirrors the files in place rather than
@@ -350,12 +355,14 @@ func usesStowConvention(dir, homeDir string) bool {
 		if !pkg.IsDir() || isExcluded(pkg.Name()) {
 			continue
 		}
-		contents, cerr := os.ReadDir(filepath.Join(dir, pkg.Name()))
+		pkgDir := filepath.Join(dir, pkg.Name())
+		contents, cerr := os.ReadDir(pkgDir)
 		if cerr != nil {
 			continue
 		}
 		for _, entry := range contents {
-			if pathExists(filepath.Join(homeDir, entry.Name())) {
+			homeEntry := filepath.Join(homeDir, entry.Name())
+			if symlinkTargetsPath(homeEntry, filepath.Join(pkgDir, entry.Name())) {
 				return true
 			}
 		}

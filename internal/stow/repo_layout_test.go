@@ -3,6 +3,7 @@ package stow
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -256,4 +257,94 @@ func TestClassifyFiles_OutsideHomeKeepsSelectionRelativePaths(t *testing.T) {
 	}
 	assert.True(t, rels[filepath.Join("sub", "app.conf")], "got %v", rels)
 	assert.True(t, rels["top.conf"], "got %v", rels)
+}
+
+// TestUsesStowConvention_RequiresSymlinkEvidence pins the fix for a
+// discriminator that fired on ordinary $HOME layouts.
+//
+// Matching on a shared NAME meant "~/.local/pipx/.cache matches ~/.cache" or
+// "~/.config/emacs/bin matches ~/bin" flipped the base for every package in
+// the selection, so Add scattered symlinks at $HOME root and into unrelated
+// existing directories. Only a $HOME symlink resolving INTO the package is
+// evidence that stowing actually happened.
+func TestUsesStowConvention_RequiresSymlinkEvidence(t *testing.T) {
+	t.Run("name collision is not evidence", func(t *testing.T) {
+		tmp := t.TempDir()
+		homeDir := filepath.Join(tmp, "home")
+		local := filepath.Join(homeDir, ".local")
+
+		// A real ~/.local layout, and a real ~/.cache that merely shares a
+		// name with ~/.local/pipx/.cache.
+		writeFile(t, filepath.Join(local, "pipx", ".cache", "x"), "x")
+		writeFile(t, filepath.Join(local, "bin", "uv"), "uv")
+		require.NoError(t, os.MkdirAll(filepath.Join(homeDir, ".cache"), 0755))
+		require.NoError(t, os.MkdirAll(filepath.Join(homeDir, "bin"), 0755))
+
+		assert.False(t, usesStowConvention(local, homeDir),
+			"a shared directory name is not evidence of a Stow repository")
+	})
+
+	t.Run("symlink into the package is evidence", func(t *testing.T) {
+		tmp := t.TempDir()
+		homeDir := filepath.Join(tmp, "home")
+		dotfiles := filepath.Join(homeDir, "dotfiles")
+		require.NoError(t, os.MkdirAll(homeDir, 0755))
+		writeFile(t, filepath.Join(dotfiles, "zsh", ".zshrc"), "zsh")
+		require.NoError(t, os.Symlink(
+			filepath.Join(dotfiles, "zsh", ".zshrc"), filepath.Join(homeDir, ".zshrc")))
+
+		assert.True(t, usesStowConvention(dotfiles, homeDir))
+	})
+
+	t.Run("symlink pointing elsewhere is not evidence", func(t *testing.T) {
+		tmp := t.TempDir()
+		homeDir := filepath.Join(tmp, "home")
+		dotfiles := filepath.Join(homeDir, "dotfiles")
+		other := filepath.Join(tmp, "other")
+		require.NoError(t, os.MkdirAll(homeDir, 0755))
+		writeFile(t, filepath.Join(dotfiles, "zsh", ".zshrc"), "zsh")
+		writeFile(t, filepath.Join(other, ".zshrc"), "other")
+		require.NoError(t, os.Symlink(filepath.Join(other, ".zshrc"), filepath.Join(homeDir, ".zshrc")))
+
+		assert.False(t, usesStowConvention(dotfiles, homeDir),
+			"a $HOME symlink pointing somewhere else is not evidence")
+	})
+}
+
+// TestClassifyFiles_DotLocalWithNameCollisionsMapsToHome is the end-to-end
+// consequence: Add must produce packages that DiscoverPackages agrees are
+// linked, and must not scatter symlinks at $HOME root.
+func TestClassifyFiles_DotLocalWithNameCollisionsMapsToHome(t *testing.T) {
+	tmp := t.TempDir()
+	homeDir := filepath.Join(tmp, "home")
+	repoDir := filepath.Join(tmp, "repo")
+	require.NoError(t, os.MkdirAll(repoDir, 0755))
+
+	local := filepath.Join(homeDir, ".local")
+	writeFile(t, filepath.Join(local, "pipx", ".cache", "x"), "x")
+	writeFile(t, filepath.Join(local, "bin", "uv"), "uv")
+	require.NoError(t, os.MkdirAll(filepath.Join(homeDir, ".cache"), 0755))
+
+	plan, err := ClassifyFiles([]string{local}, repoDir, homeDir, nil)
+	require.NoError(t, err)
+
+	for _, pkg := range plan.Packages {
+		for _, cf := range pkg.Files {
+			assert.True(t, strings.HasPrefix(cf.RelPath, ".local"+string(filepath.Separator)),
+				"paths must stay $HOME-relative, got %q", cf.RelPath)
+		}
+	}
+
+	_, err = ExecuteClassification(plan, BuildDefaultToggles(plan), repoDir, homeDir)
+	require.NoError(t, err)
+
+	packages, err := DiscoverPackages(repoDir, homeDir)
+	require.NoError(t, err)
+	for _, pkg := range packages {
+		assert.Equal(t, StatusLinked, pkg.Status,
+			"package %s must be reported linked right after Add", pkg.Name)
+	}
+
+	_, strayErr := os.Lstat(filepath.Join(homeDir, "uv"))
+	assert.True(t, os.IsNotExist(strayErr), "stow must not scatter a symlink at $HOME root")
 }
