@@ -177,7 +177,7 @@ func ClassifyFiles(selections []string, repoDir, homeDir string, ignorePatterns 
 				plan.Filtered = append(plan.Filtered, FilteredFile{AbsPath: sel, Pattern: pattern})
 				continue
 			}
-			cf, err := classifyFile(sel, sel, repoDir, homeDir, homeIndex)
+			cf, err := classifyFile(sel, relBaseFor(sel, homeDir), repoDir, homeDir, homeIndex)
 			if err != nil {
 				return nil, err
 			}
@@ -191,7 +191,7 @@ func ClassifyFiles(selections []string, repoDir, homeDir string, ignorePatterns 
 				plan.Filtered = append(plan.Filtered, FilteredFile{AbsPath: sel, Pattern: pattern})
 				continue
 			}
-			cf, err := classifyFile(sel, sel, repoDir, homeDir, homeIndex)
+			cf, err := classifyFile(sel, relBaseFor(sel, homeDir), repoDir, homeDir, homeIndex)
 			if err != nil {
 				return nil, err
 			}
@@ -210,7 +210,9 @@ func ClassifyFiles(selections []string, repoDir, homeDir string, ignorePatterns 
 					continue
 				}
 				pkgDir := filepath.Join(sel, entry.Name())
-				if err := walkAndClassify(plan, pkgIndex, pkgDir, entry.Name(), repoDir, homeDir, homeIndex, ignorePatterns); err != nil {
+				// Stow layout: paths inside a package directory are already
+				// $HOME-relative by convention, so the package dir is the base.
+				if err := walkAndClassify(plan, pkgIndex, pkgDir, pkgDir, entry.Name(), repoDir, homeDir, homeIndex, ignorePatterns); err != nil {
 					return nil, err
 				}
 			}
@@ -219,7 +221,7 @@ func ClassifyFiles(selections []string, repoDir, homeDir string, ignorePatterns 
 
 		// Regular directory selection — derive one package name.
 		pkgName := derivePkgName(sel, homeDir)
-		if err := walkAndClassify(plan, pkgIndex, sel, pkgName, repoDir, homeDir, homeIndex, ignorePatterns); err != nil {
+		if err := walkAndClassify(plan, pkgIndex, sel, relBaseFor(sel, homeDir), pkgName, repoDir, homeDir, homeIndex, ignorePatterns); err != nil {
 			return nil, err
 		}
 	}
@@ -386,7 +388,7 @@ func derivePkgNameForFile(absPath, homeDir string) string {
 // walkAndClassify walks selDir and classifies every file into pkgName.
 // Files matching any pattern in ignorePatterns are recorded in plan.Filtered
 // and skipped.
-func walkAndClassify(plan *ClassificationPlan, pkgIndex map[string]int, selDir, pkgName, repoDir, homeDir string, homeIndex map[string]string, ignorePatterns []string) error {
+func walkAndClassify(plan *ClassificationPlan, pkgIndex map[string]int, selDir, relBase, pkgName, repoDir, homeDir string, homeIndex map[string]string, ignorePatterns []string) error {
 	return filepath.WalkDir(selDir, func(path string, d fs.DirEntry, walkErr error) error {
 		// Unreadable entries are skipped rather than aborting the whole
 		// plan, but they must be surfaced. Silently dropping them meant an
@@ -431,7 +433,7 @@ func walkAndClassify(plan *ClassificationPlan, pkgIndex map[string]int, selDir, 
 			return nil
 		}
 
-		cf, err := classifyFileInDir(path, selDir, pkgName, repoDir, homeDir, homeIndex)
+		cf, err := classifyFileInDir(path, relBase, pkgName, repoDir, homeDir, homeIndex)
 		if err != nil {
 			plan.Warnings = append(plan.Warnings,
 				fmt.Sprintf("could not classify %s: %v", path, err))
@@ -453,16 +455,50 @@ func matchIgnore(path string, patterns []string) (bool, string) {
 	return core.ShouldIgnore(path, patterns)
 }
 
-// classifyFile classifies a single file (not inside a walked directory).
-// selPath is used to derive the package name.
-func classifyFile(path, selPath, repoDir, homeDir string, homeIndex map[string]string) (ClassifiedFile, error) {
+// classifyFile classifies a single selected file (not inside a walked
+// directory). relBase is the directory the repo-relative path is computed
+// against — see relBaseFor.
+func classifyFile(path, relBase, repoDir, homeDir string, homeIndex map[string]string) (ClassifiedFile, error) {
 	pkgName := derivePkgNameForFile(path, homeDir)
-	return classifyFileInDir(path, filepath.Dir(selPath), pkgName, repoDir, homeDir, homeIndex)
+	return classifyFileInDir(path, relBase, pkgName, repoDir, homeDir, homeIndex)
 }
 
-// classifyFileInDir classifies a file given the walk root (selDir) and package name.
-// relPath within the package is computed relative to selDir.
-func classifyFileInDir(absPath, selDir, pkgName, repoDir, homeDir string, homeIndex map[string]string) (ClassifiedFile, error) {
+// relBaseFor returns the directory a selection's repo-relative paths should be
+// measured from.
+//
+// For anything inside $HOME that base must be $HOME itself, because a package
+// mirrors the $HOME layout — package nvim holds .config/nvim/init.lua, not a
+// bare init.lua. Measuring from the selection directory instead broke that
+// contract two ways:
+//
+//   - Link, Unlink and DiscoverPackages all map repo/<pkg>/<rel> to
+//     $HOME/<rel>, so a file added from ~/.config/nvim landed at
+//     repo/nvim/init.lua, was reported unlinked, and stowing it created a
+//     stray ~/init.lua while Unlink could never remove the real link.
+//   - Two selections sharing a basename (~/.config/nvim and
+//     ~/.local/share/nvim) produced the same package AND the same relative
+//     path, so the second file overwrote the first in the repo and both
+//     $HOME symlinks pointed at it. One file's only copy was destroyed, with
+//     the operation reported as a success.
+//
+// Selections outside $HOME have no $HOME mapping, so they keep measuring from
+// the selection itself.
+func relBaseFor(sel, homeDir string) string {
+	base := sel
+	if fi, err := os.Lstat(sel); err == nil && !fi.IsDir() {
+		base = filepath.Dir(sel)
+	}
+	rel, err := filepath.Rel(homeDir, base)
+	if err != nil || escapesBase(rel) {
+		return base
+	}
+	return homeDir
+}
+
+// classifyFileInDir classifies a file. relPath within the package is computed
+// relative to relBase, which relBaseFor resolves to $HOME for in-$HOME
+// selections so the repo mirrors the $HOME layout.
+func classifyFileInDir(absPath, relBase, pkgName, repoDir, homeDir string, homeIndex map[string]string) (ClassifiedFile, error) {
 	lfi, err := os.Lstat(absPath)
 	if err != nil {
 		return ClassifiedFile{}, fmt.Errorf("lstat %q: %w", absPath, err)
@@ -476,15 +512,15 @@ func classifyFileInDir(absPath, selDir, pkgName, repoDir, homeDir string, homeIn
 	if resolved, rerr := filepath.EvalSymlinks(filepath.Dir(absPath)); rerr == nil {
 		resolvedAbs = filepath.Join(resolved, filepath.Base(absPath))
 	}
-	resolvedSelDir := selDir
-	if resolved, rerr := filepath.EvalSymlinks(selDir); rerr == nil {
-		resolvedSelDir = resolved
+	resolvedBase := relBase
+	if resolved, rerr := filepath.EvalSymlinks(relBase); rerr == nil {
+		resolvedBase = resolved
 	}
 
-	relPath, relErr := filepath.Rel(resolvedSelDir, resolvedAbs)
+	relPath, relErr := filepath.Rel(resolvedBase, resolvedAbs)
 	if relErr != nil || escapesBase(relPath) {
 		// Fall back using unresolved paths.
-		relPath, relErr = filepath.Rel(selDir, absPath)
+		relPath, relErr = filepath.Rel(relBase, absPath)
 		if relErr != nil || escapesBase(relPath) {
 			// Last resort: use basename with a content hash prefix to avoid collisions
 			// when multiple files share the same name across subdirs.
