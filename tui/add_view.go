@@ -988,6 +988,17 @@ func previewContentHeight(m Model) int {
 
 func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		// The jump prompt owns the keyboard while it is open. Without this
+		// the wizard-level esc/enter cases below win, and the prompt's own
+		// handlers are unreachable: esc dropped the entire multi-file
+		// selection and returned to the dashboard, while enter submitted the
+		// selection for classification with the prompt still on screen and
+		// the typed path discarded. The footer advertises "esc cancel", so
+		// the user has every reason to press it.
+		if m.addStep == addStepSelect && m.browserJumping {
+			return m.browserHandleJumpKey(keyMsg)
+		}
+
 		switch {
 		case key.Matches(keyMsg, m.keys.Esc):
 			if m.addStep == addStepSelect {

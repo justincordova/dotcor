@@ -425,6 +425,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case classifyPlanMsg:
+		// A plan that arrives after the user left the wizard belongs to a
+		// session they cancelled. Applying it here yanked them out of a
+		// fresh browse into the preview of the abandoned selection — where
+		// two more enters would execute it — or, on the error branch, into
+		// a dead confirm step with no plan to show.
+		if m.activeView != AddView {
+			return m, nil
+		}
 		if msg.err != nil {
 			m.err = msg.err
 			m.addStep = addStepSelect
@@ -441,8 +449,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case classifyResultMsg:
 		if msg.err != nil {
 			m.err = msg.err
-			m.addStep = addStepConfirm
 			m.classifying = false
+			// Same reasoning as classifyPlanMsg: only move the wizard's step
+			// if the user is still looking at the wizard.
+			if m.activeView == AddView {
+				m.addStep = addStepConfirm
+			}
 		} else {
 			m.classifying = false
 			m.classifyResult = msg.result
