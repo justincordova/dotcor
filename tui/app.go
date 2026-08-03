@@ -90,12 +90,18 @@ type recentCommitsMsg struct {
 	commits []git.CommitInfo
 }
 
+// classifyPlanMsg and classifyResultMsg carry the addSession they were
+// dispatched for. A wizard session that has been left (esc to the dashboard)
+// bumps the counter, so a result from an abandoned run is recognised as stale
+// and dropped instead of being applied to whatever the user is doing now.
 type classifyPlanMsg struct {
+	session int
 	plan *stow.ClassificationPlan
 	err  error
 }
 
 type classifyResultMsg struct {
+	session int
 	result *stow.ClassificationResult
 	err    error
 }
@@ -149,6 +155,10 @@ type Model struct {
 	// the same plan. Both runs would race on the same *.dotcor-tmp staging
 	// paths and on each other's symlink swaps.
 	classifying bool
+	// addSession identifies the current Add wizard session. It is bumped
+	// whenever the wizard is reset or a new classification is dispatched, so
+	// results from a superseded run can be recognised and dropped.
+	addSession int
 
 	browserEntries  map[string][]os.DirEntry
 	browserExpanded map[string]bool
@@ -425,12 +435,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case classifyPlanMsg:
-		// A plan that arrives after the user left the wizard belongs to a
-		// session they cancelled. Applying it here yanked them out of a
-		// fresh browse into the preview of the abandoned selection — where
-		// two more enters would execute it — or, on the error branch, into
-		// a dead confirm step with no plan to show.
-		if m.activeView != AddView {
+		// Drop anything from a superseded run. Checking the view alone was
+		// not enough: leaving the wizard and opening a fresh one put the
+		// user back in AddView, so an abandoned session's plan still landed
+		// — dropping them into the preview of a selection they had backed
+		// out of, two enters from executing it. Pressing enter twice on the
+		// select step likewise produced two plans, and the late one rewound
+		// the wizard from confirm back to preview.
+		if m.activeView != AddView || msg.session != m.addSession {
 			return m, nil
 		}
 		if msg.err != nil {
@@ -453,6 +465,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case classifyResultMsg:
+		if msg.session != m.addSession {
+			// Superseded run. Its filesystem work is already done and was
+			// reported by stow; only the UI transition is dropped.
+			return m, nil
+		}
 		if msg.err != nil {
 			m.err = msg.err
 			m.classifying = false
@@ -1256,6 +1273,8 @@ func (m Model) nextSortedPkg() int {
 func (m *Model) resetAddState() {
 	m.addStep = addStepSelect
 	m.classifying = false
+	// Invalidate anything still in flight for the session being torn down.
+	m.addSession++
 	m.browserExpanded = make(map[string]bool)
 	m.browserCursor = 0
 	m.browserScroll = 0

@@ -31,9 +31,18 @@ type browserItem struct {
 }
 
 func viewAdd(m Model) string {
+	// Render statusMsg as well as err. Every other sub-view shows both via
+	// subviewStatusRow; the Add view showed only errors, so a status-only
+	// report was written to a field nothing here drew and then wiped by its
+	// own timer. The conflict fallback — "N conflicts, press s on the
+	// dashboard to resolve", raised precisely because the Add view cannot
+	// host the confirm modal — was therefore never seen at all.
 	errLine := ""
-	if m.err != nil {
+	switch {
+	case m.err != nil:
 		errLine = "\n" + errorStyle.Render(fmt.Sprintf("  ✗ %v", m.err)) + "\n"
+	case m.statusMsg != "":
+		errLine = "\n" + successStyle.Render(fmt.Sprintf("  ✓ %s", m.statusMsg)) + "\n"
 	}
 
 	cw := contentWidth(m.width)
@@ -1056,7 +1065,7 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				m.classifying = true
-				return m, runClassification(m.previewPlan, stow.CopyToggles(m.previewToggles), m.repoDir, m.homeDir)
+				return m, runClassification(m.addSession, m.previewPlan, stow.CopyToggles(m.previewToggles), m.repoDir, m.homeDir)
 			}
 
 		}
@@ -1462,7 +1471,11 @@ func (m Model) confirmBrowserSelectionAndClassify() (tea.Model, tea.Cmd) {
 	}
 
 	m.err = nil
-	return m, classifySelections(selections, m.repoDir, m.homeDir, m.cfg.IgnorePatterns)
+	// New dispatch, new session: pressing enter twice on the select step
+	// produced two plans, and the later one rewound the wizard from confirm
+	// back to preview. Only the newest run's plan is applied.
+	m.addSession++
+	return m, classifySelections(m.addSession, selections, m.repoDir, m.homeDir, m.cfg.IgnorePatterns)
 }
 
 func (m Model) browserSelectAndClassify(fullPath string) (tea.Model, tea.Cmd) {
@@ -1479,7 +1492,8 @@ func (m Model) browserSelectAndClassify(fullPath string) (tea.Model, tea.Cmd) {
 	}
 
 	m.err = nil
-	return m, classifySelections([]string{fullPath}, m.repoDir, m.homeDir, m.cfg.IgnorePatterns)
+	m.addSession++
+	return m, classifySelections(m.addSession, []string{fullPath}, m.repoDir, m.homeDir, m.cfg.IgnorePatterns)
 }
 
 func (m *Model) toggleDirSelection(dirPath string) {
@@ -1587,7 +1601,7 @@ func selectionCount(selected map[string]bool) string {
 
 // ─── Tea commands ─────────────────────────────────────────────────────────────
 
-func classifySelections(selections []string, repoDir, homeDir string, ignorePatterns []string) tea.Cmd {
+func classifySelections(session int, selections []string, repoDir, homeDir string, ignorePatterns []string) tea.Cmd {
 	// Snapshot the pattern list before it crosses the goroutine boundary.
 	// The settings view edits m.cfg.IgnorePatterns in place —
 	// `append(s[:i], s[i+1:]...)` shifts elements within the same backing
@@ -1598,13 +1612,13 @@ func classifySelections(selections []string, repoDir, homeDir string, ignorePatt
 
 	return func() tea.Msg {
 		plan, err := stow.ClassifyFiles(selections, repoDir, homeDir, patterns)
-		return classifyPlanMsg{plan: plan, err: err}
+		return classifyPlanMsg{session: session, plan: plan, err: err}
 	}
 }
 
-func runClassification(plan *stow.ClassificationPlan, toggles map[string]bool, repoDir, homeDir string) tea.Cmd {
+func runClassification(session int, plan *stow.ClassificationPlan, toggles map[string]bool, repoDir, homeDir string) tea.Cmd {
 	return func() tea.Msg {
 		result, err := stow.ExecuteClassification(plan, toggles, repoDir, homeDir)
-		return classifyResultMsg{result: result, err: err}
+		return classifyResultMsg{session: session, result: result, err: err}
 	}
 }

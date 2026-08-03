@@ -89,7 +89,12 @@ func viewHelp(m Model) string {
 		Bold(true).
 		Render("◆ dotcor — Keybindings")
 
+	// Include any pending status/error so a message raised while the help
+	// overlay is open is not lost to its own clear timer.
 	footer := dimStyle.Render("press ? or esc to close")
+	if row := subviewStatusRow(m); row != "" {
+		footer = row + "\n" + footer
+	}
 
 	body := lipgloss.JoinVertical(lipgloss.Left, title, "", content, "", footer)
 
