@@ -102,6 +102,9 @@ type classifyPlanMsg struct {
 
 type classifyResultMsg struct {
 	session int
+	// run identifies the execution that produced this result, so only the
+	// run currently holding the in-flight gate can release it.
+	run int
 	result *stow.ClassificationResult
 	err    error
 }
@@ -150,11 +153,20 @@ type Model struct {
 	confirmScroll int
 
 	classifyResult *stow.ClassificationResult
-	// classifying is set while ExecuteClassification runs, so a second
-	// enter on the confirm step cannot start a concurrent execution over
-	// the same plan. Both runs would race on the same *.dotcor-tmp staging
-	// paths and on each other's symlink swaps.
-	classifying bool
+	// classifyingRun is the id of the ExecuteClassification currently in
+	// flight, or 0 when none is. It stops a second enter on the confirm step
+	// starting a concurrent execution: two runs would race on the same
+	// *.dotcor-tmp staging paths and on each other's symlink swaps, and an
+	// interleaved rollback can delete the repo copy the other run's $HOME
+	// symlink already points at — destroying the file's only copy.
+	//
+	// It is deliberately owner-identified rather than a bare bool. A bool was
+	// released by any arriving result, including one from an abandoned run,
+	// which handed the gate away while a newer execution was still touching
+	// the filesystem.
+	classifyingRun int
+	// classifyRunSeq issues classifyingRun ids.
+	classifyRunSeq int
 	// addSession identifies the current Add wizard session. It is bumped
 	// whenever the wizard is reset or a new classification is dispatched, so
 	// results from a superseded run can be recognised and dropped.
@@ -465,11 +477,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case classifyResultMsg:
-		// The execution has finished either way, so the in-flight flag must
-		// be cleared even for a superseded run. Returning early left it set
-		// forever, and the confirm step's enter then did nothing at all —
-		// silently, with no error, status or spinner.
-		m.classifying = false
+		// Release the gate only if this result is from the run holding it.
+		// Clearing unconditionally let an abandoned run's result release a
+		// gate a newer, still-running execution owned.
+		if msg.run != 0 && msg.run == m.classifyingRun {
+			m.classifyingRun = 0
+		}
 
 		// A superseded run still did real filesystem work, so its results
 		// are still committed and reflected on the dashboard. Only the
@@ -1275,8 +1288,10 @@ func (m Model) nextSortedPkg() int {
 
 func (m *Model) resetAddState() {
 	m.addStep = addStepSelect
-	m.classifying = false
-	// Invalidate anything still in flight for the session being torn down.
+	// Deliberately does NOT clear classifyingRun: abandoning the wizard does
+	// not stop an ExecuteClassification that is still touching the
+	// filesystem, and releasing the gate here would let the next session
+	// start a concurrent one. It is released when that run's result arrives.
 	m.addSession++
 	m.browserExpanded = make(map[string]bool)
 	m.browserCursor = 0

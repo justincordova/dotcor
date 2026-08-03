@@ -225,12 +225,17 @@ func TestConfirmStep_SecondEnterDoesNotStartConcurrentRun(t *testing.T) {
 
 	first, cmd1 := m.updateAdd(tea.KeyMsg{Type: tea.KeyEnter})
 	require.NotNil(t, cmd1, "the first enter must start the run")
-	assert.True(t, first.(Model).classifying)
+	assert.NotZero(t, first.(Model).classifyingRun)
 
 	_, cmd2 := first.(Model).updateAdd(tea.KeyMsg{Type: tea.KeyEnter})
 	assert.Nil(t, cmd2, "a second enter must not start a concurrent run")
 
-	// The flag clears when the result lands, so a later Add works.
-	done, _ := first.(Model).Update(classifyResultMsg{result: &stow.ClassificationResult{}})
-	assert.False(t, done.(Model).classifying)
+	// The gate clears when its own run's result lands, so a later Add works.
+	running := first.(Model)
+	done, _ := running.Update(classifyResultMsg{
+		session: running.addSession,
+		run:     running.classifyingRun,
+		result:  &stow.ClassificationResult{},
+	})
+	assert.Zero(t, done.(Model).classifyingRun)
 }

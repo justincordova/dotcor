@@ -1063,14 +1063,16 @@ func (m Model) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 
 			case addStepConfirm:
-				if m.previewPlan == nil || m.classifying {
+				if m.previewPlan == nil || m.classifyingRun != 0 {
 					// Already running: a second enter would start a
 					// concurrent execution over the same plan, racing on the
 					// same staging paths and symlink swaps.
 					return m, nil
 				}
-				m.classifying = true
-				return m, runClassification(m.addSession, m.previewPlan, stow.CopyToggles(m.previewToggles), m.repoDir, m.homeDir)
+				m.classifyRunSeq++
+				m.classifyingRun = m.classifyRunSeq
+				return m, runClassification(m.addSession, m.classifyingRun, m.previewPlan,
+					stow.CopyToggles(m.previewToggles), m.repoDir, m.homeDir)
 			}
 
 		}
@@ -1621,9 +1623,9 @@ func classifySelections(session int, selections []string, repoDir, homeDir strin
 	}
 }
 
-func runClassification(session int, plan *stow.ClassificationPlan, toggles map[string]bool, repoDir, homeDir string) tea.Cmd {
+func runClassification(session, run int, plan *stow.ClassificationPlan, toggles map[string]bool, repoDir, homeDir string) tea.Cmd {
 	return func() tea.Msg {
 		result, err := stow.ExecuteClassification(plan, toggles, repoDir, homeDir)
-		return classifyResultMsg{session: session, result: result, err: err}
+		return classifyResultMsg{session: session, run: run, result: result, err: err}
 	}
 }

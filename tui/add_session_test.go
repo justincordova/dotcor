@@ -121,50 +121,84 @@ func TestStowConflicts_ReachTheUserFromAddView(t *testing.T) {
 	assert.Contains(t, body, "conflicts", "the user must be told the stow did nothing")
 }
 
-// TestAddSession_SupersededResultClearsInFlightFlag pins the fix for a dead
-// confirm step.
+// TestAddSession_GateReleasedOnlyByItsOwner pins the fix for a gate handed
+// away while another execution was still running.
 //
-// classifying is what stops a second enter starting a concurrent execution.
-// Returning early for a superseded result left it set forever, so the confirm
-// step's enter did nothing at all — with no error, status or spinner to
-// explain why. The only escape was to abandon the session.
-func TestAddSession_SupersededResultClearsInFlightFlag(t *testing.T) {
+// classifyingRun is what stops a second enter starting a concurrent
+// ExecuteClassification. Two runs share the same *.dotcor-tmp staging paths,
+// and an interleaved rollback can delete the repo copy the other run's $HOME
+// symlink already points at — destroying the file's only copy. Releasing on
+// any arriving result let an abandoned run open the gate for a live one.
+func TestAddSession_GateReleasedOnlyByItsOwner(t *testing.T) {
 	m := NewModel(testCfg(), "test")
 	m.loading = false
 	m.activeView = AddView
 	m.addStep = addStepConfirm
 	m.repoDir = t.TempDir()
-	m.classifying = true
 	m.addSession = 5
 
-	updated, _ := m.Update(classifyResultMsg{
-		session: 4, // superseded
-		result:  &stow.ClassificationResult{Added: 1},
-	})
+	// Run 2 currently holds the gate; run 1 was abandoned earlier.
+	m.classifyRunSeq = 2
+	m.classifyingRun = 2
 
-	assert.False(t, updated.(Model).classifying,
-		"the execution finished, so the in-flight flag must be cleared")
-	assert.Equal(t, AddView, updated.(Model).activeView,
-		"a superseded result must not move the user")
+	stale, _ := m.Update(classifyResultMsg{session: 4, run: 1, result: &stow.ClassificationResult{Added: 1}})
+	assert.Equal(t, 2, stale.(Model).classifyingRun,
+		"an abandoned run must not release a gate held by a live execution")
+
+	owner, _ := stale.(Model).Update(classifyResultMsg{session: 5, run: 2, result: &stow.ClassificationResult{Added: 1}})
+	assert.Zero(t, owner.(Model).classifyingRun,
+		"the owning run's result must release the gate")
 }
 
-// TestAddSession_ConfirmEnterWorksAfterSupersededResult is the end-to-end
-// consequence: the confirm step must still be usable.
-func TestAddSession_ConfirmEnterWorksAfterSupersededResult(t *testing.T) {
+// TestAddSession_ConfirmEnterBlockedWhileRunning is the safety half.
+func TestAddSession_ConfirmEnterBlockedWhileRunning(t *testing.T) {
 	m := NewModel(testCfg(), "test")
 	m.loading = false
 	m.activeView = AddView
+	m.addStep = addStepConfirm
+	m.previewPlan = samplePlan()
 	m.repoDir = t.TempDir()
-	m.classifying = true
-	m.addSession = 5
 
-	updated, _ := m.Update(classifyResultMsg{session: 4, result: &stow.ClassificationResult{}})
-	ready := updated.(Model)
+	started, cmd := m.updateAdd(tea.KeyMsg{Type: tea.KeyEnter})
+	require.NotNil(t, cmd)
+	running := started.(Model)
+	require.NotZero(t, running.classifyingRun)
+
+	_, second := running.updateAdd(tea.KeyMsg{Type: tea.KeyEnter})
+	assert.Nil(t, second, "a second enter must not start a concurrent execution")
+
+	// Abandoning the wizard must NOT release the gate — the run is still
+	// touching the filesystem.
+	running.resetAddState()
+	assert.NotZero(t, running.classifyingRun,
+		"abandoning the wizard must not hand the gate to the next session")
+}
+
+// TestAddSession_ConfirmEnterWorksAfterOwningResult confirms the step is
+// usable again once the run that held the gate reports back.
+func TestAddSession_ConfirmEnterWorksAfterOwningResult(t *testing.T) {
+	m := NewModel(testCfg(), "test")
+	m.loading = false
+	m.activeView = AddView
+	m.addStep = addStepConfirm
+	m.previewPlan = samplePlan()
+	m.repoDir = t.TempDir()
+
+	started, _ := m.updateAdd(tea.KeyMsg{Type: tea.KeyEnter})
+	running := started.(Model)
+
+	done, _ := running.Update(classifyResultMsg{
+		session: running.addSession,
+		run:     running.classifyingRun,
+		result:  &stow.ClassificationResult{},
+	})
+	ready := done.(Model)
+	require.Zero(t, ready.classifyingRun)
+
 	ready.addStep = addStepConfirm
 	ready.previewPlan = samplePlan()
-
 	_, cmd := ready.updateAdd(tea.KeyMsg{Type: tea.KeyEnter})
-	assert.NotNil(t, cmd, "enter on the confirm step must still dispatch")
+	assert.NotNil(t, cmd, "the confirm step must be usable again")
 }
 
 // TestAddNoticeLines_BudgetedByEveryContentHeight pins the fix for rows
