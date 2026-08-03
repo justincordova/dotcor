@@ -30,7 +30,7 @@ func TestAdopt_ForeignSymlink_ReparentsToRepo(t *testing.T) {
 	_, err := Link(repoDir, homeDir, "nvim", nil)
 	require.NoError(t, err)
 
-	result, err := Adopt(repoDir, homeDir, "nvim")
+	result, err := Adopt(repoDir, homeDir, "nvim", nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -64,7 +64,7 @@ func TestAdopt_NoForeignSymlinks_SkipsAll(t *testing.T) {
 	_, err := Link(repoDir, homeDir, "nvim", nil)
 	require.NoError(t, err)
 
-	result, err := Adopt(repoDir, homeDir, "nvim")
+	result, err := Adopt(repoDir, homeDir, "nvim", nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, 0, result.Adopted)
@@ -85,7 +85,7 @@ func TestAdopt_BrokenSymlink_Skips(t *testing.T) {
 	_, err := Link(repoDir, homeDir, "nvim", nil)
 	require.NoError(t, err)
 
-	result, err := Adopt(repoDir, homeDir, "nvim")
+	result, err := Adopt(repoDir, homeDir, "nvim", nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, 0, result.Adopted)
@@ -100,7 +100,7 @@ func TestAdopt_PackageNotFound_ReturnsError(t *testing.T) {
 	require.NoError(t, os.MkdirAll(repoDir, 0755))
 	require.NoError(t, os.MkdirAll(homeDir, 0755))
 
-	_, err := Adopt(repoDir, homeDir, "nonexistent")
+	_, err := Adopt(repoDir, homeDir, "nonexistent", nil)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
@@ -132,7 +132,7 @@ func TestAdopt_MultipleForeignSymlinks(t *testing.T) {
 	_, err := Link(repoDir, homeDir, "nvim", nil)
 	require.NoError(t, err)
 
-	result, err := Adopt(repoDir, homeDir, "nvim")
+	result, err := Adopt(repoDir, homeDir, "nvim", nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, 2, result.Adopted)
@@ -159,7 +159,7 @@ func TestAdopt_RegularFileNotSymlink_NotAdopted(t *testing.T) {
 	_, err := Link(repoDir, homeDir, "nvim", nil)
 	require.NoError(t, err)
 
-	result, err := Adopt(repoDir, homeDir, "nvim")
+	result, err := Adopt(repoDir, homeDir, "nvim", nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, 0, result.Adopted)

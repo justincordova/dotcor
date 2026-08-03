@@ -2,17 +2,29 @@ package stow
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 )
 
 type AdoptResult struct {
-	Adopted  int
-	Skipped  int
+	Adopted int
+	Skipped int
+	// Ignored lists files skipped because they matched an ignore pattern,
+	// so a user who expects one to be adopted can see why it was not.
+	Ignored  []string
 	Failures []string
 }
 
-func Adopt(repoDir, homeDir, packageName string) (*AdoptResult, error) {
+// Adopt reparents foreign $HOME symlinks in a package into the repository.
+//
+// ignorePatterns is honoured here for the same reason as in Link, and it
+// matters more: Link deliberately refuses foreign symlinks and tells the user
+// to adopt them instead, so this is the path a secret reaches when it is
+// reached through a symlink. Adopting ~/.config/nvim/prod.key → ~/secrets/…
+// would otherwise copy the plaintext into a package directory, which — unlike
+// logs/ and backups/ — is not gitignored, and push it on the next sync.
+func Adopt(repoDir, homeDir, packageName string, ignorePatterns []string) (*AdoptResult, error) {
 	pkgDir := filepath.Join(repoDir, packageName)
 
 	if info, err := os.Stat(pkgDir); err != nil {
@@ -44,6 +56,14 @@ func Adopt(repoDir, homeDir, packageName string) (*AdoptResult, error) {
 
 	for _, f := range pkg.Files {
 		if f.InRepo || !f.IsSymlink || f.IsLinked {
+			continue
+		}
+
+		if matched, pattern := matchIgnore(f.TargetPath, ignorePatterns); matched {
+			result.Ignored = append(result.Ignored, f.RelPath)
+			result.Skipped++
+			slog.Default().Debug("adopt: skipping ignored file",
+				"path", f.TargetPath, "pattern", pattern)
 			continue
 		}
 

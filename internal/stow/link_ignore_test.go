@@ -92,3 +92,52 @@ func TestLink_NilPatternsAdoptsEverything(t *testing.T) {
 	_, statErr := os.Stat(filepath.Join(pkgDir, ".env"))
 	assert.NoError(t, statErr, "with no patterns configured nothing is filtered")
 }
+
+// TestAdopt_HonoursIgnorePatterns pins the fix for the path Link explicitly
+// defers secrets to.
+//
+// Link refuses foreign symlinks and tells the user to press 'o' to adopt.
+// Adopt then read the resolved target and wrote it into the package with no
+// ignore filtering at all — and package directories, unlike logs/ and
+// backups/, are not gitignored, so the plaintext was committed and pushed.
+func TestAdopt_HonoursIgnorePatterns(t *testing.T) {
+	tmp := t.TempDir()
+	homeDir := filepath.Join(tmp, "home")
+	repoDir := filepath.Join(tmp, "repo")
+	secrets := filepath.Join(tmp, "secrets")
+	pkgSub := filepath.Join(repoDir, "nvim", ".config", "nvim")
+
+	require.NoError(t, os.MkdirAll(pkgSub, 0755))
+	require.NoError(t, os.MkdirAll(secrets, 0755))
+	require.NoError(t, os.MkdirAll(homeDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(pkgSub, "init.lua"), []byte("tracked"), 0644))
+
+	patterns := config.GetDefaultIgnorePatterns()
+
+	_, err := Link(repoDir, homeDir, "nvim", patterns)
+	require.NoError(t, err)
+
+	// Foreign symlinks in the managed root, pointing at secrets.
+	appDir := filepath.Join(homeDir, ".config", "nvim")
+	require.NoError(t, os.WriteFile(filepath.Join(secrets, "prod.key"), []byte("PRIVATE KEY"), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(secrets, "dotenv"), []byte("TOKEN=abc"), 0600))
+	require.NoError(t, os.Symlink(filepath.Join(secrets, "prod.key"), filepath.Join(appDir, "prod.key")))
+	require.NoError(t, os.Symlink(filepath.Join(secrets, "dotenv"), filepath.Join(appDir, ".env")))
+	// A non-secret foreign symlink must still be adopted.
+	require.NoError(t, os.WriteFile(filepath.Join(secrets, "extra.lua"), []byte("ok"), 0644))
+	require.NoError(t, os.Symlink(filepath.Join(secrets, "extra.lua"), filepath.Join(appDir, "extra.lua")))
+
+	result, err := Adopt(repoDir, homeDir, "nvim", patterns)
+	require.NoError(t, err)
+
+	for _, name := range []string{"prod.key", ".env"} {
+		_, statErr := os.Stat(filepath.Join(pkgSub, name))
+		assert.True(t, os.IsNotExist(statErr),
+			"%s matches an ignore pattern and must never be copied into the repo", name)
+	}
+	assert.Len(t, result.Ignored, 2, "skipped files must be reported")
+
+	_, statErr := os.Stat(filepath.Join(pkgSub, "extra.lua"))
+	assert.NoError(t, statErr, "a non-ignored foreign symlink must still be adopted")
+	assert.Equal(t, 1, result.Adopted)
+}

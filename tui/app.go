@@ -1423,12 +1423,16 @@ func (m Model) adoptPackage(name string) tea.Cmd {
 		}
 	}
 	repoDir, homeDir := m.repoDir, m.homeDir
+	ignorePatterns := m.ignorePatternsSnapshot()
 	return func() tea.Msg {
-		result, err := stow.Adopt(repoDir, homeDir, pkg.Name)
+		result, err := stow.Adopt(repoDir, homeDir, pkg.Name, ignorePatterns)
 		if err != nil {
 			return stowResultMsg{err: err}
 		}
 		msg := fmt.Sprintf("Adopted %s (%d reparented", pkg.Name, result.Adopted)
+		if n := len(result.Ignored); n > 0 {
+			msg += fmt.Sprintf(", %d ignored", n)
+		}
 		if result.Skipped > 0 {
 			msg += fmt.Sprintf(", %d skipped", result.Skipped)
 		}
