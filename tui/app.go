@@ -465,29 +465,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case classifyResultMsg:
-		if msg.session != m.addSession {
-			// Superseded run. Its filesystem work is already done and was
-			// reported by stow; only the UI transition is dropped.
-			return m, nil
-		}
+		// The execution has finished either way, so the in-flight flag must
+		// be cleared even for a superseded run. Returning early left it set
+		// forever, and the confirm step's enter then did nothing at all —
+		// silently, with no error, status or spinner.
+		m.classifying = false
+
+		// A superseded run still did real filesystem work, so its results
+		// are still committed and reflected on the dashboard. Only the
+		// wizard's own view/step transitions are suppressed, via
+		// applyToWizard below.
+		applyToWizard := msg.session == m.addSession && m.activeView == AddView
+
 		if msg.err != nil {
 			m.err = msg.err
-			m.classifying = false
-			// Same reasoning as classifyPlanMsg: only move the wizard's step
-			// if the user is still looking at the wizard.
-			if m.activeView == AddView {
+			if applyToWizard {
 				m.addStep = addStepConfirm
 			}
 		} else {
-			m.classifying = false
 			m.classifyResult = msg.result
-			// Only pull the user back to the dashboard if they are still in
-			// the Add wizard. ExecuteClassification takes seconds on a large
-			// tree, and the confirm step shows no in-flight indicator, so a
-			// user who assumes nothing happened may have navigated away —
-			// yanking them out of Settings mid-edit is worse than landing
-			// them where they already are.
-			if m.activeView == AddView {
+			// Only pull the user back to the dashboard if this result belongs
+			// to the session they are still looking at. ExecuteClassification
+			// takes seconds on a large tree and the confirm step shows no
+			// in-flight indicator, so a user who assumes nothing happened may
+			// have navigated away or started a new session — yanking them out
+			// of either is worse than leaving them where they are.
+			if applyToWizard {
 				m.activeView = DashboardView
 			}
 			m.err = nil

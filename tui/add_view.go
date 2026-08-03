@@ -30,6 +30,17 @@ type browserItem struct {
 	indent int
 }
 
+// addNoticeLines is the number of extra lines viewAdd emits for the error or
+// status notice. Every content-height budget must include it, otherwise the
+// dialog overflows and clampDialogHeight deletes body rows off the top of the
+// list — the browser's first entries, or files from the confirm approval list.
+func addNoticeLines(m Model) int {
+	if m.err != nil || m.statusMsg != "" {
+		return 2
+	}
+	return 0
+}
+
 func viewAdd(m Model) string {
 	// Render statusMsg as well as err. Every other sub-view shows both via
 	// subviewStatusRow; the Add view showed only errors, so a status-only
@@ -637,9 +648,7 @@ func confirmContentHeight(m Model) int {
 		),
 	)
 	fixedLines := strings.Count(boxStyle.Width(cw-2).Render(fixedContent), "\n") + 1
-	if m.err != nil {
-		fixedLines += 2
-	}
+	fixedLines += addNoticeLines(m)
 	// The renderer emits TWO sticky bottom rows once the list overflows: the
 	// "%d-%d of %d" scroll indicator and the execute hint. fixedContent
 	// models only the hint, so the dialog came out exactly one line too tall
@@ -926,9 +935,7 @@ func browserContentHeight(m Model) int {
 	fixedLines := strings.Count(boxStyle.Width(cw-2).Render(fixedContent), "\n") + 1
 	fixedLines += 2 // path header + horizontal rule
 	fixedLines++    // the "… N more" row emitted when the list overflows
-	if m.err != nil {
-		fixedLines += 2
-	}
+	fixedLines += addNoticeLines(m)
 	if m.browserJumping {
 		fixedLines += 4 // blank, jump input, rule, and its trailing newline
 	}
@@ -981,9 +988,7 @@ func previewContentHeight(m Model) int {
 		),
 	)
 	fixedLines := strings.Count(boxStyle.Width(cw-2).Render(fixedContent), "\n") + 1
-	if m.err != nil {
-		fixedLines += 2
-	}
+	fixedLines += addNoticeLines(m)
 	fixedLines++ // scroll indicator or counts separator
 
 	h := m.height - fixedLines
