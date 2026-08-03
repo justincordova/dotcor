@@ -126,3 +126,24 @@ func TestClassifyResultErr_IgnoredOutsideAddView(t *testing.T) {
 	assert.Equal(t, SettingsView, asModel.activeView)
 	assert.Error(t, asModel.err, "the error must still be surfaced")
 }
+
+// TestJumpPrompt_ClosedWhenWizardAdvances pins the fix for a prompt that
+// outlived the step that renders it. Pressing enter to classify and then "/"
+// before the plan arrived left browserJumping set: the prompt was invisible
+// on the preview step and reappeared, with stale text, swallowing every
+// keystroke once the user stepped back.
+func TestJumpPrompt_ClosedWhenWizardAdvances(t *testing.T) {
+	m := jumpModel(t)
+	m.browserJumping = true
+	m.browserJumpInput.SetValue("~/.config/nvim")
+
+	plan := &stow.ClassificationPlan{
+		Packages: []stow.PackagePlan{{Name: "pkg", Files: []stow.ClassifiedFile{{RelPath: "a"}}}},
+	}
+	updated, _ := m.Update(classifyPlanMsg{plan: plan})
+	asModel := updated.(Model)
+
+	require.Equal(t, addStepPreview, asModel.addStep)
+	assert.False(t, asModel.browserJumping,
+		"the jump prompt must not survive the wizard advancing past the select step")
+}

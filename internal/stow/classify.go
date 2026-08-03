@@ -152,6 +152,9 @@ func ClassifyFiles(selections []string, repoDir, homeDir string, ignorePatterns 
 
 	// Map from package name → index in plan.Packages, for merge.
 	pkgIndex := make(map[string]int)
+	// destIndex maps an intended repo destination to the source file that
+	// claimed it, so a second source can never overwrite the first.
+	destIndex := make(map[string]string)
 	plan := &ClassificationPlan{}
 
 	// Build the $HOME symlink index once — maps resolvedTarget → symlinkPath.
@@ -181,7 +184,7 @@ func ClassifyFiles(selections []string, repoDir, homeDir string, ignorePatterns 
 			if err != nil {
 				return nil, err
 			}
-			mergeFile(plan, pkgIndex, cf)
+			mergeFile(plan, pkgIndex, destIndex, cf)
 			continue
 		}
 
@@ -195,12 +198,13 @@ func ClassifyFiles(selections []string, repoDir, homeDir string, ignorePatterns 
 			if err != nil {
 				return nil, err
 			}
-			mergeFile(plan, pkgIndex, cf)
+			mergeFile(plan, pkgIndex, destIndex, cf)
 			continue
 		}
 
 		// It's a directory. Check for Stow-parent split.
 		if isStowParent(sel) {
+			stowConvention := usesStowConvention(sel, homeDir)
 			entries, err := os.ReadDir(sel)
 			if err != nil {
 				return nil, fmt.Errorf("reading %q: %w", sel, err)
@@ -210,9 +214,14 @@ func ClassifyFiles(selections []string, repoDir, homeDir string, ignorePatterns 
 					continue
 				}
 				pkgDir := filepath.Join(sel, entry.Name())
-				// Stow layout: paths inside a package directory are already
-				// $HOME-relative by convention, so the package dir is the base.
-				if err := walkAndClassify(plan, pkgIndex, pkgDir, pkgDir, entry.Name(), repoDir, homeDir, homeIndex, ignorePatterns); err != nil {
+				// In a genuine Stow repo the package's contents are already
+				// $HOME-relative, so the package dir is the base. Otherwise
+				// fall back to the normal rule.
+				base := relBaseFor(pkgDir, homeDir)
+				if stowConvention {
+					base = pkgDir
+				}
+				if err := walkAndClassify(plan, pkgIndex, destIndex, pkgDir, base, entry.Name(), repoDir, homeDir, homeIndex, ignorePatterns); err != nil {
 					return nil, err
 				}
 			}
@@ -221,7 +230,7 @@ func ClassifyFiles(selections []string, repoDir, homeDir string, ignorePatterns 
 
 		// Regular directory selection — derive one package name.
 		pkgName := derivePkgName(sel, homeDir)
-		if err := walkAndClassify(plan, pkgIndex, sel, relBaseFor(sel, homeDir), pkgName, repoDir, homeDir, homeIndex, ignorePatterns); err != nil {
+		if err := walkAndClassify(plan, pkgIndex, destIndex, sel, relBaseFor(sel, homeDir), pkgName, repoDir, homeDir, homeIndex, ignorePatterns); err != nil {
 			return nil, err
 		}
 	}
@@ -314,6 +323,46 @@ func buildHomeSymlinkIndex(homeDir, repoDir string, selections []string) (map[st
 	return index, warnings
 }
 
+// usesStowConvention reports whether a dirs-only directory is really a Stow
+// repository, whose package contents are already $HOME-relative.
+//
+// isStowParent is purely structural — "every non-excluded child is a
+// directory" — and that is true of ~/.config and ~/.local on virtually every
+// machine. Treating those as Stow repos measured ~/.config/nvim/init.lua as a
+// bare "init.lua", which broke the repo↔$HOME mapping and let two selections
+// claim one destination.
+//
+// The distinguishing evidence is that a Stow package's entries correspond to
+// real $HOME paths: ~/dotfiles/zsh/.zshrc goes with an existing ~/.zshrc,
+// whereas ~/.config/nvim/init.lua has no ~/init.lua. Only depth-1 entries are
+// checked, so this costs one Lstat per package entry.
+//
+// A Stow repo that has never been linked shows no evidence and is treated as
+// an ordinary $HOME subtree. That mirrors the files in place rather than
+// importing them — a layout difference, never data loss.
+func usesStowConvention(dir, homeDir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+
+	for _, pkg := range entries {
+		if !pkg.IsDir() || isExcluded(pkg.Name()) {
+			continue
+		}
+		contents, cerr := os.ReadDir(filepath.Join(dir, pkg.Name()))
+		if cerr != nil {
+			continue
+		}
+		for _, entry := range contents {
+			if pathExists(filepath.Join(homeDir, entry.Name())) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // isStowParent returns true when every non-excluded direct child of dir is
 // itself a directory (GNU Stow parent layout).
 func isStowParent(dir string) bool {
@@ -388,7 +437,7 @@ func derivePkgNameForFile(absPath, homeDir string) string {
 // walkAndClassify walks selDir and classifies every file into pkgName.
 // Files matching any pattern in ignorePatterns are recorded in plan.Filtered
 // and skipped.
-func walkAndClassify(plan *ClassificationPlan, pkgIndex map[string]int, selDir, relBase, pkgName, repoDir, homeDir string, homeIndex map[string]string, ignorePatterns []string) error {
+func walkAndClassify(plan *ClassificationPlan, pkgIndex map[string]int, destIndex map[string]string, selDir, relBase, pkgName, repoDir, homeDir string, homeIndex map[string]string, ignorePatterns []string) error {
 	return filepath.WalkDir(selDir, func(path string, d fs.DirEntry, walkErr error) error {
 		// Unreadable entries are skipped rather than aborting the whole
 		// plan, but they must be surfaced. Silently dropping them meant an
@@ -441,7 +490,7 @@ func walkAndClassify(plan *ClassificationPlan, pkgIndex map[string]int, selDir, 
 			return nil
 		}
 
-		mergeFile(plan, pkgIndex, cf)
+		mergeFile(plan, pkgIndex, destIndex, cf)
 		return nil
 	})
 }
@@ -597,7 +646,30 @@ func classifyFileInDir(absPath, relBase, pkgName, repoDir, homeDir string, homeI
 }
 
 // mergeFile inserts cf into the correct PackagePlan, creating one if needed.
-func mergeFile(plan *ClassificationPlan, pkgIndex map[string]int, cf ClassifiedFile) {
+//
+// A destination already claimed by a different source file is refused rather
+// than added. Two rows sharing a RepoDest are executed in sequence, so the
+// second overwrites the first in the repo and both $HOME symlinks end up
+// pointing at the survivor — the first file's only copy is destroyed, and no
+// backup is taken on that path. Refusing keeps the file where it is and tells
+// the user, which is always recoverable.
+//
+// This is a structural guarantee, independent of how relBaseFor happens to
+// choose a base: whatever the layout logic does, one repo path can only ever
+// be claimed by one source file.
+func mergeFile(plan *ClassificationPlan, pkgIndex map[string]int, destIndex map[string]string, cf ClassifiedFile) {
+	if owner, taken := destIndex[cf.RepoDest]; taken {
+		if owner != cf.AbsPath {
+			plan.Warnings = append(plan.Warnings, fmt.Sprintf(
+				"skipped %s: it would overwrite %s in the repository (both map to %s) — add them separately or rename one",
+				cf.AbsPath, owner, cf.RepoDest))
+			slog.Default().Warn("classify: refusing colliding repo destination",
+				"dest", cf.RepoDest, "existing", owner, "skipped", cf.AbsPath)
+		}
+		return
+	}
+	destIndex[cf.RepoDest] = cf.AbsPath
+
 	idx, ok := pkgIndex[cf.PackageName]
 	if !ok {
 		plan.Packages = append(plan.Packages, PackagePlan{Name: cf.PackageName})

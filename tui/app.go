@@ -443,6 +443,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.previewScroll = 0
 			m.addStep = addStepPreview
 			m.err = nil
+			// The jump prompt only exists on the select step, and only that
+			// step renders it. Leaving it open while the wizard advances hid
+			// it from view but kept it swallowing every keystroke once the
+			// user stepped back.
+			m.browserJumping = false
+			m.browserJumpInput.Blur()
 		}
 		return m, nil
 

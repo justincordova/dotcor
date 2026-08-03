@@ -113,9 +113,12 @@ func TestClassifyFiles_AddedFileRoundTripsThroughLinkAndUnlink(t *testing.T) {
 	assert.Equal(t, 1, un.Unlinked, "unlink must remove the link that was created")
 }
 
-// TestClassifyFiles_StowParentLayoutUnchanged guards the other convention:
-// inside a Stow-style parent, package contents are already $HOME-relative.
-func TestClassifyFiles_StowParentLayoutUnchanged(t *testing.T) {
+// TestClassifyFiles_StowRepoKeepsPackageRelativePaths guards the Stow import
+// convention: inside a real Stow repository, package contents are already
+// $HOME-relative. The evidence that it IS one is that its entries correspond
+// to real $HOME paths — here ~/.zshrc and ~/.config exist, as they do in any
+// Stow setup that has been linked.
+func TestClassifyFiles_StowRepoKeepsPackageRelativePaths(t *testing.T) {
 	tmp := t.TempDir()
 	homeDir := filepath.Join(tmp, "home")
 	repoDir := filepath.Join(tmp, "repo")
@@ -125,6 +128,10 @@ func TestClassifyFiles_StowParentLayoutUnchanged(t *testing.T) {
 
 	writeFile(t, filepath.Join(dotfiles, "nvim", ".config", "nvim", "init.lua"), "nvim")
 	writeFile(t, filepath.Join(dotfiles, "zsh", ".zshrc"), "zsh")
+
+	// The $HOME side of a linked Stow setup.
+	require.NoError(t, os.Symlink(filepath.Join(dotfiles, "zsh", ".zshrc"), filepath.Join(homeDir, ".zshrc")))
+	require.NoError(t, os.MkdirAll(filepath.Join(homeDir, ".config"), 0755))
 
 	plan, err := ClassifyFiles([]string{dotfiles}, repoDir, homeDir, nil)
 	require.NoError(t, err)
@@ -137,6 +144,93 @@ func TestClassifyFiles_StowParentLayoutUnchanged(t *testing.T) {
 	}
 	assert.Equal(t, filepath.Join(".config", "nvim", "init.lua"), rels["nvim"])
 	assert.Equal(t, ".zshrc", rels["zsh"])
+}
+
+// TestClassifyFiles_DotConfigIsNotAStowRepo pins the discriminator. ~/.config
+// and ~/.local are dirs-only on virtually every machine, so a purely
+// structural "every child is a directory" test classified them as Stow repos
+// — measuring ~/.config/nvim/init.lua as a bare "init.lua", which broke the
+// repo↔$HOME mapping and let two selections claim one destination.
+func TestClassifyFiles_DotConfigIsNotAStowRepo(t *testing.T) {
+	tmp := t.TempDir()
+	homeDir := filepath.Join(tmp, "home")
+	repoDir := filepath.Join(tmp, "repo")
+	require.NoError(t, os.MkdirAll(repoDir, 0755))
+
+	writeFile(t, filepath.Join(homeDir, ".config", "nvim", "init.lua"), "nvim")
+	writeFile(t, filepath.Join(homeDir, ".config", "starship", "config.toml"), "starship")
+
+	plan, err := ClassifyFiles([]string{filepath.Join(homeDir, ".config")}, repoDir, homeDir, nil)
+	require.NoError(t, err)
+
+	rels := map[string]string{}
+	for _, pkg := range plan.Packages {
+		for _, cf := range pkg.Files {
+			rels[pkg.Name] = cf.RelPath
+		}
+	}
+	assert.Equal(t, filepath.Join(".config", "nvim", "init.lua"), rels["nvim"])
+	assert.Equal(t, filepath.Join(".config", "starship", "config.toml"), rels["starship"])
+}
+
+// TestClassifyFiles_DirsOnlyHomeParentsDoNotCollide is the data-loss case that
+// reached this code path even after the first layout fix: ~/.config and
+// ~/.local are both dirs-only, both split into packages, and a shared child
+// name produced one repo destination for two different files.
+func TestClassifyFiles_DirsOnlyHomeParentsDoNotCollide(t *testing.T) {
+	tmp := t.TempDir()
+	homeDir := filepath.Join(tmp, "home")
+	repoDir := filepath.Join(tmp, "repo")
+	require.NoError(t, os.MkdirAll(repoDir, 0755))
+
+	a := filepath.Join(homeDir, ".config", "app", "settings.json")
+	b := filepath.Join(homeDir, ".local", "app", "settings.json")
+	writeFile(t, a, "CONFIG-VERSION")
+	writeFile(t, b, "LOCAL-VERSION")
+
+	plan, err := ClassifyFiles(
+		[]string{filepath.Join(homeDir, ".config"), filepath.Join(homeDir, ".local")},
+		repoDir, homeDir, nil)
+	require.NoError(t, err)
+
+	dests := map[string]bool{}
+	for _, pkg := range plan.Packages {
+		for _, cf := range pkg.Files {
+			assert.False(t, dests[cf.RepoDest], "duplicate repo destination: %s", cf.RepoDest)
+			dests[cf.RepoDest] = true
+		}
+	}
+
+	_, err = ExecuteClassification(plan, BuildDefaultToggles(plan), repoDir, homeDir)
+	require.NoError(t, err)
+
+	gotA, err := os.ReadFile(a)
+	require.NoError(t, err)
+	gotB, err := os.ReadFile(b)
+	require.NoError(t, err)
+	assert.Equal(t, "CONFIG-VERSION", string(gotA))
+	assert.Equal(t, "LOCAL-VERSION", string(gotB))
+}
+
+// TestMergeFile_RefusesCollidingDestination pins the structural guarantee:
+// whatever the layout logic decides, one repo path can only ever be claimed by
+// one source file, and the user is told about the refusal.
+func TestMergeFile_RefusesCollidingDestination(t *testing.T) {
+	plan := &ClassificationPlan{}
+	pkgIndex := map[string]int{}
+	destIndex := map[string]string{}
+
+	first := ClassifiedFile{RelPath: "x", AbsPath: "/home/u/a/x", PackageName: "p", RepoDest: "/repo/p/x"}
+	second := ClassifiedFile{RelPath: "x", AbsPath: "/home/u/b/x", PackageName: "p", RepoDest: "/repo/p/x"}
+
+	mergeFile(plan, pkgIndex, destIndex, first)
+	mergeFile(plan, pkgIndex, destIndex, second)
+
+	require.Len(t, plan.Packages, 1)
+	assert.Len(t, plan.Packages[0].Files, 1, "the colliding file must not be added")
+	assert.Equal(t, "/home/u/a/x", plan.Packages[0].Files[0].AbsPath, "the first claim wins")
+	require.Len(t, plan.Warnings, 1, "the refusal must be surfaced")
+	assert.Contains(t, plan.Warnings[0], "/home/u/b/x")
 }
 
 // TestClassifyFiles_OutsideHomeKeepsSelectionRelativePaths guards sources
