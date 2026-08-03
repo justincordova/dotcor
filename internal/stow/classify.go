@@ -204,7 +204,6 @@ func ClassifyFiles(selections []string, repoDir, homeDir string, ignorePatterns 
 
 		// It's a directory. Check for Stow-parent split.
 		if isStowParent(sel) {
-			stowConvention := usesStowConvention(sel, homeDir)
 			entries, err := os.ReadDir(sel)
 			if err != nil {
 				return nil, fmt.Errorf("reading %q: %w", sel, err)
@@ -214,11 +213,15 @@ func ClassifyFiles(selections []string, repoDir, homeDir string, ignorePatterns 
 					continue
 				}
 				pkgDir := filepath.Join(sel, entry.Name())
-				// In a genuine Stow repo the package's contents are already
-				// $HOME-relative, so the package dir is the base. Otherwise
-				// fall back to the normal rule.
+				// Decide per package, not once for the whole parent. A
+				// single legacy-compat link such as
+				// ~/.gitconfig → ~/.config/git/.gitconfig is enough evidence
+				// for the git package, but flipping every sibling on the
+				// strength of it measured ~/.config/nvim/init.lua as a bare
+				// "init.lua" — breaking that package's $HOME mapping and
+				// scattering a stray ~/init.lua on the next stow.
 				base := relBaseFor(pkgDir, homeDir)
-				if stowConvention {
+				if packageUsesStowConvention(pkgDir, homeDir) {
 					base = pkgDir
 				}
 				if err := walkAndClassify(plan, pkgIndex, destIndex, pkgDir, base, entry.Name(), repoDir, homeDir, homeIndex, ignorePatterns); err != nil {
@@ -274,7 +277,16 @@ func buildHomeSymlinkIndex(homeDir, repoDir string, selections []string) (map[st
 		}
 		parts := strings.Split(rel, string(filepath.Separator))
 		if len(parts) >= 1 && parts[0] != "." {
-			dirs[filepath.Join(homeDir, parts[0])] = true
+			// Only directories can be scanned. Selecting a depth-1 file such
+			// as ~/.zshrc would otherwise put the file itself in this set,
+			// and the ReadDir failure below reported a warning claiming
+			// adopt detection was degraded — for the single most common
+			// selection there is, and untruthfully, since $HOME itself has
+			// already been scanned.
+			candidate := filepath.Join(homeDir, parts[0])
+			if fi, statErr := os.Stat(candidate); statErr == nil && fi.IsDir() {
+				dirs[candidate] = true
+			}
 		}
 	}
 
@@ -323,8 +335,8 @@ func buildHomeSymlinkIndex(homeDir, repoDir string, selections []string) (map[st
 	return index, warnings
 }
 
-// usesStowConvention reports whether a dirs-only directory is really a Stow
-// repository, whose package contents are already $HOME-relative.
+// packageUsesStowConvention reports whether one package directory holds
+// $HOME-relative content, i.e. whether it has actually been stowed.
 //
 // isStowParent is purely structural — "every non-excluded child is a
 // directory" — and that is true of ~/.config and ~/.local on virtually every
@@ -345,26 +357,15 @@ func buildHomeSymlinkIndex(homeDir, repoDir string, selections []string) (map[st
 // A Stow repo that has never been linked shows no evidence and is treated as
 // an ordinary $HOME subtree. That mirrors the files in place rather than
 // importing them — a layout difference, never data loss.
-func usesStowConvention(dir, homeDir string) bool {
-	entries, err := os.ReadDir(dir)
+func packageUsesStowConvention(pkgDir, homeDir string) bool {
+	contents, err := os.ReadDir(pkgDir)
 	if err != nil {
 		return false
 	}
-
-	for _, pkg := range entries {
-		if !pkg.IsDir() || isExcluded(pkg.Name()) {
-			continue
-		}
-		pkgDir := filepath.Join(dir, pkg.Name())
-		contents, cerr := os.ReadDir(pkgDir)
-		if cerr != nil {
-			continue
-		}
-		for _, entry := range contents {
-			homeEntry := filepath.Join(homeDir, entry.Name())
-			if symlinkTargetsPath(homeEntry, filepath.Join(pkgDir, entry.Name())) {
-				return true
-			}
+	for _, entry := range contents {
+		homeEntry := filepath.Join(homeDir, entry.Name())
+		if symlinkTargetsPath(homeEntry, filepath.Join(pkgDir, entry.Name())) {
+			return true
 		}
 	}
 	return false

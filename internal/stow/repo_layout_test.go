@@ -130,9 +130,11 @@ func TestClassifyFiles_StowRepoKeepsPackageRelativePaths(t *testing.T) {
 	writeFile(t, filepath.Join(dotfiles, "nvim", ".config", "nvim", "init.lua"), "nvim")
 	writeFile(t, filepath.Join(dotfiles, "zsh", ".zshrc"), "zsh")
 
-	// The $HOME side of a linked Stow setup.
+	// The $HOME side of a linked Stow setup. Evidence is required per
+	// package, so each package needs its own link — which is exactly what
+	// stow creates (it folds ~/.config into the only package providing it).
 	require.NoError(t, os.Symlink(filepath.Join(dotfiles, "zsh", ".zshrc"), filepath.Join(homeDir, ".zshrc")))
-	require.NoError(t, os.MkdirAll(filepath.Join(homeDir, ".config"), 0755))
+	require.NoError(t, os.Symlink(filepath.Join(dotfiles, "nvim", ".config"), filepath.Join(homeDir, ".config")))
 
 	plan, err := ClassifyFiles([]string{dotfiles}, repoDir, homeDir, nil)
 	require.NoError(t, err)
@@ -145,6 +147,64 @@ func TestClassifyFiles_StowRepoKeepsPackageRelativePaths(t *testing.T) {
 	}
 	assert.Equal(t, filepath.Join(".config", "nvim", "init.lua"), rels["nvim"])
 	assert.Equal(t, ".zshrc", rels["zsh"])
+}
+
+// TestClassifyFiles_XdgCompatLinkDoesNotFlipSiblings pins the fix for one
+// package's evidence deciding for all of them.
+//
+// A legacy-compat link such as ~/.gitconfig → ~/.config/git/.gitconfig is
+// genuine evidence for the git package, but applying it to every sibling
+// measured ~/.config/nvim/init.lua as a bare "init.lua" — breaking that
+// package's $HOME mapping and scattering a stray ~/init.lua on the next stow.
+func TestClassifyFiles_XdgCompatLinkDoesNotFlipSiblings(t *testing.T) {
+	tmp := t.TempDir()
+	homeDir := filepath.Join(tmp, "home")
+	repoDir := filepath.Join(tmp, "repo")
+	require.NoError(t, os.MkdirAll(repoDir, 0755))
+
+	gitconf := filepath.Join(homeDir, ".config", "git", ".gitconfig")
+	writeFile(t, gitconf, "git")
+	writeFile(t, filepath.Join(homeDir, ".config", "nvim", "init.lua"), "nvim")
+	require.NoError(t, os.Symlink(gitconf, filepath.Join(homeDir, ".gitconfig")))
+
+	plan, err := ClassifyFiles([]string{filepath.Join(homeDir, ".config")}, repoDir, homeDir, nil)
+	require.NoError(t, err)
+
+	rels := map[string]string{}
+	for _, pkg := range plan.Packages {
+		for _, cf := range pkg.Files {
+			rels[pkg.Name] = cf.RelPath
+		}
+	}
+
+	// git has its own evidence, so it keeps the stow-style path that maps
+	// back to the ~/.gitconfig the user actually uses.
+	assert.Equal(t, ".gitconfig", rels["git"])
+	// nvim has none, so it must stay $HOME-relative.
+	assert.Equal(t, filepath.Join(".config", "nvim", "init.lua"), rels["nvim"],
+		"a sibling package must not inherit another package's evidence")
+}
+
+// TestClassifyFiles_LooseHomeFileProducesNoWarning pins the fix for a false
+// alarm on the most common selection there is. A depth-1 file was added to
+// the directory scan list, and the resulting ENOTDIR was reported as
+// "adopt detection degraded" — untruthfully, since $HOME was already scanned.
+func TestClassifyFiles_LooseHomeFileProducesNoWarning(t *testing.T) {
+	tmp := t.TempDir()
+	homeDir := filepath.Join(tmp, "home")
+	repoDir := filepath.Join(tmp, "repo")
+	require.NoError(t, os.MkdirAll(homeDir, 0755))
+	require.NoError(t, os.MkdirAll(repoDir, 0755))
+
+	zshrc := filepath.Join(homeDir, ".zshrc")
+	writeFile(t, zshrc, "export ZSH=1")
+
+	plan, err := ClassifyFiles([]string{zshrc}, repoDir, homeDir, nil)
+
+	require.NoError(t, err)
+	assert.Empty(t, plan.Warnings, "selecting a loose $HOME file must not warn")
+	require.Len(t, plan.Packages, 1)
+	assert.Equal(t, ".zshrc", plan.Packages[0].Files[0].RelPath)
 }
 
 // TestClassifyFiles_DotConfigIsNotAStowRepo pins the discriminator. ~/.config
@@ -267,7 +327,7 @@ func TestClassifyFiles_OutsideHomeKeepsSelectionRelativePaths(t *testing.T) {
 // the selection, so Add scattered symlinks at $HOME root and into unrelated
 // existing directories. Only a $HOME symlink resolving INTO the package is
 // evidence that stowing actually happened.
-func TestUsesStowConvention_RequiresSymlinkEvidence(t *testing.T) {
+func TestPackageUsesStowConvention_RequiresSymlinkEvidence(t *testing.T) {
 	t.Run("name collision is not evidence", func(t *testing.T) {
 		tmp := t.TempDir()
 		homeDir := filepath.Join(tmp, "home")
@@ -280,8 +340,9 @@ func TestUsesStowConvention_RequiresSymlinkEvidence(t *testing.T) {
 		require.NoError(t, os.MkdirAll(filepath.Join(homeDir, ".cache"), 0755))
 		require.NoError(t, os.MkdirAll(filepath.Join(homeDir, "bin"), 0755))
 
-		assert.False(t, usesStowConvention(local, homeDir),
-			"a shared directory name is not evidence of a Stow repository")
+		assert.False(t, packageUsesStowConvention(filepath.Join(local, "pipx"), homeDir),
+			"a shared directory name is not evidence of a Stow package")
+		assert.False(t, packageUsesStowConvention(filepath.Join(local, "bin"), homeDir))
 	})
 
 	t.Run("symlink into the package is evidence", func(t *testing.T) {
@@ -293,7 +354,7 @@ func TestUsesStowConvention_RequiresSymlinkEvidence(t *testing.T) {
 		require.NoError(t, os.Symlink(
 			filepath.Join(dotfiles, "zsh", ".zshrc"), filepath.Join(homeDir, ".zshrc")))
 
-		assert.True(t, usesStowConvention(dotfiles, homeDir))
+		assert.True(t, packageUsesStowConvention(filepath.Join(dotfiles, "zsh"), homeDir))
 	})
 
 	t.Run("symlink pointing elsewhere is not evidence", func(t *testing.T) {
@@ -306,7 +367,7 @@ func TestUsesStowConvention_RequiresSymlinkEvidence(t *testing.T) {
 		writeFile(t, filepath.Join(other, ".zshrc"), "other")
 		require.NoError(t, os.Symlink(filepath.Join(other, ".zshrc"), filepath.Join(homeDir, ".zshrc")))
 
-		assert.False(t, usesStowConvention(dotfiles, homeDir),
+		assert.False(t, packageUsesStowConvention(filepath.Join(dotfiles, "zsh"), homeDir),
 			"a $HOME symlink pointing somewhere else is not evidence")
 	})
 }
