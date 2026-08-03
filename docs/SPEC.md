@@ -56,12 +56,42 @@ A symlink-based dotfile manager with a Bubble Tea TUI and GNU Stow-style package
 
 Top-level directories in `~/.dotcor/` are packages. Excluded: `.git`, `logs`, `backups`, `.stow-local-ignore`, `.dotcorrc`. Stow-style dot-prefixed package names (e.g. `.ssh`, `.config`, `.gnupg`, `.aws`) are valid packages and are discovered. Each package mirrors the target path from `$HOME`.
 
+`repo/<pkg>/<rel>` always maps to `$HOME/<rel>`. Every component depends on
+this: `Link` and `Unlink` compute the target that way, and `DiscoverPackages`
+derives link status from it. Repo-relative paths for anything sourced from
+`$HOME` are therefore measured from `$HOME`, never from the directory the user
+happened to select — adding `~/.config/nvim/init.lua` yields
+`nvim/.config/nvim/init.lua`, not a bare `init.lua`.
+
+Two distinct source files can never claim one repo destination; a collision is
+refused with a warning rather than letting the second overwrite the first.
+
+**Importing an existing GNU Stow repository.** A dirs-only selection is treated
+as a Stow parent (its children become packages whose contents are already
+`$HOME`-relative) only when there is evidence it has actually been stowed: a
+`$HOME` symlink resolving into that package. The evidence is required
+per-package. A purely structural test would misfire on `~/.config` and
+`~/.local`, which are dirs-only on almost every machine. An unlinked Stow repo
+shows no evidence and is mirrored in place instead — a layout difference, never
+data loss.
+
 ### Symlinks
 
 Relative symlinks, individual files only (never directory symlinks).
 
 - `~/.zshrc` → `../.dotcor/zsh/.zshrc`
 - `~/.config/nvim/init.lua` → `../../../.dotcor/nvim/.config/nvim/init.lua`
+
+The relative target is computed from the link's **physical** parent — both ends
+resolved through `EvalSymlinks` — because that is the directory the kernel
+walks. Computing it lexically produces a silently dangling link whenever an
+ancestor is itself a symlink (`~/.config` → another volume) and the two paths
+sit at different depths. The same resolved comparison decides whether a link is
+already ours, so `Link`, `Unlink` and discovery cannot disagree about one
+symlink.
+
+Swaps are atomic (staging file + `rename`), so a crash leaves either the old
+state or the new one, never neither.
 
 ### Config (`.dotcorrc`)
 
@@ -82,6 +112,52 @@ ignore_patterns:
 ```
 
 No `managed_files` list. No `version` field. State is discovered from the filesystem.
+
+Patterns use `.gitignore` semantics, not bare `filepath.Match`:
+
+- A pattern with no separator matches any path **segment**, so `node_modules`
+  excludes everything beneath it and `.env` matches at any depth.
+- A pattern with separators matches any trailing run of segments, so `.ssh/*`
+  matches `~/.ssh/id_rsa` without being anchored.
+- `**` matches zero or more whole segments (`**/*.log`, `secrets/**`).
+
+An absent `ignore_patterns` key falls back to the defaults above; only an
+explicit empty list (`ignore_patterns: []`) disables filtering. The patterns
+are enforced on every path that writes into the repo — classification, `Link`'s
+auto-detect pass, and `Adopt`.
+
+`git_remote` is stored **without credentials**. `.dotcorrc` lives inside the
+repository and is picked up by `git add -A`, so a remote entered as
+`https://user:token@host` (or the colon-less `https://<token>@host` form) would
+otherwise be committed and pushed. The operative URL lives in `.git/config`,
+which is never staged.
+
+### Permissions
+
+`~/.dotcor` and everything dotcor creates under it are `0700`. The repository
+holds the user's dotfiles — routinely `~/.ssh`, `~/.gnupg` and `~/.aws`
+material — and the backup tree mirrors `$HOME` paths, so a world-traversable
+directory would leak filenames even where file modes are correct. An existing
+`0755` repository is tightened on the next run.
+
+Repo copies carry the source file's mode, applied explicitly after the write
+(`open(2)` ignores the mode argument for an existing file).
+
+### Locking
+
+A single lock file at `~/.dotcor/.lock` serialises whole sessions.
+
+- It is published atomically with its content (temp file + `os.Link`, falling
+  back to `O_EXCL` on filesystems without hard links), so a concurrent acquirer
+  never observes a zero-length lock and mistakes it for a stale one.
+- Staleness is decided by **owner liveness**, not age: the timestamp is written
+  once at acquisition and never refreshed, while the TUI holds the lock for the
+  whole session. A process that exists but belongs to another user counts as
+  alive.
+- A lock written on another host is judged by age alone, since the local
+  process table says nothing about it. The same applies to an unparsable lock.
+- Reclaiming a stale lock is done by rename-then-verify, so it can never delete
+  a lock another process has just published.
 
 ### Discovery Algorithm
 
@@ -241,13 +317,15 @@ type FileEntry struct {
 ```
 User presses 's' on "nvim"
   → tui.Update(KeyMsg{s})
-  → stow.Link(cfg, "nvim")
+  → stow.Link(repoDir, homeDir, "nvim", ignorePatterns)
       → Walk package tree
       → For each file:
-          → Backup original if exists
           → Create parent dirs in $HOME
           → Create relative symlink (individual files only)
-      → Return result
+      → Auto-detect pass: adopt untracked files under the managed
+        $HOME root, skipping anything matching ignorePatterns
+      → Return result (conflicts are resolved separately, with a
+        backup, via LinkWithBackup)
   → git.AutoCommit("stow nvim")
   → discoverPackages() (refresh)
   → fetchGitStatus() (refresh)

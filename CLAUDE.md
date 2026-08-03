@@ -131,8 +131,20 @@ tx.Commit()
 packages, _ := stow.DiscoverPackages(repoDir, homeDir)
 pkg := &packages[0]
 
-result, err := stow.Link(pkg, homeDir)
-result, err = stow.Unlink(pkg, homeDir)
+// ignorePatterns filters Link's auto-detect pass and Adopt, both of which
+// copy untracked $HOME files into the repo. Pass the configured patterns —
+// nil only when there is genuinely no config to honour.
+result, err := stow.Link(repoDir, homeDir, pkg.Name, cfg.IgnorePatterns)
+result, err = stow.LinkWithBackup(repoDir, homeDir, pkg.Name, backupDir, cfg.IgnorePatterns)
+adopted, err := stow.Adopt(repoDir, homeDir, pkg.Name, cfg.IgnorePatterns)
+unlinked, err := stow.Unlink(repoDir, homeDir, pkg.Name)
+```
+
+In the TUI, snapshot the patterns before they cross a goroutine boundary —
+the settings view edits the slice in place:
+
+```go
+ignorePatterns := m.ignorePatternsSnapshot()
 ```
 
 ### Structured Logging

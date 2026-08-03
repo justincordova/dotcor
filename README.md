@@ -187,6 +187,24 @@ ignore_patterns:
   - ".DS_Store"
 ```
 
+Patterns follow `.gitignore` conventions:
+
+| Pattern | Matches |
+|---|---|
+| `.env` | any file named `.env`, at any depth |
+| `node_modules` | that directory and everything under it, at any depth |
+| `.ssh/*` | files directly inside any `.ssh` directory |
+| `secrets/**` | everything under any `secrets` directory |
+| `**/*.log` | any `.log` file at any depth |
+
+Omitting `ignore_patterns` entirely keeps the defaults above. Only an explicit
+empty list (`ignore_patterns: []`) turns filtering off.
+
+`git_remote` is stored without credentials. `.dotcorrc` lives inside the repo
+and is committed, so a token embedded in the URL would be pushed to the remote;
+the real URL is kept in `.git/config`, which is never committed. Use a git
+credential helper rather than putting a token in the URL.
+
 No `managed_files` list. No `version` field. State is discovered from the filesystem.
 
 ---
